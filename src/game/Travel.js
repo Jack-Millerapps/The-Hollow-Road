@@ -4,25 +4,31 @@ import { villages } from '../data/villages.js';
 import { TradeSystem } from './TradeSystem.js';
 import { RoadEvents } from './RoadEvents.js';
 import { Ending } from './Ending.js';
+import { Character } from '../scene/Character.js';
 
-const MOVE_SPEED = 0.1;
-const ROTATE_SPEED = (2 * Math.PI) / 180;
-const EVENT_INTERVAL = 40;
-const EVENT_CHANCE = 0.4;
-const END_Z = -500;
+const MOVE_SPEED = 0.12;
+const ROTATE_SPEED = (2.2 * Math.PI) / 180;
+const EVENT_INTERVAL = 36;
+const EVENT_CHANCE = 0.42;
+const END_Z = -400;
 
-const CAMERA_OFFSET = new THREE.Vector3(0, 4, 8);
-const LOOK_OFFSET = new THREE.Vector3(0, 1, 0);
+// Third-person chase camera — slightly elevated and pulled back.
+const CAMERA_OFFSET = new THREE.Vector3(0, 3.6, 7.4);
+const LOOK_OFFSET = new THREE.Vector3(0, 1.55, 0);
 
 export const Travel = {
   scene: null,
   camera: null,
   player: null,
+  character: null,
   triggered: new Set(),
   distanceSinceEvent: 0,
   paused: false,
   keys: new Set(),
   walkForward: false,
+  _cameraPos: new THREE.Vector3(),
+  _cameraLook: new THREE.Vector3(),
+  _lastTime: 0,
 
   init(camera, scene) {
     this.scene = scene;
@@ -32,11 +38,24 @@ export const Travel = {
     this.player.position.set(0, 0, 0);
     scene.add(this.player);
 
+    // Create the character and attach it to the player so it inherits
+    // position and rotation automatically.
+    this.character = new Character();
+    this.player.add(this.character.root);
+
     this.triggered = new Set();
     this.distanceSinceEvent = 0;
     this.paused = false;
     this.keys = new Set();
     this.walkForward = false;
+    this._lastTime = performance.now() / 1000;
+
+    // Seed the smoothed camera to its target position.
+    const initialOffset = CAMERA_OFFSET.clone().applyQuaternion(this.player.quaternion);
+    this._cameraPos.copy(this.player.position).add(initialOffset);
+    this._cameraLook.copy(this.player.position).add(LOOK_OFFSET);
+    this.camera.position.copy(this._cameraPos);
+    this.camera.lookAt(this._cameraLook);
 
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
@@ -51,7 +70,6 @@ export const Travel = {
     });
 
     state.playerPos = { x: 0, z: 0 };
-    this.updateCamera();
     notify();
   },
 
@@ -71,24 +89,37 @@ export const Travel = {
     this.paused = false;
   },
 
-  updateCamera() {
+  _updateCamera(delta) {
     if (!this.player || !this.camera) return;
     const offset = CAMERA_OFFSET.clone().applyQuaternion(this.player.quaternion);
-    this.camera.position.copy(this.player.position).add(offset);
-    const lookTarget = this.player.position.clone().add(LOOK_OFFSET);
-    this.camera.lookAt(lookTarget);
+    const targetPos = this.player.position.clone().add(offset);
+    const targetLook = this.player.position.clone().add(LOOK_OFFSET);
+
+    // Smooth chase for a cinematic feel — exponential lerp with dt.
+    const posK = 1 - Math.exp(-delta * 9);
+    const lookK = 1 - Math.exp(-delta * 11);
+    this._cameraPos.lerp(targetPos, posK);
+    this._cameraLook.lerp(targetLook, lookK);
+
+    this.camera.position.copy(this._cameraPos);
+    this.camera.lookAt(this._cameraLook);
   },
 
   update(delta) {
     if (!this.player) return;
 
+    const now = performance.now() / 1000;
+    const clampedDelta = Math.min(delta ?? 1 / 60, 1 / 20);
+
     if (state.flags.endingStarted) {
-      this.updateCamera();
+      this._updateCamera(clampedDelta);
+      if (this.character) this.character.update(clampedDelta, false, now);
       return;
     }
 
     if (this.paused) {
-      this.updateCamera();
+      this._updateCamera(clampedDelta);
+      if (this.character) this.character.update(clampedDelta, false, now);
       return;
     }
 
@@ -126,6 +157,8 @@ export const Travel = {
     state.playerPos = { x: this.player.position.x, z: this.player.position.z };
     notify();
 
+    if (this.character) this.character.update(clampedDelta, isMoving, now);
+
     for (const village of villages) {
       if (this.triggered.has(village.name)) continue;
       if (state.tradeComplete[village.name]) {
@@ -146,7 +179,7 @@ export const Travel = {
           this.resume();
           notify();
         });
-        this.updateCamera();
+        this._updateCamera(clampedDelta);
         return;
       }
     }
@@ -156,7 +189,7 @@ export const Travel = {
       if (Math.random() < EVENT_CHANCE) {
         this.pause();
         RoadEvents.trigger(() => this.resume());
-        this.updateCamera();
+        this._updateCamera(clampedDelta);
         return;
       }
     }
@@ -166,6 +199,6 @@ export const Travel = {
       Ending.begin();
     }
 
-    this.updateCamera();
+    this._updateCamera(clampedDelta);
   },
 };

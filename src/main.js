@@ -51,7 +51,7 @@ function start() {
     Road.update(delta, state.isWalking);
     Minimap.update(state.playerPos, villages, state);
 
-    renderer.render(scene, camera);
+    SceneManager.render();
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
