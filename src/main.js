@@ -6,6 +6,7 @@ import { VillageBuilder } from './scene/VillageBuilder.js';
 import { villages } from './data/villages.js';
 import { Travel } from './game/Travel.js';
 import { HUD } from './ui/HUD.js';
+import { Minimap } from './ui/Minimap.js';
 
 function showIntro(onBegin) {
   const root = document.getElementById('ui-root');
@@ -13,9 +14,9 @@ function showIntro(onBegin) {
   intro.className = 'intro';
   intro.innerHTML = `
     <h1>The Hollow Road</h1>
-    <p>You set out at dusk. The road runs south through three villages — Ashwick, the Veil Market, Stonehush — and then on, and then into what is waiting at the end of it.</p>
-    <p>You carry: fifty gold. Three memories. Two promises. Two secrets. No years yet to give, unless the road provides.</p>
-    <p>Hold <strong>W</strong> or the button below to walk. Stop when the road asks you to.</p>
+    <p>You set out at dusk. The road runs south, then forks — to Ashwick in the west, to the Veil Market and Stonehush in the east. Something waits at the end, whichever way you go.</p>
+    <p>You carry: fifty gold. Three memories. Two promises. One year. Two secrets. Spend carefully. The road remembers.</p>
+    <p>Hold <strong>W</strong> (or the button) to walk forward. <strong>A / D</strong> strafe. <strong>S</strong> step back. <strong>Q / E</strong> turn. <strong>M</strong> opens the map.</p>
     <button type="button">Begin</button>
   `;
   const btn = intro.querySelector('button');
@@ -34,7 +35,8 @@ function start() {
   for (const v of villages) VillageBuilder.buildVillage(v.name, scene);
 
   HUD.mount();
-  Travel.init(camera);
+  Minimap.mount();
+  Travel.init(camera, scene);
   notify();
 
   let prev = performance.now();
@@ -47,15 +49,14 @@ function start() {
     Environment.update(t);
     VillageBuilder.update(t);
     Road.update(delta, state.isWalking);
+    Minimap.update(state.playerPos, villages, state);
 
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
 
-  showIntro(() => {
-    // Nothing extra — walking is in the player's hands.
-  });
+  showIntro(() => {});
 }
 
 if (document.readyState === 'loading') {

@@ -1,7 +1,8 @@
 export const villages = [
   {
     name: 'ashwick',
-    triggerZ: -80,
+    position: { x: -120, z: -350 },
+    radius: 12,
     displayName: 'Ashwick',
     flavor: "The wheel hasn't stopped in eleven years. Neither has he.",
     npc: 'The Miller',
@@ -30,7 +31,8 @@ export const villages = [
   },
   {
     name: 'veilMarket',
-    triggerZ: -220,
+    position: { x: 100, z: -300 },
+    radius: 12,
     displayName: 'The Veil Market',
     flavor: "Everything here was someone else's. Including the silence.",
     npc: 'The Auctioneer',
@@ -61,7 +63,8 @@ export const villages = [
   },
   {
     name: 'stonehush',
-    triggerZ: -380,
+    position: { x: 80, z: -370 },
+    radius: 12,
     displayName: 'Stonehush',
     flavor: 'She places a finger to her lips. Then points at your hands.',
     npc: 'The Weaver',

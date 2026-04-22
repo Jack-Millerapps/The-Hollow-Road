@@ -1,9 +1,10 @@
 export const state = {
-  currencies: { gold: 50, memories: 3, promises: 2, years: 0, secrets: 2 },
+  currencies: { gold: 50, memories: 3, promises: 2, years: 1, secrets: 2 },
   reputation: { ashwick: 0, veilMarket: 0, stonehush: 0 },
   wholeness: 1.0,
   inventory: [],
   cameraZ: 0,
+  playerPos: { x: 0, z: 0 },
   isWalking: false,
   currentVillage: null,
   tradeComplete: { ashwick: false, veilMarket: false, stonehush: false },

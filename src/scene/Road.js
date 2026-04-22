@@ -80,43 +80,64 @@ function createCobblestoneTexture() {
   return texture;
 }
 
+const SEGMENTS = [
+  { start: { x: 0, z: 0 },    end: { x: 0,    z: -200 } },
+  { start: { x: 0, z: -200 }, end: { x: -120, z: -350 } },
+  { start: { x: 0, z: -200 }, end: { x: 120,  z: -350 } },
+];
+
+const EDGE_MAT = new THREE.MeshLambertMaterial({ color: 0x4a3a22 });
+
+function buildSegment(scene, start, end, texture) {
+  const dx = end.x - start.x;
+  const dz = end.z - start.z;
+  const length = Math.sqrt(dx * dx + dz * dz);
+  const angle = Math.atan2(-dx, -dz);
+
+  const group = new THREE.Group();
+  group.position.set((start.x + end.x) / 2, 0, (start.z + end.z) / 2);
+  group.rotation.y = angle;
+
+  const geometry = new THREE.PlaneGeometry(6, length);
+  const material = new THREE.MeshLambertMaterial({ map: texture });
+  const road = new THREE.Mesh(geometry, material);
+  road.rotation.x = -Math.PI / 2;
+  road.receiveShadow = true;
+  group.add(road);
+
+  const edgeGeo = new THREE.BoxGeometry(0.12, 0.05, length);
+
+  const left = new THREE.Mesh(edgeGeo, EDGE_MAT);
+  left.position.set(-3.06, 0.025, 0);
+  group.add(left);
+
+  const right = new THREE.Mesh(edgeGeo, EDGE_MAT);
+  right.position.set(3.06, 0.025, 0);
+  group.add(right);
+
+  scene.add(group);
+  return group;
+}
+
 export const Road = {
-  mesh: null,
   texture: null,
-  leftEdge: null,
-  rightEdge: null,
+  segments: [],
 
   init(scene) {
     const texture = createCobblestoneTexture();
+    // Single shared texture across all segments. Override the default repeat
+    // so tile density looks reasonable on ~200-unit segments.
+    texture.repeat.set(2, 32);
     this.texture = texture;
 
-    const geometry = new THREE.PlaneGeometry(6, 600);
-    const material = new THREE.MeshLambertMaterial({ map: texture });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(0, 0, -300);
-    mesh.receiveShadow = true;
-    scene.add(mesh);
-    this.mesh = mesh;
-
-    const edgeGeo = new THREE.BoxGeometry(0.12, 0.05, 600);
-    const edgeMat = new THREE.MeshLambertMaterial({ color: 0x4a3a22 });
-
-    const left = new THREE.Mesh(edgeGeo, edgeMat);
-    left.position.set(-3.06, 0.025, -300);
-    scene.add(left);
-    this.leftEdge = left;
-
-    const right = new THREE.Mesh(edgeGeo, edgeMat);
-    right.position.set(3.06, 0.025, -300);
-    scene.add(right);
-    this.rightEdge = right;
+    this.segments = SEGMENTS.map((s) =>
+      buildSegment(scene, s.start, s.end, texture),
+    );
   },
 
   update(delta, isWalking) {
     if (!this.texture) return;
     if (isWalking) {
-      // Scroll the texture to simulate forward movement.
       this.texture.offset.y -= delta * 0.6;
     }
   },

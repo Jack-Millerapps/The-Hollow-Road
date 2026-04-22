@@ -57,15 +57,10 @@ export const HUD = {
     `;
     root.appendChild(whole);
 
-    const pos = document.createElement('div');
-    pos.className = 'hud-position';
-    pos.innerHTML = 'The Hollow Road · <span data-pos>0</span> / 500';
-    root.appendChild(pos);
-
     const walkBtn = document.createElement('button');
     walkBtn.className = 'walk-button';
     walkBtn.type = 'button';
-    walkBtn.textContent = 'Walk';
+    walkBtn.textContent = 'Forward';
     walkBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       walkBtn.setPointerCapture?.(e.pointerId);
@@ -80,10 +75,10 @@ export const HUD = {
 
     const hint = document.createElement('div');
     hint.className = 'walk-hint';
-    hint.textContent = 'Hold W or the button to walk';
+    hint.textContent = 'WASD move · Q/E turn · M map';
     root.appendChild(hint);
 
-    this.elements = { hud, whole, walkBtn, pos };
+    this.elements = { hud, whole, walkBtn };
 
     subscribe(() => this.render());
     this.render();
@@ -116,12 +111,5 @@ export const HUD = {
 
     const btn = this.elements.walkBtn;
     if (btn) btn.classList.toggle('walking', state.isWalking);
-
-    const pos = this.elements.pos;
-    if (pos) {
-      const metric = Math.round(Math.max(0, -state.cameraZ));
-      const valEl = pos.querySelector('[data-pos]');
-      if (valEl) valEl.textContent = String(metric);
-    }
   },
 };
