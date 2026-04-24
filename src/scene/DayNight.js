@@ -195,6 +195,7 @@ function wrapPanel(panel) {
 let installed = false;
 let _logAccum = 0;
 let _debugLog = false;
+let _applyAccum = 0;
 
 export const DayNight = {
   init({ startPhase = null } = {}) {
@@ -232,7 +233,8 @@ export const DayNight = {
 
   update(delta) {
     reconcilePause();
-    if (!state.timePaused && state.currentScene === 'world') {
+    const wasPaused = state.timePaused || state.currentScene !== 'world';
+    if (!wasPaused) {
       state.gameTime = (state.gameTime || 0) + delta;
       _logAccum += delta;
       if (_debugLog && _logAccum >= 1) {
@@ -256,7 +258,14 @@ export const DayNight = {
         );
       }
     }
-    applyPhase(phaseAt(state.gameTime || 0));
+    // Sky / fog / moon colors change over many seconds. Re-lerping them at
+    // 60fps is pure waste; 10Hz is indistinguishable to the eye. Still runs
+    // when paused so the cycle "sticks" to the right look on resume.
+    _applyAccum += delta;
+    if (_applyAccum >= 0.1 || wasPaused) {
+      _applyAccum = 0;
+      applyPhase(phaseAt(state.gameTime || 0));
+    }
   },
 
   getCurrentPhase() {

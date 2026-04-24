@@ -810,11 +810,20 @@ export const CaveInterior = {
     };
   },
 
+  _compassAccum: 0,
+  _exitPromptVisible: null,
+  _lastCompassDeg: null,
+
   // Called from main game loop while in the cave scene.
   update(delta, playerPos, playerYaw) {
     if (state.currentScene !== 'cave' || !this.active) {
-      if (this._compass) this._compass.el.style.opacity = '0';
-      if (this._exitPrompt) this._exitPrompt.style.opacity = '0';
+      if (this._compass && this._compass.el.style.opacity !== '0') {
+        this._compass.el.style.opacity = '0';
+      }
+      if (this._exitPrompt && this._exitPromptVisible !== false) {
+        this._exitPrompt.style.opacity = '0';
+        this._exitPromptVisible = false;
+      }
       return;
     }
     const local = this.worldToLocal(playerPos.x, playerPos.z);
@@ -822,31 +831,37 @@ export const CaveInterior = {
     // Exit portal proximity.
     const ex = this.active.exitPortal.x;
     const ez = this.active.exitPortal.z;
-    const distExit = Math.hypot(local.x - ex, local.z - ez);
-    this._atExit = distExit < this.EXIT_TRIGGER_RADIUS;
-    if (this._exitPrompt) {
+    const dxE = local.x - ex;
+    const dzE = local.z - ez;
+    const distExitSq = dxE * dxE + dzE * dzE;
+    const limitSq = this.EXIT_TRIGGER_RADIUS * this.EXIT_TRIGGER_RADIUS;
+    this._atExit = distExitSq < limitSq;
+    if (this._exitPrompt && this._exitPromptVisible !== this._atExit) {
       this._exitPrompt.style.opacity = this._atExit ? '1' : '0';
+      this._exitPromptVisible = this._atExit;
     }
 
-    // Compass toward troll chamber.
-    if (this._compass) {
-      this._compass.el.style.opacity = '1';
+    // Compass toward troll chamber — DOM style writes trigger restyle,
+    // throttle to ~10Hz and skip when the angle hasn't actually moved.
+    this._compassAccum += delta;
+    if (this._compass && this._compassAccum >= 0.1) {
+      this._compassAccum = 0;
+      if (this._compass.el.style.opacity !== '1') {
+        this._compass.el.style.opacity = '1';
+      }
       const tx = this.active.compassLocal.x;
       const tz = this.active.compassLocal.z;
       const dirX = tx - local.x;
       const dirZ = tz - local.z;
-      // Convert world-space direction into screen-relative direction using
-      // the player's yaw. playerYaw==0 → facing -Z. Rotate dir into player
-      // frame then take atan2 for DOM rotation.
       const cos = Math.cos(-playerYaw);
       const sin = Math.sin(-playerYaw);
       const rx = dirX * cos - dirZ * sin;
       const rz = dirX * sin + dirZ * cos;
-      // In DOM we want 0deg pointing "up" (forward for the player).
-      // Player forward is -Z in local space -> rz is -1 when forward.
-      const angleRad = Math.atan2(rx, -rz);
-      const deg = angleRad * (180 / Math.PI);
-      this._compass.arrow.style.transform = `rotate(${deg}deg)`;
+      const deg = Math.atan2(rx, -rz) * (180 / Math.PI);
+      if (this._lastCompassDeg === null || Math.abs(deg - this._lastCompassDeg) > 1) {
+        this._lastCompassDeg = deg;
+        this._compass.arrow.style.transform = `rotate(${deg}deg)`;
+      }
     }
   },
 };

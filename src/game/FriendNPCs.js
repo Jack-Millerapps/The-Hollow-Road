@@ -181,14 +181,15 @@ export const FriendNPCs = {
       return;
     }
 
+    const limitSq = INTERACT_RADIUS * INTERACT_RADIUS;
     let best = null;
-    let bestDist = Infinity;
+    let bestSq = Infinity;
     for (const entry of this.entries) {
       const dx = entry.worldPos.x - playerPos.x;
       const dz = entry.worldPos.z - playerPos.z;
-      const d = Math.hypot(dx, dz);
-      if (d < INTERACT_RADIUS && d < bestDist) {
-        bestDist = d;
+      const dsq = dx * dx + dz * dz;
+      if (dsq < limitSq && dsq < bestSq) {
+        bestSq = dsq;
         best = entry;
       }
     }

@@ -103,31 +103,47 @@ function buildGoblinMesh() {
 // Road / village / cave exclusion helpers.
 // ---------------------------------------------------------------------------
 
-function distanceToSegment(px, pz, a, b) {
+// Squared distance from point to segment — avoids allocating a result object
+// and skips Math.hypot when we only need to compare.
+function segmentDistSq(px, pz, a, b) {
   const dx = b.x - a.x;
   const dz = b.z - a.z;
   const lenSq = dx * dx + dz * dz;
   if (lenSq < 1e-6) {
     const ex = px - a.x;
     const ez = pz - a.z;
-    return { dist: Math.hypot(ex, ez), t: 0 };
+    return ex * ex + ez * ez;
   }
   let t = ((px - a.x) * dx + (pz - a.z) * dz) / lenSq;
-  t = Math.max(0, Math.min(1, t));
-  const cx = a.x + dx * t;
-  const cz = a.z + dz * t;
-  return { dist: Math.hypot(px - cx, pz - cz), t, cx, cz };
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
+  const ex = px - (a.x + dx * t);
+  const ez = pz - (a.z + dz * t);
+  return ex * ex + ez * ez;
 }
 
 export function distanceToNearestRoad(px, pz) {
-  let best = Infinity;
+  let bestSq = Infinity;
   for (let i = 0; i < ROAD_WAYPOINTS.length - 1; i++) {
     const a = ROAD_WAYPOINTS[i];
     const b = ROAD_WAYPOINTS[i + 1];
-    const { dist } = distanceToSegment(px, pz, a, b);
-    if (dist < best) best = dist;
+    const d = segmentDistSq(px, pz, a, b);
+    if (d < bestSq) bestSq = d;
   }
-  return best;
+  return Math.sqrt(bestSq);
+}
+
+// Cheaper boolean variant — stops on the first segment within `limit` units.
+// Callers that only care about "within range" (Travel's off-road flag, spawner
+// placement) pay for <1 segment on average once the player is on the road.
+export function isWithinRoadDistance(px, pz, limit) {
+  const limitSq = limit * limit;
+  for (let i = 0; i < ROAD_WAYPOINTS.length - 1; i++) {
+    const a = ROAD_WAYPOINTS[i];
+    const b = ROAD_WAYPOINTS[i + 1];
+    if (segmentDistSq(px, pz, a, b) <= limitSq) return true;
+  }
+  return false;
 }
 
 function insideVillageZone(px, pz) {

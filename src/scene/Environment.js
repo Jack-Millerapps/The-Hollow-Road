@@ -20,10 +20,24 @@ const ROAD_HALF_WIDTH = 3.2;
 
 // Hill barriers between legs — tall silhouettes that hide the next town
 // until the player is nearly on top of it. Rendered as InstancedMesh.
-const HILL_COUNT = 120;
-const TREE_COUNT = 1400;
-const GRASS_COUNT = 1800;
-const ROCK_COUNT = 260;
+// On low-end hardware (matches SceneManager.detectLowEnd) we halve the
+// instance counts so the vertex pipeline and transform upload are cheaper.
+function isLowEnd() {
+  try {
+    const p = new URLSearchParams(window.location.search).get('lowend');
+    if (p === '1') return true;
+    if (p === '0') return false;
+  } catch {}
+  const cores = navigator.hardwareConcurrency || 4;
+  const mem = navigator.deviceMemory || 4;
+  const touch = typeof window !== 'undefined' && 'ontouchstart' in window;
+  return cores <= 4 || mem <= 4 || touch;
+}
+const LOW = isLowEnd();
+const HILL_COUNT = LOW ? 60 : 120;
+const TREE_COUNT = LOW ? 700 : 1400;
+const GRASS_COUNT = LOW ? 900 : 1800;
+const ROCK_COUNT = LOW ? 130 : 260;
 const LANTERN_COUNT_PER_KM = 8; // sparse at this scale
 
 function stdMat(color, opts = {}) {
@@ -163,7 +177,10 @@ export const Environment = {
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.set(0, -0.02, -7000);
-    ground.receiveShadow = true;
+    // The ground covers 3000x18000 units; sampling the shadow map per
+    // fragment across that area is a real fill-rate cost for very subtle
+    // benefit (the dim moon shadow barely lands on the textured ground).
+    ground.receiveShadow = false;
     group.add(ground);
   },
 
@@ -492,12 +509,15 @@ export const Environment = {
   },
 
   update(time) {
-    // Breathing flicker on the core material (cheap, shared material).
+    // These only affect world-scene visuals; skip while the group is hidden.
+    if (!this.group?.visible) return;
     if (this.lanternCores) {
       const m = this.lanternCores.material;
       m.emissiveIntensity = 2.0 + Math.sin(time * 3.2) * 0.25;
     }
-    if (this.stars) {
+    // Stars opacity is also driven by DayNight.applyPhase — this just adds a
+    // gentle breathing flicker on top. Safe to skip when stars are hidden.
+    if (this.stars?.visible) {
       this.stars.material.opacity = 0.85 + Math.sin(time * 0.7) * 0.08;
     }
   },

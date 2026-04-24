@@ -5,7 +5,7 @@ import { TradeSystem } from './TradeSystem.js';
 import { RoadEvents } from './RoadEvents.js';
 import { Ending } from './Ending.js';
 import { Character } from '../scene/Character.js';
-import { distanceToNearestRoad } from './Goblins.js';
+import { isWithinRoadDistance } from './Goblins.js';
 import { VeilWander } from './VeilWander.js';
 import { FriendNPCs } from './FriendNPCs.js';
 import { FirstNightWarning } from '../ui/FirstNightWarning.js';
@@ -34,6 +34,12 @@ const ROAD_LATERAL_LIMIT = 10;
 const CAMERA_OFFSET = new THREE.Vector3(0, 3.6, 7.4);
 const LOOK_OFFSET = new THREE.Vector3(0, 1.55, 0);
 
+// Pre-allocated scratch vectors reused every frame by the camera update path.
+// Allocating fresh Vector3 objects per frame triggers GC pressure at 60fps.
+const _scratchOffset = new THREE.Vector3();
+const _scratchTargetPos = new THREE.Vector3();
+const _scratchTargetLook = new THREE.Vector3();
+
 const WESTWIND_EXIT_Z = 470; // ~30 units south of Westwind centre (z=500), past the signpost
 
 export const Travel = {
@@ -57,6 +63,7 @@ export const Travel = {
   _canvas: null,
   _softPrompt: null,
   _softPromptTimer: 0,
+  _lastNotifyMs: 0,
 
   init(camera, scene, opts = {}) {
     this.scene = scene;
@@ -167,28 +174,27 @@ export const Travel = {
   _setCameraFromPlayer() {
     if (!this.player || !this.camera) return;
     this.player.rotation.y = this._yaw;
-    const offset = CAMERA_OFFSET.clone().applyQuaternion(this.player.quaternion);
-    const targetPos = this.player.position.clone().add(offset);
-    const targetLook = this.player.position.clone().add(LOOK_OFFSET);
-    // Apply pitch by nudging the look target up/down based on _pitch.
-    targetLook.y += Math.tan(this._pitch) * 4;
-    this._cameraPos.copy(targetPos);
-    this._cameraLook.copy(targetLook);
-    this.camera.position.copy(targetPos);
-    this.camera.lookAt(targetLook);
+    _scratchOffset.copy(CAMERA_OFFSET).applyQuaternion(this.player.quaternion);
+    _scratchTargetPos.copy(this.player.position).add(_scratchOffset);
+    _scratchTargetLook.copy(this.player.position).add(LOOK_OFFSET);
+    _scratchTargetLook.y += Math.tan(this._pitch) * 4;
+    this._cameraPos.copy(_scratchTargetPos);
+    this._cameraLook.copy(_scratchTargetLook);
+    this.camera.position.copy(_scratchTargetPos);
+    this.camera.lookAt(_scratchTargetLook);
   },
 
   _updateCamera(delta) {
     if (!this.player || !this.camera) return;
     this.player.rotation.y = this._yaw;
-    const offset = CAMERA_OFFSET.clone().applyQuaternion(this.player.quaternion);
-    const targetPos = this.player.position.clone().add(offset);
-    const targetLook = this.player.position.clone().add(LOOK_OFFSET);
-    targetLook.y += Math.tan(this._pitch) * 4;
+    _scratchOffset.copy(CAMERA_OFFSET).applyQuaternion(this.player.quaternion);
+    _scratchTargetPos.copy(this.player.position).add(_scratchOffset);
+    _scratchTargetLook.copy(this.player.position).add(LOOK_OFFSET);
+    _scratchTargetLook.y += Math.tan(this._pitch) * 4;
     const posK = 1 - Math.exp(-delta * 9);
     const lookK = 1 - Math.exp(-delta * 11);
-    this._cameraPos.lerp(targetPos, posK);
-    this._cameraLook.lerp(targetLook, lookK);
+    this._cameraPos.lerp(_scratchTargetPos, posK);
+    this._cameraLook.lerp(_scratchTargetLook, lookK);
     this.camera.position.copy(this._cameraPos);
     this.camera.lookAt(this._cameraLook);
     state.cameraYaw = this._yaw;
@@ -333,7 +339,11 @@ export const Travel = {
 
     this._updateStamina(clampedDelta, canSprint);
     if (state.isWalking !== moved) state.isWalking = moved;
-    state.playerPos = { x: this.player.position.x, z: this.player.position.z };
+    // Mutate the existing object rather than replacing it — avoids a fresh
+    // allocation every frame and lets consumers keep their stable reference.
+    if (!state.playerPos) state.playerPos = { x: 0, z: 0 };
+    state.playerPos.x = this.player.position.x;
+    state.playerPos.z = this.player.position.z;
 
     // CHANGE 4 / 2 / 6 — crossing south of Westwind for the first time.
     if (!state.flags.hasLeftWestwind && !inCave &&
@@ -361,14 +371,23 @@ export const Travel = {
     if (inCave) {
       state.offRoad = false;
     } else {
-      const d = distanceToNearestRoad(
+      // Early-exit road-distance check — stops on the first segment within
+      // range, avoiding the full per-segment scan when the player is on-road.
+      state.offRoad = !isWithinRoadDistance(
         this.player.position.x,
         this.player.position.z,
+        ROAD_LATERAL_LIMIT,
       );
-      state.offRoad = d > ROAD_LATERAL_LIMIT;
     }
 
-    notify();
+    // notify() fans out to every HUD subscriber (StaminaBar, ObjectiveTracker,
+    // Watch, HUD, Map, DebugOverlay). Running that at 60fps dominated the
+    // frame budget; 10Hz is imperceptible for the HUD.
+    const nowMs = now * 1000;
+    if (nowMs - this._lastNotifyMs > 100) {
+      this._lastNotifyMs = nowMs;
+      notify();
+    }
     if (this.character) this.character.update(clampedDelta, moved, now);
 
     if (inCave) { this._updateCamera(clampedDelta); return; }

@@ -1,7 +1,11 @@
+import * as THREE from 'three';
 import { state, notify, gain } from '../state.js';
 import { CaveInterior } from '../scene/CaveInterior.js';
 import { DayNight } from '../scene/DayNight.js';
 import { Save } from './Save.js';
+
+// Pre-allocated scratch vec reused by per-frame world-position sampling.
+const _miningScratch = new THREE.Vector3();
 
 // ---------------------------------------------------------------------------
 // Phase 3 — Mining + resting.
@@ -192,16 +196,18 @@ export const Mining = {
   _nearestActiveOre() {
     if (!this._playerPos) return null;
     const nodes = CaveInterior.getOreNodes();
+    const limitSq = MINE_RADIUS * MINE_RADIUS;
     let best = null;
-    let bestDist = Infinity;
+    let bestSq = Infinity;
     for (const n of nodes) {
       if (n.userData.depleted) continue;
-      const wp = new (n.position.constructor)();
-      n.getWorldPosition(wp);
-      const dist = Math.hypot(wp.x - this._playerPos.x, wp.z - this._playerPos.z);
-      if (dist < MINE_RADIUS && dist < bestDist) {
+      n.getWorldPosition(_miningScratch);
+      const dx = _miningScratch.x - this._playerPos.x;
+      const dz = _miningScratch.z - this._playerPos.z;
+      const dsq = dx * dx + dz * dz;
+      if (dsq < limitSq && dsq < bestSq) {
         best = n;
-        bestDist = dist;
+        bestSq = dsq;
       }
     }
     return best;
@@ -316,9 +322,10 @@ export const Mining = {
     // Advance active mining progress.
     if (this._miningNode) {
       // Still in range?
-      const wp = new (this._miningNode.position.constructor)();
-      this._miningNode.getWorldPosition(wp);
-      const dist = Math.hypot(wp.x - playerPos.x, wp.z - playerPos.z);
+      this._miningNode.getWorldPosition(_miningScratch);
+      const dxm = _miningScratch.x - playerPos.x;
+      const dzm = _miningScratch.z - playerPos.z;
+      const dist = Math.sqrt(dxm * dxm + dzm * dzm);
       if (dist > MINE_RADIUS + 0.3) {
         this._cancelMining();
       } else {

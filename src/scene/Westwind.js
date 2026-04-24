@@ -660,8 +660,15 @@ export const Westwind = {
     };
   },
 
-  update(time) {
+  update(time, playerPos) {
     if (!this.group?.visible) return;
+    // Once the player is far south of Westwind, none of these animations are
+    // visible — skip the per-tree/lantern/window work entirely.
+    if (playerPos) {
+      const dz = playerPos.z - CENTER.z;
+      const dx = playerPos.x - CENTER.x;
+      if (dx * dx + dz * dz > 260 * 260) return;
+    }
     // Tree sway
     for (const tree of this.trees) {
       tree.rotation.z =

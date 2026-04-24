@@ -957,6 +957,25 @@ function buildStonehush(scene) {
 
 // ============================================================
 
+// Anything farther than this from the player is too distant for its flicker
+// animations to be visible, so we skip the per-frame work entirely.
+const VILLAGE_UPDATE_RANGE_SQ = 220 * 220;
+
+const VILLAGE_POSITIONS = {
+  ashwick: { x: 0, z: -500 },
+  veilMarket: { x: 0, z: -2500 },
+  stonehush: { x: -800, z: -5000 },
+};
+
+function villageInRange(name, playerPos) {
+  if (!playerPos) return true;
+  const p = VILLAGE_POSITIONS[name];
+  if (!p) return true;
+  const dx = p.x - playerPos.x;
+  const dz = p.z - playerPos.z;
+  return dx * dx + dz * dz < VILLAGE_UPDATE_RANGE_SQ;
+}
+
 export const VillageBuilder = {
   buildVillage(name, scene) {
     if (name === 'ashwick') buildAshwick(scene);
@@ -964,8 +983,13 @@ export const VillageBuilder = {
     else if (name === 'stonehush') buildStonehush(scene);
   },
 
-  update(time) {
+  update(time, playerPos) {
+    const updateAshwick = villageInRange('ashwick', playerPos);
+    const updateVeil = villageInRange('veilMarket', playerPos);
+    const updateStonehush = villageInRange('stonehush', playerPos);
+    if (!updateAshwick && !updateVeil && !updateStonehush) return;
     // -- Ashwick --
+    if (updateAshwick) {
     if (registry.ashwick.millPivot) {
       registry.ashwick.millPivot.rotation.z += 0.015;
     }
@@ -1017,8 +1041,10 @@ export const VillageBuilder = {
       h.core.material.emissiveIntensity = 3.0 * f;
       h.glow.material.opacity = 0.5 + f * 0.2;
     }
+    } // end updateAshwick
 
     // -- Veil Market --
+    if (updateVeil) {
     for (let i = 0; i < registry.veilMarket.orbs.length; i++) {
       const orb = registry.veilMarket.orbs[i];
       orb.position.y = orb.userData.baseY + Math.sin(time * 1.4 + orb.userData.bobPhase) * 0.35;
@@ -1044,8 +1070,10 @@ export const VillageBuilder = {
     if (registry.veilMarket.chimes) {
       registry.veilMarket.chimes.rotation.z = Math.sin(time * 1.1) * 0.04;
     }
+    } // end updateVeil
 
     // -- Stonehush --
+    if (updateStonehush) {
     for (const t of registry.stonehush.threads) {
       t.position.x = t.userData.baseX + Math.sin(time * 0.8 + t.userData.phase) * 0.015;
       t.rotation.z = Math.sin(time * 1.2 + t.userData.phase) * 0.01;
@@ -1061,5 +1089,6 @@ export const VillageBuilder = {
       const mat = registry.stonehush.pool.material;
       mat.emissiveIntensity = 0.18 + Math.sin(time * 0.6) * 0.04;
     }
+    } // end updateStonehush
   },
 };

@@ -298,8 +298,13 @@ export const CaveEntrance = {
       this._clearPrompt();
       return;
     }
-    // Torch flicker.
-    for (const { mesh } of this.entries) {
+    // Torch flicker — caves are scattered along a 16k route; only update
+    // entrances within visual range of the player.
+    const rangeSq = 160 * 160;
+    for (const { mesh, cave } of this.entries) {
+      const dxm = cave.position.x - playerPos.x;
+      const dzm = cave.position.z - playerPos.z;
+      if (dxm * dxm + dzm * dzm > rangeSq) continue;
       const torches = mesh.userData.torches || [];
       for (const torch of torches) {
         const seed = torch.userData.flickerSeed || 0;

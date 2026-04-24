@@ -111,8 +111,15 @@ export const Watch = {
     subscribe(() => this.syncVisibility());
     this.syncVisibility();
 
-    const renderLoop = () => {
-      this.render();
+    // Clock hands move slowly (one revolution per 8.5-minute cycle). Redrawing
+    // the gradient-heavy canvas at 60fps is pure waste — 5Hz is indistinguish-
+    // able from realtime for this UI.
+    this._lastRenderMs = 0;
+    const renderLoop = (now) => {
+      if (!this._lastRenderMs || now - this._lastRenderMs > 200) {
+        this._lastRenderMs = now;
+        this.render();
+      }
       this._raf = requestAnimationFrame(renderLoop);
     };
     this._raf = requestAnimationFrame(renderLoop);

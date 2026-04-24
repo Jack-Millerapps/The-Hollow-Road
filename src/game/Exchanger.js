@@ -119,14 +119,16 @@ export const Exchanger = {
       this._setActive(null);
       return;
     }
+    // Squared-distance comparison avoids an unnecessary sqrt per entry.
+    const limitSq = INTERACT_RADIUS * INTERACT_RADIUS;
     let best = null;
-    let bestDist = Infinity;
+    let bestSq = Infinity;
     for (const e of this.entries) {
       const dx = e.worldPos.x - playerPos.x;
       const dz = e.worldPos.z - playerPos.z;
-      const d = Math.hypot(dx, dz);
-      if (d < INTERACT_RADIUS && d < bestDist) {
-        bestDist = d;
+      const dsq = dx * dx + dz * dz;
+      if (dsq < limitSq && dsq < bestSq) {
+        bestSq = dsq;
         best = e;
       }
     }

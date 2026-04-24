@@ -423,10 +423,10 @@ function start() {
       DayNight.update(delta);
       Environment.update(t);
       Environment.updateCulling(camera);
-      VillageBuilder.update(t);
+      VillageBuilder.update(t, state.playerPos);
       Road.update(delta, state.isWalking);
       CabinInterior.update(t);
-      Westwind.update(t);
+      Westwind.update(t, state.playerPos);
 
       if (state.currentScene === 'world') {
         FriendNPCs.update(state.playerPos, t);
@@ -444,6 +444,7 @@ function start() {
       }
       if (BrotherScene.mesh) BrotherScene.update(delta, t);
 
+      SceneManager.updateShadowFollow(state.playerPos);
       SceneManager.render();
       FPSCounter.tick();
     } finally {

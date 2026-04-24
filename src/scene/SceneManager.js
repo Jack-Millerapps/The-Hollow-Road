@@ -11,6 +11,27 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 // ---------------------------------------------------------------------------
 
 const POINT_LIGHT_BUDGET = 4;
+// Cap pixel ratio to keep fragment work bounded on retina/hi-dpi screens.
+// A dpr of 2 means 4x the pixels of dpr 1; 1.5 cuts that to ~2.25x.
+const MAX_PIXEL_RATIO = 1.5;
+// Throttle point-light culling — sub-frame precision isn't needed.
+const CULL_INTERVAL_MS = 200;
+
+// Low-end detection — skip bloom/vignette on devices that can't spare the
+// fragment throughput. Override with ?lowend=1 or ?lowend=0 in the URL.
+function detectLowEnd() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const forced = params.get('lowend');
+    if (forced === '1') return true;
+    if (forced === '0') return false;
+  } catch {}
+  const cores = navigator.hardwareConcurrency || 4;
+  const mem = navigator.deviceMemory || 4;
+  // Touch devices with limited cores/memory almost always benefit.
+  const touch = typeof window !== 'undefined' && 'ontouchstart' in window;
+  return cores <= 4 || mem <= 4 || touch;
+}
 
 const VignetteShader = {
   uniforms: {
@@ -58,6 +79,9 @@ export const SceneManager = {
 
   // Culling budgets
   _pointLights: [],
+  _lastCullMs: 0,
+  _cullScratch: null,
+  _shadowFrame: 0,
 
   init() {
     const scene = new THREE.Scene();
@@ -80,16 +104,22 @@ export const SceneManager = {
     camera.position.set(0, 2.5, 0);
     camera.lookAt(0, 2.5, -10);
 
-    // Disable antialiasing on high-density screens to keep mobile fast.
-    const useAA = (window.devicePixelRatio || 1) <= 2;
+    // Disable antialiasing on high-density screens — the dpr cap gives us
+    // plenty of effective sampling and AA is a big fragment-shader cost.
+    const dpr = window.devicePixelRatio || 1;
+    const useAA = dpr <= 1;
     const renderer = new THREE.WebGLRenderer({
       antialias: useAA,
       powerPreference: 'high-performance',
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(dpr, MAX_PIXEL_RATIO));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // PCFShadowMap is noticeably cheaper than PCFSoftShadowMap and still
+    // readable once the shadow.radius blurs the edges.
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
     renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.1;
@@ -129,24 +159,34 @@ export const SceneManager = {
     scene.add(moonFill);
 
     // --- Post-processing stack -----------------------------------------
+    // On low-end hardware (<=4 cores / touch / ?lowend=1) we skip the whole
+    // composer — UnrealBloomPass alone does ~5 extra render-target draws at
+    // the composer resolution, which is the single most expensive thing
+    // per frame on integrated GPUs.
 
-    const composer = new EffectComposer(renderer);
-    composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    composer.setSize(window.innerWidth, window.innerHeight);
+    this.lowEnd = detectLowEnd();
 
-    const renderPass = new RenderPass(scene, camera);
-    composer.addPass(renderPass);
+    let composer = null;
+    let bloomPass = null;
+    if (!this.lowEnd) {
+      composer = new EffectComposer(renderer);
+      composer.setPixelRatio(Math.min(dpr, MAX_PIXEL_RATIO));
+      composer.setSize(window.innerWidth, window.innerHeight);
 
-    const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.75,
-      0.85,
-      0.55,
-    );
-    composer.addPass(bloomPass);
+      const renderPass = new RenderPass(scene, camera);
+      composer.addPass(renderPass);
 
-    const vignettePass = new ShaderPass(VignetteShader);
-    composer.addPass(vignettePass);
+      bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        0.75,
+        0.85,
+        0.55,
+      );
+      composer.addPass(bloomPass);
+
+      const vignettePass = new ShaderPass(VignetteShader);
+      composer.addPass(vignettePass);
+    }
 
     window.addEventListener('resize', () => this.onResize());
 
@@ -172,9 +212,13 @@ export const SceneManager = {
     this._pointLights.push(light);
   },
 
-  // Called every frame — only the 4 closest to the camera stay lit.
+  // Throttled — sub-frame precision isn't necessary for which lanterns glow.
   cullPointLights() {
     if (this._pointLights.length === 0 || !this.camera) return;
+    const now = performance.now();
+    if (now - this._lastCullMs < CULL_INTERVAL_MS) return;
+    this._lastCullMs = now;
+
     const cam = this.camera.position;
     const entries = this._pointLights;
     if (entries.length <= POINT_LIGHT_BUDGET) {
@@ -186,18 +230,30 @@ export const SceneManager = {
       }
       return;
     }
-    const ranked = [];
+
+    // Pre-allocated scratch vec to avoid per-frame GC churn.
+    if (!this._cullScratch) this._cullScratch = new THREE.Vector3();
+    const wp = this._cullScratch;
+
+    // Partial selection: find the POINT_LIGHT_BUDGET nearest without a full sort.
+    const nearest = [];
     for (const l of entries) {
       if (!l.parent) continue;
-      const wp = new THREE.Vector3();
       l.getWorldPosition(wp);
       const d = wp.distanceToSquared(cam);
-      ranked.push({ l, d });
+      if (nearest.length < POINT_LIGHT_BUDGET) {
+        nearest.push({ l, d });
+        continue;
+      }
+      let worstIdx = 0;
+      for (let i = 1; i < nearest.length; i++) {
+        if (nearest[i].d > nearest[worstIdx].d) worstIdx = i;
+      }
+      if (d < nearest[worstIdx].d) nearest[worstIdx] = { l, d };
     }
-    ranked.sort((a, b) => a.d - b.d);
-    for (let i = 0; i < ranked.length; i++) {
-      const { l } = ranked[i];
-      if (i < POINT_LIGHT_BUDGET) {
+    const kept = new Set(nearest.map((n) => n.l));
+    for (const l of entries) {
+      if (kept.has(l)) {
         l.visible = true;
         if (l.userData._baseIntensity !== undefined && l.intensity === 0) {
           l.intensity = l.userData._baseIntensity;
@@ -219,8 +275,27 @@ export const SceneManager = {
     }
   },
 
+  // Re-home the moon shadow camera around the player so the 160x160 shadow
+  // frustum covers the area the player can actually see. Previously it was
+  // fixed at origin (z=0), meaning anywhere past z=±80 got no shadows at all.
+  updateShadowFollow(playerPos) {
+    if (!this.moonLight || !playerPos) return;
+    const dx = playerPos.x;
+    const dz = playerPos.z;
+    // Keep the same relative moon angle, just translated toward the player.
+    this.moonLight.position.set(-35 + dx, 60, -10 + dz);
+    this.moonLight.target.position.set(dx, 0, dz);
+    this.moonLight.target.updateMatrixWorld();
+  },
+
   render() {
     this.cullPointLights();
+    // Refresh the shadow map every 3rd frame — the moon moves slowly and
+    // nothing else casts shadows, so sub-frame precision is wasted work.
+    if (this.renderer) {
+      this._shadowFrame = (this._shadowFrame + 1) % 3;
+      this.renderer.shadowMap.needsUpdate = this._shadowFrame === 0;
+    }
     if (this.composer) {
       this.composer.render();
     } else {
