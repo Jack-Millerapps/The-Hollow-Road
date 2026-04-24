@@ -348,7 +348,10 @@ function start() {
 
   HUD.mount();
   Travel.init(camera, scene, { canvas: renderer.domElement });
-  DebugOverlay.mount({ canvas: renderer.domElement });
+  // Debug overlay is opt-in to avoid impacting performance.
+  const debugEnabled =
+    new URLSearchParams(window.location.search).get('debug') === '1';
+  if (debugEnabled) DebugOverlay.mount({ canvas: renderer.domElement });
   // Apply visibility when scene changes (not every frame).
   let _lastScene = null;
   subscribe(() => {
@@ -449,25 +452,27 @@ function start() {
   }
   requestAnimationFrame(tick);
 
-  // Throttle debug overlay extra info (DOM updates can be costly).
-  setInterval(() => {
-    DebugOverlay.setExtra({
-      cabinVisible: !!CabinInterior.group?.visible,
-      envVisible: !!Environment.group?.visible,
-      starsVisible: !!Environment.stars?.visible,
-      westwindVisible: !!Westwind.group?.visible,
-      teleportSeq: _teleportSeq,
-      lastTeleport: _lastTeleport,
-      playerPos: state.playerPos,
-      cameraPos: SceneManager.camera
-        ? {
-            x: Number(SceneManager.camera.position.x.toFixed(2)),
-            y: Number(SceneManager.camera.position.y.toFixed(2)),
-            z: Number(SceneManager.camera.position.z.toFixed(2)),
-          }
-        : null,
-    });
-  }, 250);
+  if (debugEnabled) {
+    // Throttle debug overlay extra info (DOM updates can be costly).
+    setInterval(() => {
+      DebugOverlay.setExtra({
+        cabinVisible: !!CabinInterior.group?.visible,
+        envVisible: !!Environment.group?.visible,
+        starsVisible: !!Environment.stars?.visible,
+        westwindVisible: !!Westwind.group?.visible,
+        teleportSeq: _teleportSeq,
+        lastTeleport: _lastTeleport,
+        playerPos: state.playerPos,
+        cameraPos: SceneManager.camera
+          ? {
+              x: Number(SceneManager.camera.position.x.toFixed(2)),
+              y: Number(SceneManager.camera.position.y.toFixed(2)),
+              z: Number(SceneManager.camera.position.z.toFixed(2)),
+            }
+          : null,
+      });
+    }, 250);
+  }
 
   let lastSignature = '';
   setInterval(() => {
@@ -506,6 +511,9 @@ function start() {
       return;
     }
     if (snapshot.currentScene === 'cabin') {
+      // Cabin is an intro-only transient scene. Older saves may have persisted
+      // it; treat those as "start the cabin intro" and immediately rewrite the
+      // save on exit to world.
       enterCabin();
       return;
     }

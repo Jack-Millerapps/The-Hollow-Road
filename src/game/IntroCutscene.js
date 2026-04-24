@@ -218,7 +218,6 @@ export const IntroCutscene = {
     // Persist early so a reload keeps the name.
     state.playerName = name;
     state.hasSeenIntro = true;
-    state.currentScene = 'cabin';
     notify();
     Save.write(state);
 

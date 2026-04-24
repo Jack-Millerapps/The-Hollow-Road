@@ -181,7 +181,7 @@ export const BrotherScene = {
       });
     }
 
-    state.currentScene = 'cabin';
+    // Scene transitions are owned by main.js. Do not mutate currentScene here.
     Save.write(state);
 
     await new Promise((resolve) => {
