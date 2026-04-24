@@ -1,4 +1,4 @@
-import { state, notify } from './state.js';
+import { state, notify, subscribe } from './state.js';
 import { SceneManager } from './scene/SceneManager.js';
 import { Road } from './scene/Road.js';
 import { Environment } from './scene/Environment.js';
