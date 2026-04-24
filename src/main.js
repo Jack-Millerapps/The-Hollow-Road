@@ -36,6 +36,7 @@ import { FPSCounter } from './ui/FPSCounter.js';
 import { ControlsIntro } from './ui/ControlsIntro.js';
 import { ObjectiveTracker } from './ui/ObjectiveTracker.js';
 import { HUDTutorial } from './ui/HUDTutorial.js';
+import { DebugOverlay } from './ui/DebugOverlay.js';
 
 // ---------------------------------------------------------------------------
 // Fade overlay helpers
@@ -342,6 +343,7 @@ function start() {
 
   HUD.mount();
   Travel.init(camera, scene, { canvas: renderer.domElement });
+  DebugOverlay.mount({ canvas: renderer.domElement });
 
   InventoryPanel.mount();
   PauseMenu.mount({
@@ -390,44 +392,54 @@ function start() {
 
   let prev = performance.now();
   function tick(now) {
-    const delta = Math.min(0.1, (now - prev) / 1000);
-    prev = now;
-    const t = now * 0.001;
+    try {
+      const delta = Math.min(0.1, (now - prev) / 1000);
+      prev = now;
+      const t = now * 0.001;
 
-    if (state.currentScene !== 'cutscene') {
-      state.playtimeSeconds = (state.playtimeSeconds || 0) + delta;
+      if (state.currentScene !== 'cutscene') {
+        state.playtimeSeconds = (state.playtimeSeconds || 0) + delta;
+      }
+
+      Travel.update(delta);
+      DayNight.update(delta);
+      Environment.update(t);
+      Environment.updateCulling(camera);
+      VillageBuilder.update(t);
+      Road.update(delta, state.isWalking);
+      CabinInterior.update(t);
+      Westwind.update(t);
+
+      if (state.currentScene === 'world') {
+        FriendNPCs.update(state.playerPos, t);
+        CaveEntrance.update(state.playerPos, t);
+        Goblins.update(delta, state.playerPos);
+        VeilWander.update(delta, state.playerPos);
+        Exchanger.update(state.playerPos);
+      } else {
+        Goblins.update(delta, state.playerPos);
+      }
+      if (state.currentScene === 'cave' && Travel.player) {
+        CaveInterior.update(delta, state.playerPos, Travel.player.rotation.y);
+        Mining.update(delta, state.playerPos);
+        TrollTrade.update(delta, state.playerPos);
+      }
+      if (BrotherScene.mesh) BrotherScene.update(delta, t);
+
+      DebugOverlay.setExtra({
+        cabinVisible: !!CabinInterior.group?.visible,
+        envVisible: !!Environment.group?.visible,
+        starsVisible: !!Environment.stars?.visible,
+        westwindVisible: !!Westwind.group?.visible,
+      });
+
+      ensureSceneVisibility();
+
+      SceneManager.render();
+      FPSCounter.tick();
+    } finally {
+      requestAnimationFrame(tick);
     }
-
-    Travel.update(delta);
-    DayNight.update(delta);
-    Environment.update(t);
-    Environment.updateCulling(camera);
-    VillageBuilder.update(t);
-    Road.update(delta, state.isWalking);
-    CabinInterior.update(t);
-    Westwind.update(t);
-
-    if (state.currentScene === 'world') {
-      FriendNPCs.update(state.playerPos, t);
-      CaveEntrance.update(state.playerPos, t);
-      Goblins.update(delta, state.playerPos);
-      VeilWander.update(delta, state.playerPos);
-      Exchanger.update(state.playerPos);
-    } else {
-      Goblins.update(delta, state.playerPos);
-    }
-    if (state.currentScene === 'cave' && Travel.player) {
-      CaveInterior.update(delta, state.playerPos, Travel.player.rotation.y);
-      Mining.update(delta, state.playerPos);
-      TrollTrade.update(delta, state.playerPos);
-    }
-    if (BrotherScene.mesh) BrotherScene.update(delta, t);
-
-    ensureSceneVisibility();
-
-    SceneManager.render();
-    FPSCounter.tick();
-    requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
 
