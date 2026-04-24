@@ -290,6 +290,44 @@ async function resumeCaveFromSave() {
 }
 
 // ---------------------------------------------------------------------------
+// Visibility watchdog (prevents "blank sky" state)
+// ---------------------------------------------------------------------------
+
+function ensureSceneVisibility() {
+  // If anything ever leaves us in a state where BOTH world and cabin/cave are
+  // hidden, the renderer will show only the background (reads as a white/grey
+  // screen). Enforce the expected visibility by currentScene every frame.
+  const sc = state.currentScene;
+
+  if (sc === 'world') {
+    // World on; interiors off.
+    setWorldVisible(true);
+    setCabinVisible(false);
+    const active = CaveInterior.getActive?.();
+    if (active?.group) active.group.visible = false;
+    return;
+  }
+
+  if (sc === 'cabin') {
+    // Cabin on; world + caves off.
+    setWorldVisible(false);
+    setCabinVisible(true);
+    const active = CaveInterior.getActive?.();
+    if (active?.group) active.group.visible = false;
+    return;
+  }
+
+  if (sc === 'cave') {
+    // Cave on; world + cabin off.
+    setWorldVisible(false);
+    setCabinVisible(false);
+    const active = CaveInterior.getActive?.();
+    if (active?.group) active.group.visible = true;
+    return;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
 
@@ -384,6 +422,8 @@ function start() {
       TrollTrade.update(delta, state.playerPos);
     }
     if (BrotherScene.mesh) BrotherScene.update(delta, t);
+
+    ensureSceneVisibility();
 
     SceneManager.render();
     FPSCounter.tick();
