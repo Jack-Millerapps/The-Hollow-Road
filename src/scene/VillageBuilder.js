@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getSoftCircleTexture } from './spriteTextures.js';
 
 const registry = {
   ashwick: {
@@ -53,6 +54,7 @@ function emissiveMat(color, emissive, intensity, opts = {}) {
 function glowSprite(color, scale, opacity = 0.6) {
   const s = new THREE.Sprite(
     new THREE.SpriteMaterial({
+      map: getSoftCircleTexture(),
       color,
       transparent: true,
       opacity,

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getSoftCircleTexture } from './spriteTextures.js';
 
 const ROBE = 0x2a1d12;
 const ROBE_LINING = 0x4a2c18;
@@ -370,6 +371,7 @@ export class Character {
     // Soft glow billboard — additive plane that bleeds warmth outward
     const glow = new THREE.Sprite(
       new THREE.SpriteMaterial({
+        map: getSoftCircleTexture(),
         color: GLOW_WARM,
         transparent: true,
         opacity: 0.55,

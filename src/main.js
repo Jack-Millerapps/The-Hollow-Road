@@ -57,9 +57,20 @@ function setFade(opacity, duration = 1200) {
 // ---------------------------------------------------------------------------
 
 function setWorldVisible(visible) {
-  if (Environment.group) Environment.group.visible = visible;
+  // Environment has sky props (moon/stars) that are not parented under
+  // Environment.group, so we must use its show/hide helpers rather than
+  // toggling only the group visibility (otherwise you can get a blank sky
+  // with no world geometry during scene transitions).
+  if (visible) Environment.show?.();
+  else Environment.hide?.();
   if (Westwind.group) Westwind.group.visible = visible;
   if (CaveEntrance.group) CaveEntrance.setVisible(visible);
+  // Road segments are added directly to the scene; hide them during cabin/cave.
+  if (Road.segments?.length) {
+    for (const seg of Road.segments) {
+      if (seg) seg.visible = visible;
+    }
+  }
 }
 
 function setCabinVisible(visible) {

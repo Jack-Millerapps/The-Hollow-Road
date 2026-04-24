@@ -268,6 +268,14 @@ export const Map = {
 
   mount() {
     window.addEventListener('keydown', (e) => {
+      // Don't steal keys while the player is typing into an input (e.g. name entry).
+      const a = document.activeElement;
+      const typing =
+        a &&
+        (a.tagName === 'INPUT' ||
+          a.tagName === 'TEXTAREA' ||
+          a.isContentEditable);
+      if (typing) return;
       if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
         this.toggle();

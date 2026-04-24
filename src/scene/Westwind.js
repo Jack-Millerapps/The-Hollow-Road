@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { SceneManager } from './SceneManager.js';
 import { Collision } from '../game/Collision.js';
+import { getSoftCircleTexture } from './spriteTextures.js';
 
 // Westwind — the player's hometown, perched just north of the existing
 // road network. Builds a small village and a dirt path running south to
@@ -213,6 +214,7 @@ function makeCabin({ warmGlow = true } = {}) {
     if (warmGlow) {
       const glow = new THREE.Sprite(
         new THREE.SpriteMaterial({
+          map: getSoftCircleTexture(),
           color: 0xffaa55,
           transparent: true,
           opacity: 0.55,
@@ -339,6 +341,7 @@ function makeLanternPost() {
   // Glow sprite
   const glow = new THREE.Sprite(
     new THREE.SpriteMaterial({
+      map: getSoftCircleTexture(),
       color: 0xffaa55,
       transparent: true,
       opacity: 0.6,
