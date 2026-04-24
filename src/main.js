@@ -57,7 +57,11 @@ function setFade(opacity, duration = 1200) {
 // Scene visibility management
 // ---------------------------------------------------------------------------
 
+let _worldVisible = null;
 function setWorldVisible(visible) {
+  // Avoid expensive per-frame toggles (especially road segments).
+  if (_worldVisible === visible) return;
+  _worldVisible = visible;
   // Environment has sky props (moon/stars) that are not parented under
   // Environment.group, so we must use its show/hide helpers rather than
   // toggling only the group visibility (otherwise you can get a blank sky
@@ -309,37 +313,23 @@ async function resumeCaveFromSave() {
 // Visibility watchdog (prevents "blank sky" state)
 // ---------------------------------------------------------------------------
 
-function ensureSceneVisibility() {
-  // If anything ever leaves us in a state where BOTH world and cabin/cave are
-  // hidden, the renderer will show only the background (reads as a white/grey
-  // screen). Enforce the expected visibility by currentScene every frame.
-  const sc = state.currentScene;
-
+function applySceneVisibility(sc) {
+  // Enforce expected visibility *only when scene changes*.
   if (sc === 'world') {
-    // World on; interiors off.
     setWorldVisible(true);
     setCabinVisible(false);
     const active = CaveInterior.getActive?.();
     if (active?.group) active.group.visible = false;
-    return;
-  }
-
-  if (sc === 'cabin') {
-    // Cabin on; world + caves off.
+  } else if (sc === 'cabin') {
     setWorldVisible(false);
     setCabinVisible(true);
     const active = CaveInterior.getActive?.();
     if (active?.group) active.group.visible = false;
-    return;
-  }
-
-  if (sc === 'cave') {
-    // Cave on; world + cabin off.
+  } else if (sc === 'cave') {
     setWorldVisible(false);
     setCabinVisible(false);
     const active = CaveInterior.getActive?.();
     if (active?.group) active.group.visible = true;
-    return;
   }
 }
 
@@ -359,6 +349,16 @@ function start() {
   HUD.mount();
   Travel.init(camera, scene, { canvas: renderer.domElement });
   DebugOverlay.mount({ canvas: renderer.domElement });
+  // Apply visibility when scene changes (not every frame).
+  let _lastScene = null;
+  subscribe(() => {
+    const sc = state.currentScene;
+    if (sc === _lastScene) return;
+    _lastScene = sc;
+    applySceneVisibility(sc);
+  });
+  // Ensure initial visibility is correct.
+  applySceneVisibility(state.currentScene);
 
   InventoryPanel.mount();
   PauseMenu.mount({
@@ -441,25 +441,6 @@ function start() {
       }
       if (BrotherScene.mesh) BrotherScene.update(delta, t);
 
-      DebugOverlay.setExtra({
-        cabinVisible: !!CabinInterior.group?.visible,
-        envVisible: !!Environment.group?.visible,
-        starsVisible: !!Environment.stars?.visible,
-        westwindVisible: !!Westwind.group?.visible,
-        teleportSeq: _teleportSeq,
-        lastTeleport: _lastTeleport,
-        playerPos: state.playerPos,
-        cameraPos: SceneManager.camera
-          ? {
-              x: Number(SceneManager.camera.position.x.toFixed(2)),
-              y: Number(SceneManager.camera.position.y.toFixed(2)),
-              z: Number(SceneManager.camera.position.z.toFixed(2)),
-            }
-          : null,
-      });
-
-      ensureSceneVisibility();
-
       SceneManager.render();
       FPSCounter.tick();
     } finally {
@@ -467,6 +448,26 @@ function start() {
     }
   }
   requestAnimationFrame(tick);
+
+  // Throttle debug overlay extra info (DOM updates can be costly).
+  setInterval(() => {
+    DebugOverlay.setExtra({
+      cabinVisible: !!CabinInterior.group?.visible,
+      envVisible: !!Environment.group?.visible,
+      starsVisible: !!Environment.stars?.visible,
+      westwindVisible: !!Westwind.group?.visible,
+      teleportSeq: _teleportSeq,
+      lastTeleport: _lastTeleport,
+      playerPos: state.playerPos,
+      cameraPos: SceneManager.camera
+        ? {
+            x: Number(SceneManager.camera.position.x.toFixed(2)),
+            y: Number(SceneManager.camera.position.y.toFixed(2)),
+            z: Number(SceneManager.camera.position.z.toFixed(2)),
+          }
+        : null,
+    });
+  }, 250);
 
   let lastSignature = '';
   setInterval(() => {
