@@ -1,16 +1,26 @@
 import * as THREE from 'three';
 
+// ---------------------------------------------------------------------------
+// Road — consolidation patch.
+//
+// The route spans ~16,500 units. Waypoints define the trunk line from
+// Westwind to The Unnamed Village. Legs longer than 1500 units are sampled
+// along a Catmull-Rom curve (natural bends) rather than straight segments.
+//
+// The Road module exposes a list of straight sub-segments (`SEGMENTS`) that
+// Environment.js, Minimap/Map, VeilWander, and Goblins all consume to
+// measure distance-to-road.
+// ---------------------------------------------------------------------------
+
 function createCobblestoneTexture() {
   const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
 
-  // Deep damp base so grout reads dark
   ctx.fillStyle = '#141009';
   ctx.fillRect(0, 0, size, size);
 
-  // Vignette-like moisture mottling
   for (let i = 0; i < 16; i++) {
     const cx = Math.random() * size;
     const cy = Math.random() * size;
@@ -22,7 +32,6 @@ function createCobblestoneTexture() {
     ctx.fillRect(0, 0, size, size);
   }
 
-  // Irregular cobblestone blocks — denser grid for higher resolution
   const cols = 8;
   const rows = 8;
   const cellW = size / cols;
@@ -41,7 +50,6 @@ function createCobblestoneTexture() {
       const cy = r * cellH + jitterY;
       const w = cellW - 3 + Math.random() * 5;
       const h = cellH - 3 + Math.random() * 5;
-
       const baseHex = shades[Math.floor(Math.random() * shades.length)];
       ctx.fillStyle = baseHex;
       const rr = 4 + Math.random() * 2;
@@ -58,50 +66,18 @@ function createCobblestoneTexture() {
       ctx.closePath();
       ctx.fill();
 
-      // Gradient lighting on top of each stone to fake rounding
       const grad = ctx.createRadialGradient(
-        cx + w * 0.35,
-        cy + h * 0.35,
-        1,
-        cx + w * 0.5,
-        cy + h * 0.5,
-        Math.max(w, h) * 0.8,
+        cx + w * 0.35, cy + h * 0.35, 1,
+        cx + w * 0.5, cy + h * 0.5, Math.max(w, h) * 0.8,
       );
       grad.addColorStop(0, 'rgba(255, 220, 170, 0.12)');
       grad.addColorStop(0.5, 'rgba(0, 0, 0, 0)');
       grad.addColorStop(1, 'rgba(0, 0, 0, 0.35)');
       ctx.fillStyle = grad;
       ctx.fillRect(cx - 1, cy - 1, w + 2, h + 2);
-
-      // Moss patches on a small percentage of stones
-      if (Math.random() < 0.08) {
-        const mx = cx + Math.random() * w;
-        const my = cy + Math.random() * h;
-        const mr = 2 + Math.random() * 4;
-        const mg = ctx.createRadialGradient(mx, my, 0, mx, my, mr);
-        mg.addColorStop(0, 'rgba(60, 100, 40, 0.5)');
-        mg.addColorStop(1, 'rgba(60, 100, 40, 0)');
-        ctx.fillStyle = mg;
-        ctx.beginPath();
-        ctx.arc(mx, my, mr, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Dark crack
-      if (Math.random() < 0.25) {
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        const sx = cx + Math.random() * w;
-        const sy = cy + Math.random() * h;
-        ctx.moveTo(sx, sy);
-        ctx.lineTo(sx + (Math.random() - 0.5) * 8, sy + (Math.random() - 0.5) * 8);
-        ctx.stroke();
-      }
     }
   }
 
-  // Grain pass
   const img = ctx.getImageData(0, 0, size, size);
   const d = img.data;
   for (let i = 0; i < d.length; i += 4) {
@@ -119,69 +95,75 @@ function createCobblestoneTexture() {
   return texture;
 }
 
-// Generate a very simple normal map from the albedo, gives stones relief.
-function createCobblestoneNormal(colorCanvas) {
-  const c = document.createElement('canvas');
-  c.width = c.height = colorCanvas.width;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#8080ff';
-  ctx.fillRect(0, 0, c.width, c.height);
-  const src = colorCanvas.getContext('2d').getImageData(0, 0, c.width, c.height);
-  const dst = ctx.getImageData(0, 0, c.width, c.height);
-  const s = src.data;
-  const d = dst.data;
-  const w = c.width;
-  const h = c.height;
-  function brightness(i) {
-    return (s[i] + s[i + 1] + s[i + 2]) / 3;
-  }
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const i = (y * w + x) * 4;
-      const l = brightness(i - 4);
-      const r = brightness(i + 4);
-      const u = brightness(i - w * 4);
-      const db = brightness(i + w * 4);
-      const dx = (r - l) * 0.4;
-      const dy = (db - u) * 0.4;
-      d[i] = Math.max(0, Math.min(255, 128 - dx));
-      d[i + 1] = Math.max(0, Math.min(255, 128 + dy));
-      d[i + 2] = 220;
-      d[i + 3] = 255;
-    }
-  }
-  ctx.putImageData(dst, 0, 0);
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.anisotropy = 8;
-  return tex;
-}
-
-// Phase 2 — cobblestone route from Westwind's southern edge all the way
-// down to the Unnamed Village. Exported so Minimap.js can render the same
-// path. Each entry is a world-space (x, z) waypoint.
-export const ROAD_WAYPOINTS = [
-  { x: 0, z: 110 }, // Westwind southern edge (dirt path handoff)
-  { x: 0, z: 70 }, // Ashwick
-  { x: 0, z: 40 }, // Veil Market
-  { x: -8, z: 15 }, // gentle bend west before Stonehush
-  { x: -25, z: -20 }, // Stonehush
-  { x: -10, z: -55 }, // bend back east toward Deeproot
-  { x: 20, z: -80 }, // Deeproot
-  { x: 30, z: -100 }, // Mirror Town
-  { x: 18, z: -135 }, // bend back toward center
-  { x: 0, z: -170 }, // The Unnamed Village
-  { x: 0, z: -195 }, // open road past the village (ending threshold)
+// Main route anchors — these are the town centers along the road. Between
+// them, sub-waypoints are generated to introduce bends on long legs.
+const ANCHORS = [
+  { x: 0, z: 500 },    // Westwind
+  { x: 0, z: -500 },   // Ashwick
+  { x: 0, z: -2500 },  // Veil Market
+  { x: -800, z: -5000 }, // Stonehush
+  { x: 600, z: -6000 },  // Deeproot
+  { x: 200, z: -7800 },  // Mirror Town
+  { x: 0, z: -14500 }, // Unnamed Village
 ];
 
-const SEGMENTS = [];
-for (let i = 0; i < ROAD_WAYPOINTS.length - 1; i++) {
-  SEGMENTS.push({
-    start: ROAD_WAYPOINTS[i],
-    end: ROAD_WAYPOINTS[i + 1],
-  });
+// For legs > 1500 units, introduce bends by sampling a Catmull-Rom curve
+// built from anchors with tangent-aware control points.
+function buildWaypoints() {
+  const pts = [];
+  for (let i = 0; i < ANCHORS.length - 1; i++) {
+    const a = ANCHORS[i];
+    const b = ANCHORS[i + 1];
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const legLen = Math.hypot(dx, dz);
+    pts.push({ x: a.x, z: a.z });
+
+    if (legLen > 1500) {
+      // Insert 2 bends with lateral offset.
+      const perpX = -dz / legLen;
+      const perpZ = dx / legLen;
+      const bends = [0.33, 0.66];
+      for (const t of bends) {
+        const px = a.x + dx * t;
+        const pz = a.z + dz * t;
+        // Alternating lateral offset proportional to length (5-8%).
+        const sign = t < 0.5 ? 1 : -1;
+        const off = legLen * 0.05 * sign;
+        pts.push({ x: px + perpX * off, z: pz + perpZ * off });
+      }
+    }
+  }
+  pts.push(ANCHORS[ANCHORS.length - 1]);
+  return pts;
 }
+
+// Dense-sample the polyline through a Catmull-Rom curve so the visible road
+// looks smoothly curved rather than straight-kinked.
+function buildCurveSegments(waypoints, segmentMax = 120) {
+  const vecs = waypoints.map((p) => new THREE.Vector3(p.x, 0, p.z));
+  const curve = new THREE.CatmullRomCurve3(vecs, false, 'catmullrom', 0.25);
+  const totalLen = curve.getLength();
+  const count = Math.max(2, Math.ceil(totalLen / segmentMax));
+  const pts = curve.getSpacedPoints(count);
+  const segs = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    segs.push({
+      start: { x: pts[i].x, z: pts[i].z },
+      end: { x: pts[i + 1].x, z: pts[i + 1].z },
+    });
+  }
+  return { segs, curve, totalLen };
+}
+
+const RAW_WAYPOINTS = buildWaypoints();
+const { segs: RAW_SEGMENTS, curve: ROAD_CURVE, totalLen: ROAD_LENGTH } =
+  buildCurveSegments(RAW_WAYPOINTS, 120);
+
+export const ROAD_WAYPOINTS = RAW_WAYPOINTS;
+export const ROAD_SEGMENTS_DATA = RAW_SEGMENTS;
+export const ROAD_TOTAL_LENGTH = ROAD_LENGTH;
+export { ROAD_CURVE };
 
 const EDGE_MAT = new THREE.MeshStandardMaterial({
   color: 0x5a4226,
@@ -189,20 +171,25 @@ const EDGE_MAT = new THREE.MeshStandardMaterial({
   flatShading: true,
 });
 
-function buildSegment(scene, start, end, texture, normalTex) {
+function buildSegment(scene, start, end, texture) {
   const dx = end.x - start.x;
   const dz = end.z - start.z;
   const length = Math.sqrt(dx * dx + dz * dz);
+  if (length < 0.01) return null;
   const angle = Math.atan2(-dx, -dz);
 
   const group = new THREE.Group();
   group.position.set((start.x + end.x) / 2, 0.005, (start.z + end.z) / 2);
   group.rotation.y = angle;
 
-  const geometry = new THREE.PlaneGeometry(6, length, 1, Math.max(1, Math.round(length / 10)));
+  const geometry = new THREE.PlaneGeometry(
+    6,
+    length,
+    1,
+    Math.max(1, Math.round(length / 20)),
+  );
   const material = new THREE.MeshStandardMaterial({
     map: texture,
-    normalMap: normalTex,
     roughness: 0.88,
     metalness: 0.02,
   });
@@ -211,51 +198,16 @@ function buildSegment(scene, start, end, texture, normalTex) {
   road.receiveShadow = true;
   group.add(road);
 
-  // Soft wet strip down the middle — subtle emissive line that picks up a bit
-  // of moonlight reflection and makes the road feel alive.
-  const wetStripMat = new THREE.MeshStandardMaterial({
-    color: 0x1a1a22,
-    emissive: 0x2a3050,
-    emissiveIntensity: 0.12,
-    roughness: 0.2,
-    metalness: 0.35,
-    transparent: true,
-    opacity: 0.3,
-  });
-  const wetStrip = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.4, length),
-    wetStripMat,
-  );
-  wetStrip.rotation.x = -Math.PI / 2;
-  wetStrip.position.y = 0.01;
-  group.add(wetStrip);
-
   // Edge stones
   const edgeGeo = new THREE.BoxGeometry(0.16, 0.1, length);
   const left = new THREE.Mesh(edgeGeo, EDGE_MAT);
   left.position.set(-3.1, 0.05, 0);
-  left.castShadow = true;
   left.receiveShadow = true;
   group.add(left);
-
   const right = new THREE.Mesh(edgeGeo, EDGE_MAT);
   right.position.set(3.1, 0.05, 0);
-  right.castShadow = true;
   right.receiveShadow = true;
   group.add(right);
-
-  // Mossy trim strip just outside the edge
-  const mossMat = new THREE.MeshStandardMaterial({
-    color: 0x1c3412,
-    roughness: 1,
-    flatShading: true,
-  });
-  const mossLeft = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, length), mossMat);
-  mossLeft.position.set(-3.35, 0.02, 0);
-  group.add(mossLeft);
-  const mossRight = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, length), mossMat);
-  mossRight.position.set(3.35, 0.02, 0);
-  group.add(mossRight);
 
   scene.add(group);
   return group;
@@ -263,38 +215,43 @@ function buildSegment(scene, start, end, texture, normalTex) {
 
 export const Road = {
   texture: null,
-  normalTexture: null,
   segments: [],
 
   init(scene) {
-    const colorCanvas = document.createElement('canvas');
-    colorCanvas.width = colorCanvas.height = 256;
-    const ctx = colorCanvas.getContext('2d');
-    // Re-run the pattern logic onto our own canvas so we can also build a
-    // matching normal map from the albedo values.
-    const tmpTex = createCobblestoneTexture();
-    // createCobblestoneTexture already built a CanvasTexture from its own
-    // offscreen canvas; grab that canvas for the normal map derivation.
-    const srcCanvas = tmpTex.image;
-    ctx.drawImage(srcCanvas, 0, 0, 256, 256);
-    const normalTex = createCobblestoneNormal(colorCanvas);
-
-    tmpTex.repeat.set(2, 28);
-    normalTex.repeat.set(2, 28);
-    this.texture = tmpTex;
-    this.normalTexture = normalTex;
-
-    this.segments = SEGMENTS.map((s) =>
-      buildSegment(scene, s.start, s.end, tmpTex, normalTex),
-    );
+    const texture = createCobblestoneTexture();
+    texture.repeat.set(2, 14);
+    this.texture = texture;
+    this.segments = RAW_SEGMENTS.map((s) =>
+      buildSegment(scene, s.start, s.end, texture),
+    ).filter(Boolean);
   },
 
   update(delta, isWalking) {
     if (!this.texture) return;
     if (isWalking) {
-      // Subtle, not too fast, and both layers scroll together.
       this.texture.offset.y -= delta * 0.3;
-      if (this.normalTexture) this.normalTexture.offset.y -= delta * 0.3;
     }
+  },
+
+  // Returns perpendicular distance from (x,z) to the nearest road segment.
+  distanceToRoad(x, z) {
+    let best = Infinity;
+    for (const s of RAW_SEGMENTS) {
+      const ax = s.start.x;
+      const az = s.start.z;
+      const bx = s.end.x;
+      const bz = s.end.z;
+      const dx = bx - ax;
+      const dz = bz - az;
+      const l2 = dx * dx + dz * dz;
+      if (l2 === 0) continue;
+      let t = ((x - ax) * dx + (z - az) * dz) / l2;
+      t = Math.max(0, Math.min(1, t));
+      const px = ax + t * dx;
+      const pz = az + t * dz;
+      const d = Math.hypot(x - px, z - pz);
+      if (d < best) best = d;
+    }
+    return best;
   },
 };

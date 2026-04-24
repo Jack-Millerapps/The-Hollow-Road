@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state } from '../state.js';
+import { state, notify } from '../state.js';
 import { DialoguePanel } from '../ui/DialoguePanel.js';
 import { CabinInterior } from '../scene/CabinInterior.js';
 import { makeVillagerMesh } from '../scene/Westwind.js';
@@ -151,18 +151,39 @@ export const BrotherScene = {
     if (this.mesh) {
       const doorPos = CabinInterior.getDoorWorldPos(new THREE.Vector3());
       doorPos.y = 0;
-      // Stand just inside the door, facing it.
       doorPos.z -= 0.8;
       this.mesh.userData.walking = true;
       await animateTo(this.mesh, doorPos, 2200);
-      this.mesh.rotation.y = 0; // face the door (+z)
+      this.mesh.rotation.y = 0;
     }
 
-    // Persist state so a reload keeps us here.
+    // Brother gives the backpack at the door — the player starts with
+    // nothing in their inventory except what friends/brother provide.
+    if (!state.items.backpack) {
+      await new Promise((resolve) => {
+        DialoguePanel.open({
+          title: brotherName,
+          body:
+            "Take this. You'll need to carry more than memories where you're going.",
+          buttons: [
+            {
+              label: '(Accept the backpack.)',
+              onClick: () => {
+                state.items.backpack = true;
+                state.flags.brotherGifted = true;
+                notify();
+                DialoguePanel.close();
+                resolve();
+              },
+            },
+          ],
+        });
+      });
+    }
+
     state.currentScene = 'cabin';
     Save.write(state);
 
-    // Show "Step outside" button.
     await new Promise((resolve) => {
       DialoguePanel.open({
         title: '',

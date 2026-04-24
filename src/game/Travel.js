@@ -7,29 +7,31 @@ import { Ending } from './Ending.js';
 import { Character } from '../scene/Character.js';
 import { distanceToNearestRoad } from './Goblins.js';
 import { VeilWander } from './VeilWander.js';
+import { FriendNPCs } from './FriendNPCs.js';
+import { FirstNightWarning } from '../ui/FirstNightWarning.js';
+import { DayNight } from '../scene/DayNight.js';
 
-// Phase 2 — time-based movement.
-const WALK_SPEED = 1.0; // units per second
-const SPRINT_SPEED = 3.0; // units per second
-const CAVE_SPEED = 0.7; // Phase 3 — reduced in caves
-const SPRINT_DRAIN = 0.25; // stamina per second while sprinting
-const SPRINT_REGEN = 0.15; // stamina per second while not sprinting
-const SPRINT_GRACE = 0.2; // must exceed this to re-sprint after depletion
-const ROTATE_SPEED = 2.2; // radians per second
+// CHANGE 9 — player speeds and cycle durations
+const WALK_SPEED = 4.0;
+const SPRINT_SPEED = 9.0;
+const CAVE_SPEED = 2.2;
+const SPRINT_DRAIN = 0.25;
+const SPRINT_REGEN = 0.15;
+const SPRINT_GRACE = 0.2;
 
-const EVENT_INTERVAL = 36;
-const EVENT_CHANCE = 0.42;
-const END_Z = -195; // just past the Unnamed Village at z=-170
-const ROAD_LATERAL_LIMIT = 8; // Phase 3 — beyond this, state.offRoad = true
+// Mouse-look tuning
+const MOUSE_SENS_X = 0.0022; // rad per px
+const MOUSE_SENS_Y = 0.0022;
+const PITCH_LIMIT = (60 * Math.PI) / 180;
 
-// Third-person chase camera — slightly elevated and pulled back.
+const EVENT_INTERVAL = 42;
+const EVENT_CHANCE = 0.34;
+const ROAD_LATERAL_LIMIT = 10;
+
 const CAMERA_OFFSET = new THREE.Vector3(0, 3.6, 7.4);
 const LOOK_OFFSET = new THREE.Vector3(0, 1.55, 0);
 
-// When the player leaves Westwind for the first time we zero gameTime so the
-// day/night cycle starts at "noon". Westwind center sits at z=120; we pick a
-// threshold a little south of the village signpost.
-const WESTWIND_EXIT_Z = 108;
+const WESTWIND_EXIT_Z = 470; // ~30 units south of Westwind centre (z=500), past the signpost
 
 export const Travel = {
   scene: null,
@@ -44,14 +46,27 @@ export const Travel = {
   _cameraPos: new THREE.Vector3(),
   _cameraLook: new THREE.Vector3(),
   _lastTime: 0,
-  _sprintLocked: false, // true after stamina hits 0; cleared once stamina > SPRINT_GRACE
+  _sprintLocked: false,
+  _pitch: 0,
+  _yaw: 0,
+  _pointerLocked: false,
+  _mobileDrag: null, // { lastX, lastY }
+  _canvas: null,
+  _softPrompt: null,
+  _softPromptTimer: 0,
 
-  init(camera, scene) {
+  init(camera, scene, opts = {}) {
     this.scene = scene;
     this.camera = camera;
+    this._canvas = opts.canvas || document.querySelector('canvas');
 
     this.player = new THREE.Object3D();
-    this.player.position.set(0, 0, 0);
+    const startX = state.playerPos?.x ?? 0;
+    const startZ = state.playerPos?.z ?? 500;
+    this.player.position.set(startX, 0, startZ);
+    this._yaw = state.cameraYaw ?? Math.PI; // facing -Z by default
+    this._pitch = state.cameraPitch ?? 0;
+    this.player.rotation.y = this._yaw;
     scene.add(this.player);
 
     this.character = new Character();
@@ -65,75 +80,160 @@ export const Travel = {
     this._lastTime = performance.now() / 1000;
     this._sprintLocked = false;
 
-    const initialOffset = CAMERA_OFFSET.clone().applyQuaternion(this.player.quaternion);
-    this._cameraPos.copy(this.player.position).add(initialOffset);
-    this._cameraLook.copy(this.player.position).add(LOOK_OFFSET);
-    this.camera.position.copy(this._cameraPos);
-    this.camera.lookAt(this._cameraLook);
+    this._setCameraFromPlayer();
 
     window.addEventListener('keydown', (e) => {
-      this.keys.add(e.key.toLowerCase());
+      const k = e.key.toLowerCase();
+      this.keys.add(k);
     });
-    window.addEventListener('keyup', (e) => {
-      this.keys.delete(e.key.toLowerCase());
-    });
+    window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
     window.addEventListener('blur', () => {
       this.keys.clear();
       this.walkForward = false;
     });
 
-    state.playerPos = { x: 0, z: 0 };
+    this._initPointerLock();
+    this._initMobileDrag();
+
+    state.playerPos = { x: this.player.position.x, z: this.player.position.z };
     notify();
   },
 
-  setButtonHeld(held) {
-    this.walkForward = held;
+  _initPointerLock() {
+    if (!this._canvas) return;
+    this._canvas.addEventListener('click', () => {
+      if (state.currentScene !== 'world') return;
+      if (this.paused) return;
+      if (document.pointerLockElement !== this._canvas) {
+        this._canvas.requestPointerLock?.();
+      }
+    });
+    document.addEventListener('pointerlockchange', () => {
+      this._pointerLocked = document.pointerLockElement === this._canvas;
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!this._pointerLocked) return;
+      const dx = e.movementX || 0;
+      const dy = e.movementY || 0;
+      this._yaw -= dx * MOUSE_SENS_X;
+      this._pitch -= dy * MOUSE_SENS_Y;
+      if (this._pitch > PITCH_LIMIT) this._pitch = PITCH_LIMIT;
+      if (this._pitch < -PITCH_LIMIT) this._pitch = -PITCH_LIMIT;
+    });
   },
+
+  _initMobileDrag() {
+    if (!this._canvas) return;
+    if (!('ontouchstart' in window)) return;
+    let lastX = 0;
+    let lastY = 0;
+    let active = false;
+    this._canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      active = true;
+      lastX = e.touches[0].clientX;
+      lastY = e.touches[0].clientY;
+    });
+    this._canvas.addEventListener('touchmove', (e) => {
+      if (!active || e.touches.length !== 1) return;
+      const x = e.touches[0].clientX;
+      const y = e.touches[0].clientY;
+      const dx = x - lastX;
+      const dy = y - lastY;
+      lastX = x;
+      lastY = y;
+      this._yaw -= dx * MOUSE_SENS_X * 1.4;
+      this._pitch -= dy * MOUSE_SENS_Y * 1.4;
+      if (this._pitch > PITCH_LIMIT) this._pitch = PITCH_LIMIT;
+      if (this._pitch < -PITCH_LIMIT) this._pitch = -PITCH_LIMIT;
+    });
+    this._canvas.addEventListener('touchend', () => { active = false; });
+  },
+
+  setButtonHeld(held) { this.walkForward = held; },
 
   pause() {
     this.paused = true;
-    if (state.isWalking) {
-      state.isWalking = false;
-      notify();
-    }
-    if (state.isSprinting) {
-      state.isSprinting = false;
-    }
+    if (state.isWalking) { state.isWalking = false; notify(); }
+    if (state.isSprinting) state.isSprinting = false;
+    if (this._pointerLocked) document.exitPointerLock?.();
   },
 
-  resume() {
-    this.paused = false;
+  resume() { this.paused = false; },
+
+  _setCameraFromPlayer() {
+    if (!this.player || !this.camera) return;
+    this.player.rotation.y = this._yaw;
+    const offset = CAMERA_OFFSET.clone().applyQuaternion(this.player.quaternion);
+    const targetPos = this.player.position.clone().add(offset);
+    const targetLook = this.player.position.clone().add(LOOK_OFFSET);
+    // Apply pitch by nudging the look target up/down based on _pitch.
+    targetLook.y += Math.tan(this._pitch) * 4;
+    this._cameraPos.copy(targetPos);
+    this._cameraLook.copy(targetLook);
+    this.camera.position.copy(targetPos);
+    this.camera.lookAt(targetLook);
   },
 
   _updateCamera(delta) {
     if (!this.player || !this.camera) return;
+    this.player.rotation.y = this._yaw;
     const offset = CAMERA_OFFSET.clone().applyQuaternion(this.player.quaternion);
     const targetPos = this.player.position.clone().add(offset);
     const targetLook = this.player.position.clone().add(LOOK_OFFSET);
-
+    targetLook.y += Math.tan(this._pitch) * 4;
     const posK = 1 - Math.exp(-delta * 9);
     const lookK = 1 - Math.exp(-delta * 11);
     this._cameraPos.lerp(targetPos, posK);
     this._cameraLook.lerp(targetLook, lookK);
-
     this.camera.position.copy(this._cameraPos);
     this.camera.lookAt(this._cameraLook);
+    state.cameraYaw = this._yaw;
+    state.cameraPitch = this._pitch;
   },
 
   _updateStamina(delta, sprinting) {
     const max = state.maxStamina ?? 1.0;
     if (sprinting) {
       state.stamina = Math.max(0, (state.stamina ?? 0) - SPRINT_DRAIN * delta);
-      if (state.stamina <= 0) {
-        state.stamina = 0;
-        this._sprintLocked = true;
-      }
+      if (state.stamina <= 0) { state.stamina = 0; this._sprintLocked = true; }
     } else {
       state.stamina = Math.min(max, (state.stamina ?? 0) + SPRINT_REGEN * delta);
-      if (this._sprintLocked && state.stamina > SPRINT_GRACE) {
-        this._sprintLocked = false;
-      }
+      if (this._sprintLocked && state.stamina > SPRINT_GRACE) this._sprintLocked = false;
     }
+  },
+
+  _showSoftPrompt(text) {
+    if (!this._softPrompt) {
+      const el = document.createElement('div');
+      Object.assign(el.style, {
+        position: 'fixed',
+        top: '60%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        padding: '14px 22px',
+        background: 'rgba(16, 10, 6, 0.92)',
+        border: '1px solid rgba(200, 160, 110, 0.5)',
+        borderRadius: '4px',
+        color: '#ffd79a',
+        fontFamily: 'Georgia, serif',
+        fontStyle: 'italic',
+        fontSize: '15px',
+        zIndex: '45',
+        pointerEvents: 'none',
+        opacity: '0',
+        transition: 'opacity 0.4s ease',
+      });
+      document.getElementById('ui-root').appendChild(el);
+      this._softPrompt = el;
+    }
+    this._softPrompt.textContent = text;
+    this._softPrompt.style.opacity = '1';
+    this._softPromptTimer = 3.0;
+  },
+
+  _hideSoftPrompt() {
+    if (this._softPrompt) this._softPrompt.style.opacity = '0';
   },
 
   update(delta) {
@@ -141,6 +241,11 @@ export const Travel = {
 
     const now = performance.now() / 1000;
     const clampedDelta = Math.min(delta ?? 1 / 60, 1 / 20);
+
+    if (this._softPromptTimer > 0) {
+      this._softPromptTimer -= clampedDelta;
+      if (this._softPromptTimer <= 0) this._hideSoftPrompt();
+    }
 
     if (state.flags.endingStarted) {
       this._updateCamera(clampedDelta);
@@ -156,11 +261,7 @@ export const Travel = {
       return;
     }
 
-    const rotLeft = this.keys.has('q') || this.keys.has('arrowleft');
-    const rotRight = this.keys.has('arrowright');
-    if (rotLeft) this.player.rotation.y += ROTATE_SPEED * clampedDelta;
-    if (rotRight) this.player.rotation.y -= ROTATE_SPEED * clampedDelta;
-
+    // CHANGE 7 — no more Q/E rotation. WASD relative to camera yaw.
     const forwardPressed = this.keys.has('w') || this.walkForward;
     const backPressed = this.keys.has('s');
     const strafeLeftPressed = this.keys.has('a');
@@ -178,17 +279,9 @@ export const Travel = {
 
     const inCave = state.currentScene === 'cave';
     const canSprint =
-      !inCave &&
-      shiftHeld &&
-      movingInput &&
-      !this._sprintLocked &&
+      !inCave && shiftHeld && movingInput && !this._sprintLocked &&
       (state.stamina ?? 0) > 0;
-    let speed;
-    if (inCave) {
-      speed = CAVE_SPEED;
-    } else {
-      speed = canSprint ? SPRINT_SPEED : WALK_SPEED;
-    }
+    const speed = inCave ? CAVE_SPEED : (canSprint ? SPRINT_SPEED : WALK_SPEED);
     state.isSprinting = canSprint;
 
     let moved = false;
@@ -197,35 +290,41 @@ export const Travel = {
       const nf = fwd / len;
       const ns = strafe / len;
       const step = speed * clampedDelta;
-      const move = new THREE.Vector3(ns * step, 0, nf * step);
-      move.applyQuaternion(this.player.quaternion);
-      this.player.position.x += move.x;
-      this.player.position.z += move.z;
-      this.distanceSinceEvent += Math.hypot(move.x, move.z);
+      // Movement relative to yaw (no pitch component).
+      const sinY = Math.sin(this._yaw);
+      const cosY = Math.cos(this._yaw);
+      const moveX = ns * step * cosY + nf * step * sinY;
+      const moveZ = -ns * step * sinY + nf * step * cosY;
+      this.player.position.x += moveX;
+      this.player.position.z += moveZ;
+      this.distanceSinceEvent += Math.hypot(moveX, moveZ);
       moved = true;
     }
 
     this._updateStamina(clampedDelta, canSprint);
-
-    if (state.isWalking !== moved) {
-      state.isWalking = moved;
-    }
-
+    if (state.isWalking !== moved) state.isWalking = moved;
     state.playerPos = { x: this.player.position.x, z: this.player.position.z };
 
-    // First exit from Westwind — clock resets to noon the moment the player
-    // crosses south of the signpost.
-    if (
-      !state.flags.hasLeftWestwind &&
-      !inCave &&
-      this.player.position.z < WESTWIND_EXIT_Z
-    ) {
-      state.flags.hasLeftWestwind = true;
-      state.gameTime = 0;
+    // CHANGE 4 / 2 / 6 — crossing south of Westwind for the first time.
+    if (!state.flags.hasLeftWestwind && !inCave &&
+        this.player.position.z < WESTWIND_EXIT_Z) {
+      const missing = FriendNPCs.missingFriend();
+      if (missing) {
+        this.player.position.z = WESTWIND_EXIT_Z + 1.5;
+        this._showSoftPrompt(
+          `You're not ready yet. Talk to ${missing.name} first.`,
+        );
+      } else {
+        // First real exit — start the clock at night, unfreeze, and warn.
+        state.flags.hasLeftWestwind = true;
+        state.timePaused = false;
+        DayNight.setStartPhase('night');
+        FirstNightWarning.maybeShow();
+        notify();
+      }
     }
 
-    // Phase 3 — off-road tracker used by the goblin system. Only meaningful
-    // in the world scene; inside caves we pin it to false.
+    // Off-road tracker used by goblins.
     if (inCave) {
       state.offRoad = false;
     } else {
@@ -237,19 +336,10 @@ export const Travel = {
     }
 
     notify();
-
     if (this.character) this.character.update(clampedDelta, moved, now);
 
-    // Skip village triggers, random road events and the ending when the
-    // player is currently inside a cave scene. Cave interactions use their
-    // own proximity + keypress handlers.
-    if (inCave) {
-      this._updateCamera(clampedDelta);
-      return;
-    }
+    if (inCave) { this._updateCamera(clampedDelta); return; }
 
-    // Phase 4 — the Veil Market is handled separately because it can
-    // respawn elsewhere (VeilWander). Check that first.
     if (VeilWander.consumeTradeRequest()) {
       this.pause();
       state.currentVillage = 'veilMarket';
@@ -266,15 +356,12 @@ export const Travel = {
 
     for (const village of villages) {
       if (village.placeholder) continue;
-      if (village.wandering) continue; // veilMarket handled by VeilWander
+      if (village.wandering) continue;
       if (this.triggered.has(village.name)) continue;
-      if (state.tradeComplete[village.name]) {
-        this.triggered.add(village.name);
-        continue;
-      }
+      if (state.tradeComplete[village.name]) { this.triggered.add(village.name); continue; }
       const dx = this.player.position.x - village.position.x;
       const dz = this.player.position.z - village.position.z;
-      const dist = Math.sqrt(dx * dx + dz * dz);
+      const dist = Math.hypot(dx, dz);
       if (dist < village.radius) {
         this.triggered.add(village.name);
         this.pause();
@@ -301,6 +388,7 @@ export const Travel = {
       }
     }
 
+    const END_Z = -14800; // just past the Unnamed Village at z=-14500
     if (this.player.position.z <= END_Z && !state.flags.endingStarted) {
       this.pause();
       Ending.begin();

@@ -1,31 +1,33 @@
 // ---------------------------------------------------------------------------
 // The Hollow Road — global game state
-//
-// SAVE_VERSION is bumped whenever the shape of `state` changes so that older
-// saves can be loaded safely. See src/game/Save.js for the migration flow.
 // ---------------------------------------------------------------------------
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
-// Canonical "blank slate" used both at boot and as the baseline to merge
-// older saves against. Always construct the nested objects via the helper
-// so that a save restore never mutates this shared template.
 function freshDefaults() {
   return {
     currencies: { gold: 50, memories: 3, promises: 2, years: 1, secrets: 2 },
-    reputation: { ashwick: 0, veilMarket: 0, stonehush: 0, deeproot: 0, mirrorTown: 0 },
+    reputation: {
+      ashwick: 0,
+      veilMarket: 0,
+      stonehush: 0,
+      deeproot: 0,
+      mirrorTown: 0,
+    },
     wholeness: 1.0,
     inventory: [],
+    // Consolidation — the player starts with NOTHING. Items are granted
+    // by the brother (backpack) and the three friends in Westwind.
     items: {
-      backpack: true,
-      shovel: true,
-      pickaxe: true,
+      backpack: false,
+      shovel: false,
+      pickaxe: false,
       ripMap: false,
-      watch: true,
-      sleepingBag: true,
+      watch: false,
+      sleepingBag: false,
     },
     cameraZ: 0,
-    playerPos: { x: 0, z: 0 },
+    playerPos: { x: 0, z: 500 },
     isWalking: false,
     currentVillage: null,
     tradeComplete: {
@@ -43,19 +45,26 @@ function freshDefaults() {
       endingComplete: false,
       nextVillageHintShown: false,
       hasLeftWestwind: false,
-      // Phase 4 task flags
+      // Phase 4 / consolidation flags
       ashwickTaskDone: false,
       stonehushTaskDone: false,
       deeprootTaskDone: false,
       mirrorSeen: false,
-      // Phase 4 one-shot story choice flags
       treeAccepted: false,
       veilFirstEncounterDone: false,
+      // Consolidation additions
+      seenControls: false,
+      seenFirstNightWarning: false,
+      // Friend gifting gates
+      friendMiraGifted: false,
+      friendTomasGifted: false,
+      friendElenGifted: false,
+      brotherGaveBackpack: false,
     },
     // -- Phase 1 --------------------------------------------------------------
     playerName: '',
     hasSeenIntro: false,
-    currentScene: 'cutscene', // "cutscene" | "cabin" | "world" | "cave"
+    currentScene: 'cutscene',
     gameTime: 0,
     // -- Phase 2 --------------------------------------------------------------
     stamina: 1.0,
@@ -68,28 +77,31 @@ function freshDefaults() {
     mapPieces: new Set(),
     mined: {},
     trollsTraded: [],
-    // -- Phase 4 --------------------------------------------------------------
+    // -- Phase 4 / consolidation ---------------------------------------------
     totalGoblinThefts: 0,
     tasksCompleted: [],
     veilMarketSpawnCount: 0,
-    mapShopsUsed: [],
     playtimeSeconds: 0,
-    // Save metadata
+    // Consolidation — quests replace MapShop / SpecialTasks.
+    quests: {
+      ashwick: { step: 0, done: false, branch: null },
+      stonehush: { step: 0, done: false, branch: null },
+      deeproot: { step: 0, done: false, branch: null },
+      mirrorTown: { step: 0, done: false, branch: null },
+    },
+    // View state
+    cameraYaw: 0,
+    cameraPitch: 0,
     saveVersion: SAVE_VERSION,
   };
 }
 
 export const state = freshDefaults();
 
-// Expose a factory so Save.js (or tests) can spin up a clean state object
-// without duplicating the schema.
 export function createDefaultState() {
   return freshDefaults();
 }
 
-// Shallow-merge a snapshot onto the live state. Missing keys get defaults
-// from `freshDefaults()`. Deep objects (currencies / items / flags / etc.)
-// are merged per-key so future additions never clobber saved progress.
 export function mergeDefaults(target) {
   const d = freshDefaults();
   for (const key of Object.keys(d)) {
@@ -97,7 +109,6 @@ export function mergeDefaults(target) {
       target[key] = d[key];
       continue;
     }
-    // Merge nested plain-object maps (currencies, items, flags, etc.)
     if (
       d[key] &&
       typeof d[key] === 'object' &&
@@ -110,6 +121,20 @@ export function mergeDefaults(target) {
     ) {
       for (const sub of Object.keys(d[key])) {
         if (target[key][sub] === undefined) target[key][sub] = d[key][sub];
+        // One-level deeper merge for quests sub-objects
+        if (
+          d[key][sub] &&
+          typeof d[key][sub] === 'object' &&
+          target[key][sub] &&
+          typeof target[key][sub] === 'object' &&
+          !Array.isArray(d[key][sub])
+        ) {
+          for (const k2 of Object.keys(d[key][sub])) {
+            if (target[key][sub][k2] === undefined) {
+              target[key][sub][k2] = d[key][sub][k2];
+            }
+          }
+        }
       }
     }
   }
@@ -129,7 +154,7 @@ export function notify() {
 
 export function canAfford(cost) {
   if (!cost) return true;
-  return Object.entries(cost).every(([k, v]) => state.currencies[k] >= v);
+  return Object.entries(cost).every(([k, v]) => (state.currencies[k] || 0) >= v);
 }
 
 export function spend(type, amount) {

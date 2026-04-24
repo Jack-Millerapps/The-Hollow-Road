@@ -1,6 +1,11 @@
 import { state, spend, canAfford, addInventory, notify } from '../state.js';
 import { TradePanel } from '../ui/TradePanel.js';
 import { DialoguePanel } from '../ui/DialoguePanel.js';
+import { QuestSystem } from './QuestSystem.js';
+
+// Consolidation — villages that have multi-step quests. Entering these towns
+// hands off to QuestSystem (the quest's main NPC drives the dialogue).
+const QUEST_VILLAGES = new Set(['ashwick', 'stonehush', 'deeproot', 'mirrorTown']);
 
 // List of all map pieces the world can yield. Kept in sync with CAVE_PIECES
 // in src/data/caves.js — the caves module is the authoritative owner of the
@@ -35,6 +40,10 @@ function classifyWrongness(option, village) {
 
 export const TradeSystem = {
   startTrade(village, onComplete) {
+    if (QUEST_VILLAGES.has(village.name)) {
+      QuestSystem.talkToQuestNpc(village.name, { onClose: onComplete });
+      return;
+    }
     TradePanel.open({
       village,
       canAfford,

@@ -1,22 +1,24 @@
-// Phase 2 rescale — the full route Westwind (0, 120) → Unnamed Village
-// (0, -170) is roughly 300m total. Existing villages keep their NPC data
-// untouched; new phase-3 placeholders are marked `placeholder: true` so
-// Travel.js skips their trigger until later phases fill in the content.
+// ---------------------------------------------------------------------------
+// Villages — consolidation patch (Change 9 rescaled coordinates).
 //
-// Phase 4 additions:
-//   • veilMarket.options now includes a "Whisper of the Road" repeatable
-//     purchase (costs 3 secrets, grants a single random unowned map piece).
-//     It is marked repeatable so the trade flow does not set
-//     state.tradeComplete.veilMarket on its own — VeilWander drives that.
-//   • veilMarket.wandering: true is a flag used by Travel.js to delegate
-//     trigger handling to VeilWander.js rather than the standard village
-//     loop.
+// The route spans roughly 16,500 units end-to-end:
+//   westwind    (0,  500)
+//   ashwick     (0, -500)       1000 units from Westwind
+//   veilMarket  (0, -2500)      2000 units from Ashwick
+//   stonehush   (-800, -5000)   3000 units (slight west turn)
+//   deeproot    (600, -6000)    1500 units (east turn)
+//   mirrorTown  (200, -7800)    2000 units
+//   unnamed     (0, -14500)     7000 units (pilgrimage leg)
+//
+// Walking speed is 4 u/s, sprint is 9 u/s. See Travel.js + DayNight.js for
+// the 8.5-minute day/night cycle.
+// ---------------------------------------------------------------------------
 
 export const villages = [
   {
     name: 'ashwick',
-    position: { x: 0, z: 70 },
-    radius: 6,
+    position: { x: 0, z: -500 },
+    radius: 18,
     displayName: 'Ashwick',
     flavor: "The wheel hasn't stopped in eleven years. Neither has he.",
     npc: 'The Miller',
@@ -45,8 +47,8 @@ export const villages = [
   },
   {
     name: 'veilMarket',
-    position: { x: 0, z: 40 },
-    radius: 6,
+    position: { x: 0, z: -2500 },
+    radius: 18,
     displayName: 'The Veil Market',
     flavor: "Everything here was someone else's. Including the silence.",
     npc: 'The Auctioneer',
@@ -75,7 +77,6 @@ export const villages = [
           'They take the gold and say nothing. A transaction, nothing more.',
       },
       {
-        // Phase 4 — a single random unowned map piece.
         label: 'Whisper of the Road (3 Secrets)',
         cost: { secrets: 3 },
         isTrue: false,
@@ -87,8 +88,8 @@ export const villages = [
   },
   {
     name: 'stonehush',
-    position: { x: -25, z: -20 },
-    radius: 6,
+    position: { x: -800, z: -5000 },
+    radius: 24,
     displayName: 'Stonehush',
     flavor: 'She places a finger to her lips. Then points at your hands.',
     npc: 'The Weaver',
@@ -118,8 +119,8 @@ export const villages = [
   },
   {
     name: 'deeproot',
-    position: { x: 20, z: -80 },
-    radius: 6,
+    position: { x: 600, z: -6000 },
+    radius: 22,
     displayName: 'Deeproot',
     flavor: 'Roots thick as a man’s arm break the stones of the road.',
     npc: 'The Root-keeper',
@@ -150,8 +151,8 @@ export const villages = [
   },
   {
     name: 'mirrorTown',
-    position: { x: 30, z: -100 },
-    radius: 6,
+    position: { x: 200, z: -7800 },
+    radius: 22,
     displayName: 'Mirror Town',
     flavor: 'Every window shows you, but not the you that is walking.',
     npc: 'The Glassmaker',
@@ -182,8 +183,8 @@ export const villages = [
   },
   {
     name: 'unnamed',
-    position: { x: 0, z: -170 },
-    radius: 8,
+    position: { x: 0, z: -14500 },
+    radius: 40,
     displayName: 'The Unnamed Village',
     flavor: 'No one here will tell you what this place is called.',
     placeholder: true,
@@ -193,3 +194,6 @@ export const villages = [
 export function getVillageByName(name) {
   return villages.find((v) => v.name === name);
 }
+
+// Named export for the Westwind hometown (not a trade destination).
+export const WESTWIND_CENTER = { x: 0, z: 500 };

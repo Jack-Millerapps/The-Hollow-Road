@@ -4,7 +4,14 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
-// Subtle filmic vignette — darkens edges, adds cinematic framing.
+// ---------------------------------------------------------------------------
+// Light budget. Only the moon DirectionalLight casts shadows. All PointLights
+// register themselves with the budget; each frame the 4 closest to the camera
+// stay enabled and the rest are turned off (visible=false / intensity=0).
+// ---------------------------------------------------------------------------
+
+const POINT_LIGHT_BUDGET = 4;
+
 const VignetteShader = {
   uniforms: {
     tDiffuse: { value: null },
@@ -31,7 +38,6 @@ const VignetteShader = {
       float d = dot(p, p);
       float vig = smoothstep(offset, 0.2, d);
       tex.rgb *= mix(1.0 - darkness * 0.55, 1.0, vig);
-      // Tiny warm tint in the highlights — unifies lantern-lit scene.
       tex.rgb += vec3(warmth, warmth * 0.5, 0.0) * max(0.0, (tex.r + tex.g + tex.b) / 3.0 - 0.35);
       gl_FragColor = tex;
     }
@@ -50,25 +56,32 @@ export const SceneManager = {
   ambient: null,
   hemi: null,
 
+  // Culling budgets
+  _pointLights: [],
+
   init() {
     const scene = new THREE.Scene();
 
     const fogColor = new THREE.Color(0x0f111a);
-    const fog = new THREE.FogExp2(fogColor.getHex(), 0.022);
+    // Consolidation — default to daylight fog density; DayNight overrides each frame.
+    const fog = new THREE.FogExp2(fogColor.getHex(), 0.0015);
     scene.fog = fog;
     scene.background = fogColor.clone().multiplyScalar(0.55);
 
+    // Extended far plane so the (much bigger) 16k-unit world is visible.
     const camera = new THREE.PerspectiveCamera(
-      58,
+      60,
       window.innerWidth / window.innerHeight,
       0.1,
-      600,
+      1200,
     );
     camera.position.set(0, 2.5, 0);
     camera.lookAt(0, 2.5, -10);
 
+    // Disable antialiasing on high-density screens to keep mobile fast.
+    const useAA = (window.devicePixelRatio || 1) <= 2;
     const renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: useAA,
       powerPreference: 'high-performance',
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -82,7 +95,7 @@ export const SceneManager = {
     const app = document.getElementById('app');
     app.appendChild(renderer.domElement);
 
-    // --- Lighting rig ---------------------------------------------------
+    // --- Lighting rig --------------------------------------------------
 
     const ambient = new THREE.AmbientLight(0x18202e, 0.2);
     scene.add(ambient);
@@ -96,13 +109,14 @@ export const SceneManager = {
     moonLight.target.position.set(0, 0, -150);
     scene.add(moonLight.target);
     moonLight.castShadow = true;
-    moonLight.shadow.mapSize.set(2048, 2048);
+    // Consolidation — reduced shadow map from 2048 → 512.
+    moonLight.shadow.mapSize.set(512, 512);
     moonLight.shadow.camera.near = 1;
-    moonLight.shadow.camera.far = 220;
-    moonLight.shadow.camera.left = -70;
-    moonLight.shadow.camera.right = 70;
-    moonLight.shadow.camera.top = 70;
-    moonLight.shadow.camera.bottom = -70;
+    moonLight.shadow.camera.far = 240;
+    moonLight.shadow.camera.left = -80;
+    moonLight.shadow.camera.right = 80;
+    moonLight.shadow.camera.top = 80;
+    moonLight.shadow.camera.bottom = -80;
     moonLight.shadow.bias = -0.0008;
     moonLight.shadow.normalBias = 0.02;
     moonLight.shadow.radius = 4;
@@ -123,9 +137,9 @@ export const SceneManager = {
 
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.75, // strength
-      0.85, // radius
-      0.55, // threshold — only brighter-than-average pixels bloom
+      0.75,
+      0.85,
+      0.55,
     );
     composer.addPass(bloomPass);
 
@@ -148,6 +162,50 @@ export const SceneManager = {
     return { scene, camera, renderer, fog };
   },
 
+  // Register a PointLight so we can cap the active count per frame.
+  registerPointLight(light) {
+    if (!light) return;
+    light.castShadow = false; // hard rule
+    light.userData._baseIntensity = light.intensity;
+    this._pointLights.push(light);
+  },
+
+  // Called every frame — only the 4 closest to the camera stay lit.
+  cullPointLights() {
+    if (this._pointLights.length === 0 || !this.camera) return;
+    const cam = this.camera.position;
+    const entries = this._pointLights;
+    if (entries.length <= POINT_LIGHT_BUDGET) {
+      for (const l of entries) {
+        if (l.userData._baseIntensity !== undefined && l.intensity === 0) {
+          l.intensity = l.userData._baseIntensity;
+        }
+        l.visible = true;
+      }
+      return;
+    }
+    const ranked = [];
+    for (const l of entries) {
+      if (!l.parent) continue;
+      const wp = new THREE.Vector3();
+      l.getWorldPosition(wp);
+      const d = wp.distanceToSquared(cam);
+      ranked.push({ l, d });
+    }
+    ranked.sort((a, b) => a.d - b.d);
+    for (let i = 0; i < ranked.length; i++) {
+      const { l } = ranked[i];
+      if (i < POINT_LIGHT_BUDGET) {
+        l.visible = true;
+        if (l.userData._baseIntensity !== undefined && l.intensity === 0) {
+          l.intensity = l.userData._baseIntensity;
+        }
+      } else {
+        l.visible = false;
+      }
+    }
+  },
+
   onResize() {
     if (!this.renderer || !this.camera) return;
     this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -160,6 +218,7 @@ export const SceneManager = {
   },
 
   render() {
+    this.cullPointLights();
     if (this.composer) {
       this.composer.render();
     } else {

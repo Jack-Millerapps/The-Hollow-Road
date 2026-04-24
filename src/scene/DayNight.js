@@ -5,57 +5,70 @@ import { DialoguePanel } from '../ui/DialoguePanel.js';
 import { TradePanel } from '../ui/TradePanel.js';
 
 // ---------------------------------------------------------------------------
-// Phase 2 — day/night cycle.
+// Day / night cycle (consolidation patch).
 //
-// The world time (state.gameTime) advances while the player is in the world
-// and the game isn't paused. Four phases lerp the scene's moon, ambient and
-// fog between hand-authored targets.
+// Total cycle length is 8.5 minutes = 510 seconds:
+//   5 day + 1 sunset + 2 night + 0.5 sunrise.
+//
+// The player starts at the BEGINNING of the NIGHT phase when they first step
+// onto the road from Westwind. `state.gameTime` is set to the offset for
+// "night" at that moment (see Travel.js) so the cycle arrives at sunrise ~2
+// minutes later.
 // ---------------------------------------------------------------------------
 
 const PHASES = [
   {
     name: 'day',
-    duration: 300, // 5 minutes
+    duration: 300, // 5 min
     moonColor: 0xfff5e0,
     moonIntensity: 0.9,
     ambientColor: 0xb8a080,
     ambientIntensity: 0.55,
     fogColor: 0x8a9a8a,
-    fogDensity: 0.012,
+    fogDensity: 0.0015,
   },
   {
     name: 'sunset',
-    duration: 60, // 1 minute
+    duration: 60, // 1 min
     moonColor: 0xff8844,
     moonIntensity: 0.7,
     ambientColor: 0x5a3828,
     ambientIntensity: 0.4,
     fogColor: 0x4a2a1a,
-    fogDensity: 0.02,
+    fogDensity: 0.004,
   },
   {
     name: 'night',
-    duration: 120, // 2 minutes
+    duration: 120, // 2 min
     moonColor: 0x3a4a6a,
     moonIntensity: 0.35,
     ambientColor: 0x0a0a18,
     ambientIntensity: 0.2,
     fogColor: 0x040608,
-    fogDensity: 0.045,
+    fogDensity: 0.008,
   },
   {
     name: 'sunrise',
-    duration: 30, // 30 seconds
+    duration: 30, // 0.5 min
     moonColor: 0xffb880,
     moonIntensity: 0.7,
     ambientColor: 0x8a6a50,
     ambientIntensity: 0.45,
     fogColor: 0x6a4a3a,
-    fogDensity: 0.02,
+    fogDensity: 0.004,
   },
 ];
 
 export const CYCLE_LENGTH = PHASES.reduce((s, p) => s + p.duration, 0); // 510s
+
+function phaseStartOffset(name) {
+  let acc = 0;
+  for (const p of PHASES) {
+    if (p.name === name) return acc;
+    acc += p.duration;
+  }
+  return 0;
+}
 
 function phaseAt(time) {
   const wrapped = ((time % CYCLE_LENGTH) + CYCLE_LENGTH) % CYCLE_LENGTH;
@@ -82,7 +95,6 @@ function phaseAt(time) {
 }
 
 function smooth(t) {
-  // smoothstep — produces nicer easing between adjacent phase targets.
   return t * t * (3 - 2 * t);
 }
 
@@ -122,15 +134,10 @@ function applyPhase(info) {
       current.fogDensity + (next.fogDensity - current.fogDensity) * k;
   }
   if (SceneManager.scene && SceneManager.scene.background) {
-    // Match background to fog so distant clears never "pop" at the horizon.
     _tmpColor.copy(fog.color).multiplyScalar(0.55);
     SceneManager.scene.background.copy(_tmpColor);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Panel / scene pause reconciliation
-// ---------------------------------------------------------------------------
 
 function reconcilePause() {
   const anyPanel = !!DialoguePanel.root || !!TradePanel.root;
@@ -157,55 +164,66 @@ function wrapPanel(panel) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
 let installed = false;
+let _logAccum = 0;
+let _debugLog = false;
 
 export const DayNight = {
-  init() {
+  init({ startPhase = null } = {}) {
     if (installed) return;
     installed = true;
     wrapPanel(DialoguePanel);
     wrapPanel(TradePanel);
+
+    try {
+      _debugLog = new URLSearchParams(window.location.search).get('debug') === '1';
+    } catch {
+      _debugLog = false;
+    }
+
+    if (startPhase) {
+      state.gameTime = phaseStartOffset(startPhase);
+    }
+
     reconcilePause();
-    // Apply the starting phase once so initial frame matches state.gameTime.
     applyPhase(phaseAt(state.gameTime || 0));
+  },
+
+  // Force the cycle clock to the start of a named phase.
+  setStartPhase(name) {
+    state.gameTime = phaseStartOffset(name);
+    applyPhase(phaseAt(state.gameTime));
   },
 
   update(delta) {
     reconcilePause();
     if (!state.timePaused && state.currentScene === 'world') {
       state.gameTime = (state.gameTime || 0) + delta;
+      _logAccum += delta;
+      if (_debugLog && _logAccum >= 1) {
+        _logAccum = 0;
+        const info = phaseAt(state.gameTime);
+        // eslint-disable-next-line no-console
+        console.log(
+          `[DayNight] phase: ${info.phase.name}, gameTime: ${state.gameTime.toFixed(1)}`,
+        );
+      }
     }
     applyPhase(phaseAt(state.gameTime || 0));
   },
 
   getCurrentPhase() {
-    const info = phaseAt(state.gameTime || 0);
-    return info.phase.name;
+    return phaseAt(state.gameTime || 0).phase.name;
   },
-
   getPhaseProgress() {
     return phaseAt(state.gameTime || 0).progress;
   },
-
   getPhaseInfo() {
     return phaseAt(state.gameTime || 0);
   },
-
-  // Seconds of real time remaining until the 'night' phase starts. Negative
-  // if we are already in night.
   timeUntilNight() {
     const info = phaseAt(state.gameTime || 0);
-    let offset = 0;
-    for (let i = 0; i < PHASES.length; i++) {
-      if (PHASES[i].name === 'night') {
-        offset = i === 0 ? 0 : PHASES.slice(0, i).reduce((s, p) => s + p.duration, 0);
-        break;
-      }
-    }
+    const offset = phaseStartOffset('night');
     let delta = offset - info.timeInCycle;
     if (delta < 0) delta += CYCLE_LENGTH;
     return delta;

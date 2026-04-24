@@ -43,13 +43,12 @@ const PARTICLE_COUNT = 120;
 
 // Keep the market clear of Westwind, destinations, caves, and the ending.
 const EXCLUSION = [
-  // { x, z, r }
-  { x: 0, z: 120, r: 18 }, // Westwind / start
-  { x: 0, z: -170, r: 14 }, // Unnamed Village
+  { x: 0, z: 500, r: 30 }, // Westwind / start
+  { x: 0, z: -14500, r: 50 }, // Unnamed Village
   ...villages
     .filter((v) => v.name !== 'veilMarket')
-    .map((v) => ({ x: v.position.x, z: v.position.z, r: v.radius + 4 })),
-  ...caves.map((c) => ({ x: c.position.x, z: c.position.z, r: 6 })),
+    .map((v) => ({ x: v.position.x, z: v.position.z, r: v.radius + 6 })),
+  ...caves.map((c) => ({ x: c.position.x, z: c.position.z, r: 10 })),
 ];
 
 function clamp(n, lo, hi) {
@@ -285,7 +284,7 @@ export const VeilWander = {
       !!state.tradeComplete?.veilMarket;
     if (!firstDone) {
       this._state = 'guaranteed';
-      this._spawnPoint = { x: 0, z: 40 };
+      this._spawnPoint = { x: 0, z: -200 };
       this._placeBeacon(this._spawnPoint);
     } else {
       this._state = 'absent';

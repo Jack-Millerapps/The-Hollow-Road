@@ -1,13 +1,19 @@
-// Phase 3 — six caves carved into the world between the main destinations.
-// Each cave has a single, stubborn troll who only accepts the cave's
-// signature currency. The `mapReward` string becomes an entry in
-// state.mapPieces after a successful trade.
+// Consolidation patch — cave placements rescaled to the 16.5k-unit route.
+// Each cave sits off the road on a specific leg.
+//
+// Leg mapping (positions chosen mid-leg, ~20 units off-road):
+//   Westwind (0, 500) → Ashwick (0, -500)         ashCave   @ (25, 0)
+//   Ashwick  (0, -500) → Veil (0, -2500)          veilCave  @ (-25, -1500)
+//   Veil     (0, -2500) → Stonehush (-800, -5000) stoneCave @ (-400, -3700)  *the worst time
+//   Stonehush (-800, -5000) → Deeproot (600, -6000) deepCave @ (-100, -5500)
+//   Deeproot (600, -6000) → Mirror (200, -7800)   mirrorCave @ (430, -6750)
+//   Mirror   (200, -7800) → Unnamed (0, -14500)   endCave   @ (60, -11300)  *deep into the pilgrimage
 
 export const caves = [
   {
     id: 'ashCave',
     name: 'The Ash Hollow',
-    position: { x: -18, z: 85 },
+    position: { x: 25, z: 0 },
     currency: 'gold',
     troll: 'Ogrim',
     mapReward: 'ashwickPiece',
@@ -17,7 +23,7 @@ export const caves = [
   {
     id: 'veilCave',
     name: 'The Velvet Deep',
-    position: { x: 15, z: 55 },
+    position: { x: -25, z: -1500 },
     currency: 'secrets',
     troll: 'Shen',
     mapReward: 'veilPiece',
@@ -27,7 +33,7 @@ export const caves = [
   {
     id: 'stoneCave',
     name: 'The Stone Throat',
-    position: { x: -35, z: 10 },
+    position: { x: -400, z: -3700 },
     currency: 'promises',
     troll: 'Kalla',
     mapReward: 'stonePiece',
@@ -37,7 +43,7 @@ export const caves = [
   {
     id: 'deepCave',
     name: 'The Rootway',
-    position: { x: 35, z: -50 },
+    position: { x: -100, z: -5500 },
     currency: 'memories',
     troll: 'Bram',
     mapReward: 'deepPiece',
@@ -47,7 +53,7 @@ export const caves = [
   {
     id: 'mirrorCave',
     name: 'The Still Pool',
-    position: { x: 45, z: -95 },
+    position: { x: 430, z: -6750 },
     currency: 'years',
     troll: 'Nera',
     mapReward: 'mirrorPiece',
@@ -57,25 +63,21 @@ export const caves = [
   {
     id: 'endCave',
     name: 'The Last Hollow',
-    position: { x: -15, z: -140 },
+    position: { x: 60, z: -11300 },
     currency: 'any',
     troll: 'Old One',
-    mapReward: null, // final cave reveals the true path — handled in UI
+    mapReward: null,
     flavor: 'You have come far. Give what you can most afford to give.',
-    // End-cave cost is picked by the player at trade time. See TrollTrade.
     cost: null,
   },
 ];
 
-export const CAVE_TRIGGER_RADIUS = 4;
+export const CAVE_TRIGGER_RADIUS = 8;
 
 export function getCaveById(id) {
   return caves.find((c) => c.id === id) || null;
 }
 
-// Ore node currency colors used for both the mining mesh emissive tint and
-// the ore name shown in tooltips. endCave rolls a random currency at mine
-// time so its color here is a neutral "any" silver.
 export const CURRENCY_COLORS = {
   gold: 0xffcc55,
   secrets: 0x7a4aff,

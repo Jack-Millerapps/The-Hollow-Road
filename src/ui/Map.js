@@ -4,91 +4,76 @@ import { caves } from '../data/caves.js';
 import { ROAD_WAYPOINTS } from '../scene/Road.js';
 
 // ---------------------------------------------------------------------------
-// Phase 3 — Ripped travel map. Press M to open fullscreen.
-//
-// The player's map starts mostly blank. As trolls grant map pieces, regions
-// reveal in order along the road. Unrevealed regions render as foggy gray
-// with '?' markers.
+// Map — consolidation patch. The world is ~16,500 units long; we zoom to the
+// player's currently-revealed regions and pan the canvas accordingly.
+// Only regions the player has unlocked (via map pieces) are drawn; everything
+// else is fogged out with a '?'.
 // ---------------------------------------------------------------------------
 
 const SIZE = 640;
 
-const WORLD_X_MIN = -60;
-const WORLD_X_MAX = 60;
-const WORLD_Z_MIN = -210;
-const WORLD_Z_MAX = 140;
+// World bounds for the new scale.
+const WORLD_X_MIN = -1400;
+const WORLD_X_MAX = 1400;
+const WORLD_Z_MIN = -14800;
+const WORLD_Z_MAX = 700;
 const WORLD_W = WORLD_X_MAX - WORLD_X_MIN;
 const WORLD_H = WORLD_Z_MAX - WORLD_Z_MIN;
 
-function worldToMap(x, z, size) {
-  const span = Math.max(WORLD_W, WORLD_H);
-  const scale = size / span;
-  const offX = (span - WORLD_W) / 2;
-  const offZ = (span - WORLD_H) / 2;
-  return {
-    x: (x - WORLD_X_MIN + offX) * scale,
-    y: (z - WORLD_Z_MIN + offZ) * scale,
-  };
-}
-
-// Revealed "regions" along the Z axis. A region spans from one waypoint z
-// to the next; unlocking a piece clears fog for that region.
-//
-// By default only the Westwind + ashCave + Ashwick region is visible (it's
-// the first stretch the player sees). Each subsequent piece extends south.
+// A region is a band along Z, keyed to a map piece the player must earn.
 const REGIONS = [
   {
-    id: 'start', // always revealed from the beginning
-    zMin: 70,
-    zMax: 140,
+    id: 'start',
+    zMin: -500,
+    zMax: 700,
     label: 'The Home Road',
     includesVillages: ['ashwick'],
     includesCaves: ['ashCave'],
   },
   {
     id: 'ashwickPiece',
-    zMin: 35,
-    zMax: 70,
+    zMin: -2500,
+    zMax: -500,
     label: 'The Market Road',
     includesVillages: ['veilMarket'],
     includesCaves: ['veilCave'],
   },
   {
     id: 'veilPiece',
-    zMin: -5,
-    zMax: 35,
+    zMin: -5000,
+    zMax: -2500,
     label: 'The Silent Road',
     includesVillages: ['stonehush'],
     includesCaves: ['stoneCave'],
   },
   {
     id: 'stonePiece',
-    zMin: -60,
-    zMax: -5,
+    zMin: -6000,
+    zMax: -5000,
     label: 'The Root Road',
     includesVillages: ['deeproot'],
     includesCaves: ['deepCave'],
   },
   {
     id: 'deepPiece',
-    zMin: -110,
-    zMax: -60,
+    zMin: -7800,
+    zMax: -6000,
     label: 'The Glass Road',
     includesVillages: ['mirrorTown'],
     includesCaves: ['mirrorCave'],
   },
   {
     id: 'mirrorPiece',
-    zMin: -155,
-    zMax: -110,
-    label: 'The Last Road',
+    zMin: -13000,
+    zMax: -7800,
+    label: 'The Long Road',
     includesVillages: [],
     includesCaves: ['endCave'],
   },
   {
     id: 'endPiece',
     zMin: WORLD_Z_MIN,
-    zMax: -155,
+    zMax: -13000,
     label: 'The Unnamed',
     includesVillages: ['unnamed'],
     includesCaves: [],
@@ -103,53 +88,64 @@ function isRegionRevealed(region) {
   return Array.isArray(pieces) && pieces.includes(region.id);
 }
 
+function revealedCount() {
+  return REGIONS.filter((r) => isRegionRevealed(r)).length;
+}
+
 function pointInRegion(x, z, region) {
   return z >= region.zMin && z <= region.zMax;
 }
 
+// Dynamic viewport: by default show the player's current region plus 1 above,
+// zoomed to the player. Once you have many map pieces, zoom out to the whole
+// route.
+function computeViewport() {
+  const revealed = REGIONS.filter((r) => isRegionRevealed(r));
+  if (revealed.length >= REGIONS.length - 1) {
+    return {
+      zMin: WORLD_Z_MIN,
+      zMax: WORLD_Z_MAX,
+      xMin: WORLD_X_MIN,
+      xMax: WORLD_X_MAX,
+    };
+  }
+  // Center on the player; show revealed surrounding territory.
+  const pz = state.playerPos?.z ?? 0;
+  const rangeZ = 3500;
+  const rangeX = 900;
+  return {
+    zMin: pz - rangeZ,
+    zMax: pz + rangeZ / 2,
+    xMin: -rangeX,
+    xMax: rangeX,
+  };
+}
+
+function worldToMap(x, z, size, vp) {
+  const w = vp.xMax - vp.xMin;
+  const h = vp.zMax - vp.zMin;
+  const span = Math.max(w, h);
+  const scale = size / span;
+  const offX = (span - w) / 2;
+  const offZ = (span - h) / 2;
+  return {
+    x: (x - vp.xMin + offX) * scale,
+    y: (z - vp.zMin + offZ) * scale,
+  };
+}
+
 function draw(ctx, size) {
   ctx.clearRect(0, 0, size, size);
+  const vp = computeViewport();
 
-  // Parchment background.
   const grd = ctx.createRadialGradient(
-    size / 2,
-    size / 2,
-    size * 0.15,
-    size / 2,
-    size / 2,
-    size * 0.65,
+    size / 2, size / 2, size * 0.15,
+    size / 2, size / 2, size * 0.65,
   );
   grd.addColorStop(0, '#e9d4a8');
   grd.addColorStop(1, '#8a6a48');
   ctx.fillStyle = grd;
   ctx.fillRect(0, 0, size, size);
-
-  // Torn ragged border.
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-in';
-  ctx.beginPath();
-  const m = 24;
-  const step = 18;
-  ctx.moveTo(m, m);
-  for (let x = m; x < size - m; x += step) {
-    const jitter = (Math.sin(x * 0.37) + 1) * 5;
-    ctx.lineTo(x, m + jitter);
-  }
-  for (let y = m; y < size - m; y += step) {
-    const jitter = (Math.sin(y * 0.29) + 1) * 5;
-    ctx.lineTo(size - m - jitter, y);
-  }
-  for (let x = size - m; x > m; x -= step) {
-    const jitter = (Math.sin(x * 0.41) + 1) * 5;
-    ctx.lineTo(x, size - m - jitter);
-  }
-  for (let y = size - m; y > m; y -= step) {
-    const jitter = (Math.sin(y * 0.33) + 1) * 5;
-    ctx.lineTo(m + jitter, y);
-  }
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
 
   // Road drawn only through revealed regions.
   ctx.save();
@@ -165,8 +161,8 @@ function draw(ctx, size) {
       (regionA && isRegionRevealed(regionA)) ||
       (regionB && isRegionRevealed(regionB));
     if (!revealed) continue;
-    const pa = worldToMap(a.x, a.z, size);
-    const pb = worldToMap(b.x, b.z, size);
+    const pa = worldToMap(a.x, a.z, size, vp);
+    const pb = worldToMap(b.x, b.z, size, vp);
     ctx.beginPath();
     ctx.moveTo(pa.x, pa.y);
     ctx.lineTo(pb.x, pb.y);
@@ -174,11 +170,10 @@ function draw(ctx, size) {
   }
   ctx.restore();
 
-  // Villages.
   for (const v of villages) {
     const region = REGIONS.find((r) => pointInRegion(v.position.x, v.position.z, r));
     if (!region || !isRegionRevealed(region)) continue;
-    const p = worldToMap(v.position.x, v.position.z, size);
+    const p = worldToMap(v.position.x, v.position.z, size, vp);
     ctx.save();
     ctx.fillStyle = '#3a1818';
     ctx.strokeStyle = '#2a0e08';
@@ -187,17 +182,16 @@ function draw(ctx, size) {
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#2a1608';
-    ctx.font = 'italic 14px Georgia, serif';
+    ctx.font = 'italic 13px Georgia, serif';
     ctx.textBaseline = 'middle';
     ctx.fillText(v.displayName, p.x + 10, p.y);
     ctx.restore();
   }
 
-  // Caves.
   for (const c of caves) {
     const region = REGIONS.find((r) => pointInRegion(c.position.x, c.position.z, r));
     if (!region || !isRegionRevealed(region)) continue;
-    const p = worldToMap(c.position.x, c.position.z, size);
+    const p = worldToMap(c.position.x, c.position.z, size, vp);
     ctx.save();
     ctx.fillStyle = '#2a1608';
     ctx.beginPath();
@@ -212,12 +206,15 @@ function draw(ctx, size) {
     ctx.restore();
   }
 
-  // Fog over unrevealed regions.
+  // Fog over unrevealed regions (visible in current viewport only).
   ctx.save();
   for (const region of REGIONS) {
     if (isRegionRevealed(region)) continue;
-    const topLeft = worldToMap(WORLD_X_MIN, region.zMax, size);
-    const bottomRight = worldToMap(WORLD_X_MAX, region.zMin, size);
+    const zTop = Math.max(region.zMin, vp.zMin);
+    const zBot = Math.min(region.zMax, vp.zMax);
+    if (zBot <= zTop) continue;
+    const topLeft = worldToMap(vp.xMin, zBot, size, vp);
+    const bottomRight = worldToMap(vp.xMax, zTop, size, vp);
     const x0 = Math.min(topLeft.x, bottomRight.x);
     const y0 = Math.min(topLeft.y, bottomRight.y);
     const w = Math.abs(bottomRight.x - topLeft.x);
@@ -236,30 +233,29 @@ function draw(ctx, size) {
   }
   ctx.restore();
 
-  // Player marker (only if in world and in a revealed region).
   if (state.currentScene === 'world' && state.playerPos) {
-    const region = REGIONS.find((r) =>
-      pointInRegion(state.playerPos.x, state.playerPos.z, r),
-    );
-    if (region && isRegionRevealed(region)) {
-      const p = worldToMap(state.playerPos.x, state.playerPos.z, size);
-      ctx.save();
-      ctx.fillStyle = '#c22a1a';
-      ctx.shadowBlur = 8;
-      ctx.shadowColor = '#ff7a40';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
+    const p = worldToMap(state.playerPos.x, state.playerPos.z, size, vp);
+    ctx.save();
+    ctx.fillStyle = '#c22a1a';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#ff7a40';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 
-  // Title.
   ctx.save();
   ctx.fillStyle = '#2a1608';
   ctx.font = 'italic 22px Georgia, serif';
   ctx.textAlign = 'center';
   ctx.fillText('The Hollow Road', size / 2, 50);
+  ctx.font = '12px Georgia, serif';
+  ctx.fillText(
+    `${revealedCount() - 1} / ${REGIONS.length - 1} regions revealed`,
+    size / 2,
+    size - 22,
+  );
   ctx.textAlign = 'start';
   ctx.restore();
 }
@@ -289,9 +285,7 @@ export const Map = {
 
   openPanel() {
     if (this.open) return;
-    // Only useful if the player has the ripped map.
     if (!state.items.ripMap) {
-      // A short-lived toast: tell them they don't have a map yet.
       showNoMapToast();
       return;
     }

@@ -127,7 +127,7 @@ export const Epilogue = {
 
     const tasks = (state.tasksCompleted || []).map(labelForTask);
     const caves = (state.trollsTraded || []).map(labelForCave);
-    const mapShops = (state.mapShopsUsed || []).length;
+    const questsDone = Object.values(state.quests || {}).filter((q) => q?.done).length;
     const mapPieces = state.mapPieces instanceof Set ? state.mapPieces.size : 0;
 
     const finalLabel =
@@ -140,7 +140,7 @@ export const Epilogue = {
       ['Time played', formatTime(state.playtimeSeconds)],
       ['Currencies spent', spentBreakdown()],
       ['Map pieces gathered', `${mapPieces}`],
-      ['Map shops visited', `${mapShops}`],
+      ['Quests completed', `${questsDone}`],
       ['Goblin thefts', `${state.totalGoblinThefts || 0}`],
       ['Tasks completed', tasks.length ? tasks.join('; ') : 'None'],
       ['Caves visited', caves.length ? caves.join('; ') : 'None'],

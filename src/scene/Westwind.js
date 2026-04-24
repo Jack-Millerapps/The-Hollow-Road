@@ -4,7 +4,8 @@ import * as THREE from 'three';
 // road network. Builds a small village and a dirt path running south to
 // meet (0, 0), where the existing Hollow Road begins.
 
-const CENTER = new THREE.Vector3(0, 0, 120);
+// Consolidation — Westwind center moved to z=500 (see data/villages.js)
+const CENTER = new THREE.Vector3(0, 0, 500);
 
 function mat(color, opts = {}) {
   return new THREE.MeshStandardMaterial({
@@ -576,7 +577,7 @@ export const Westwind = {
     // Signpost pointing south (toward (-z) in world, but Westwind is at +z so
     // "south" from here is toward lower z). In the group we rotate so the
     // arrow points toward -z.
-    const signpost = makeSignpost('Hollow Road — 500m');
+    const signpost = makeSignpost('The Hollow Road');
     signpost.position.set(1.5, 0, -13);
     signpost.rotation.y = Math.PI / 2; // arrow points -x locally; rotate
     group.add(signpost);

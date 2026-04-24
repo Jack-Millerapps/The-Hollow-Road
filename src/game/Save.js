@@ -8,22 +8,18 @@ import {
 
 const KEY = 'hollowRoadSave';
 
-function cloneRecord(obj) {
-  const out = {};
-  for (const k of Object.keys(obj || {})) out[k] = obj[k];
-  return out;
+function cloneDeep(obj) {
+  try {
+    return JSON.parse(JSON.stringify(obj));
+  } catch {
+    return {};
+  }
 }
 
-// Lightweight migration notice — a single toast that fades itself out. Built
-// without any ui/ dependency so it is safe to call from Save.load() before
-// the main HUD has mounted.
 function showMigrationNotice(fromVersion) {
   try {
     const el = document.createElement('div');
-    el.textContent =
-      fromVersion === 0
-        ? 'Save format updated. Your progress has been carried over.'
-        : `Save format updated (v${fromVersion} → v${SAVE_VERSION}). Your progress has been carried over.`;
+    el.textContent = `Save updated (v${fromVersion || 0} → v${SAVE_VERSION}). Progress carried over.`;
     Object.assign(el.style, {
       position: 'fixed',
       top: '24px',
@@ -32,7 +28,7 @@ function showMigrationNotice(fromVersion) {
       padding: '10px 18px',
       background: 'rgba(20, 16, 10, 0.92)',
       color: '#e5d9b6',
-      fontFamily: 'Georgia, "Times New Roman", serif',
+      fontFamily: 'Georgia, serif',
       fontSize: '14px',
       letterSpacing: '0.02em',
       border: '1px solid rgba(200, 170, 120, 0.35)',
@@ -51,7 +47,7 @@ function showMigrationNotice(fromVersion) {
       setTimeout(() => el.remove(), 600);
     }, 4200);
   } catch {
-    // no DOM yet — silently skip
+    /* no DOM yet */
   }
 }
 
@@ -70,7 +66,6 @@ export const Save = {
       if (!raw) return null;
       const data = JSON.parse(raw);
 
-      // Rehydrate Sets.
       data.seenRoadEvents = Array.isArray(data.seenRoadEvents)
         ? new Set(data.seenRoadEvents)
         : new Set();
@@ -78,11 +73,9 @@ export const Save = {
         ? new Set(data.mapPieces)
         : new Set();
 
-      // Migration: merge in defaults for any new Phase 4 fields.
       const savedVersion = Number(data.saveVersion || 0);
       mergeDefaults(data);
       if (savedVersion < SAVE_VERSION) {
-        // Notice runs async so we don't block the load.
         setTimeout(() => showMigrationNotice(savedVersion), 250);
       }
       data.saveVersion = SAVE_VERSION;
@@ -104,35 +97,33 @@ export const Save = {
           x: src.playerPos?.x ?? 0,
           z: src.playerPos?.z ?? 0,
         },
-        currencies: cloneRecord(src.currencies),
-        reputation: cloneRecord(src.reputation),
+        currencies: cloneDeep(src.currencies),
+        reputation: cloneDeep(src.reputation),
         inventory: Array.isArray(src.inventory) ? src.inventory.slice() : [],
-        items: cloneRecord(src.items),
-        tradeComplete: cloneRecord(src.tradeComplete),
-        spent: cloneRecord(src.spent),
+        items: cloneDeep(src.items),
+        tradeComplete: cloneDeep(src.tradeComplete),
+        spent: cloneDeep(src.spent),
         seenRoadEvents: src.seenRoadEvents
           ? Array.from(src.seenRoadEvents)
           : [],
-        flags: cloneRecord(src.flags),
+        flags: cloneDeep(src.flags),
         gameTime: src.gameTime ?? 0,
-        // -- Phase 3 ----------------------------------------------------------
         currentCaveId: src.currentCaveId ?? null,
         mapPieces: src.mapPieces ? Array.from(src.mapPieces) : [],
-        mined: cloneRecord(src.mined),
+        mined: cloneDeep(src.mined),
         trollsTraded: Array.isArray(src.trollsTraded)
           ? src.trollsTraded.slice()
           : [],
         offRoad: !!src.offRoad,
-        // -- Phase 4 ----------------------------------------------------------
         totalGoblinThefts: src.totalGoblinThefts ?? 0,
         tasksCompleted: Array.isArray(src.tasksCompleted)
           ? src.tasksCompleted.slice()
           : [],
         veilMarketSpawnCount: src.veilMarketSpawnCount ?? 0,
-        mapShopsUsed: Array.isArray(src.mapShopsUsed)
-          ? src.mapShopsUsed.slice()
-          : [],
         playtimeSeconds: src.playtimeSeconds ?? 0,
+        quests: cloneDeep(src.quests),
+        cameraYaw: src.cameraYaw ?? 0,
+        cameraPitch: src.cameraPitch ?? 0,
       };
       localStorage.setItem(KEY, JSON.stringify(payload));
       return true;
@@ -150,8 +141,6 @@ export const Save = {
     }
   },
 
-  // Wipe in-memory state back to defaults. Used by the Epilogue "New Journey"
-  // button before the page reloads.
   resetInMemory() {
     const d = createDefaultState();
     for (const key of Object.keys(d)) {
@@ -160,12 +149,24 @@ export const Save = {
     notify();
   },
 
-  // Applies a saved snapshot onto the live state.
   apply(snapshot) {
     if (!snapshot) return;
-    if (snapshot.playerName !== undefined) state.playerName = snapshot.playerName;
-    if (snapshot.hasSeenIntro !== undefined) state.hasSeenIntro = snapshot.hasSeenIntro;
-    if (snapshot.currentScene !== undefined) state.currentScene = snapshot.currentScene;
+    const passthrough = [
+      'playerName',
+      'hasSeenIntro',
+      'currentScene',
+      'gameTime',
+      'currentCaveId',
+      'offRoad',
+      'totalGoblinThefts',
+      'veilMarketSpawnCount',
+      'playtimeSeconds',
+      'cameraYaw',
+      'cameraPitch',
+    ];
+    for (const k of passthrough) {
+      if (snapshot[k] !== undefined) state[k] = snapshot[k];
+    }
     if (snapshot.playerPos) {
       state.playerPos = {
         x: snapshot.playerPos.x ?? 0,
@@ -184,12 +185,6 @@ export const Save = {
       state.seenRoadEvents = new Set(snapshot.seenRoadEvents);
     }
     if (snapshot.flags) Object.assign(state.flags, snapshot.flags);
-    if (snapshot.gameTime !== undefined) state.gameTime = snapshot.gameTime;
-
-    // -- Phase 3 -----------------------------------------------------------
-    if (snapshot.currentCaveId !== undefined) {
-      state.currentCaveId = snapshot.currentCaveId;
-    }
     if (snapshot.mapPieces instanceof Set) {
       state.mapPieces = new Set(snapshot.mapPieces);
     } else if (Array.isArray(snapshot.mapPieces)) {
@@ -201,23 +196,11 @@ export const Save = {
     if (Array.isArray(snapshot.trollsTraded)) {
       state.trollsTraded = snapshot.trollsTraded.slice();
     }
-    if (snapshot.offRoad !== undefined) state.offRoad = !!snapshot.offRoad;
-
-    // -- Phase 4 -----------------------------------------------------------
-    if (snapshot.totalGoblinThefts !== undefined) {
-      state.totalGoblinThefts = snapshot.totalGoblinThefts;
-    }
     if (Array.isArray(snapshot.tasksCompleted)) {
       state.tasksCompleted = snapshot.tasksCompleted.slice();
     }
-    if (snapshot.veilMarketSpawnCount !== undefined) {
-      state.veilMarketSpawnCount = snapshot.veilMarketSpawnCount;
-    }
-    if (Array.isArray(snapshot.mapShopsUsed)) {
-      state.mapShopsUsed = snapshot.mapShopsUsed.slice();
-    }
-    if (snapshot.playtimeSeconds !== undefined) {
-      state.playtimeSeconds = snapshot.playtimeSeconds;
+    if (snapshot.quests && typeof snapshot.quests === 'object') {
+      state.quests = cloneDeep(snapshot.quests);
     }
     notify();
   },

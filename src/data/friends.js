@@ -1,10 +1,11 @@
-// Westwind's three friends — static data consumed by the Westwind scene
-// builder and the FriendNPC interaction system.
+// Consolidation patch — friends now grant starting items. The player must
+// explicitly ASK for them: a friend opens with a long ethos paragraph, and
+// offers the item only when the player says "I'm leaving today."
 //
-// Positions are in *world space* (Westwind center sits at (0, 0, 120)),
-// so each friend stands in front of one of the three neighbor cabins.
-// The `grants` field describes an item key in state.items to flip to true
-// after the dialogue closes.
+// Grants:
+//   Mira   — pickaxe + shovel
+//   Tomas  — watch + sleepingBag
+//   Elen   — ripMap
 
 export const FRIENDS = [
   {
@@ -12,38 +13,36 @@ export const FRIENDS = [
     name: 'Mira',
     robeColor: 0x5a3020,
     skinColor: 0xd7b78c,
-    position: { x: 7.5, z: 122 }, // near neighbor cabin 1
+    position: { x: 7.5, z: 502 },
     facing: -Math.PI / 1.5,
-    lines: [
-      "Don't just follow the road — there are things beneath it.",
-      'Caves. I\'ve heard travelers say there are villages down there. Underground.',
-      'They trade differently.',
-    ],
+    ethos:
+      "You won't survive on the road. Not at night. The caves are the only shelter, and the trolls won't open their hollows for an empty hand. Take these. The pickaxe lets you mine what they want. The shovel — well. The shovel is for what you'd rather not be seen burying.",
+    grants: ['pickaxe', 'shovel'],
+    receivedLine: '(You received a pickaxe and a shovel.)',
   },
   {
     id: 'tomas',
     name: 'Tomas',
     robeColor: 0x2a3548,
     skinColor: 0xc29a74,
-    position: { x: -7.5, z: 111 }, // near neighbor cabin 2
+    position: { x: -7.5, z: 491 },
     facing: Math.PI / 4,
-    lines: [
-      'The road at night is no place to be.',
-      "Promise me you'll get off it before dark.",
-    ],
+    ethos:
+      "My grandfather walked the road. He came back. He told me one thing before he died: the road forgives no one who can't tell day from night. This watch was his. The sleeping bag was his too. He carried it for forty years. He said the only mercy on the road is sleeping through the dark hours.",
+    grants: ['watch', 'sleepingBag'],
+    receivedLine: '(You received a watch and a sleeping bag.)',
   },
   {
     id: 'elen',
     name: 'Elen',
     robeColor: 0x4a2a4a,
     skinColor: 0xcfa382,
-    position: { x: 8.5, z: 111 }, // near neighbor cabin 3
+    position: { x: 8.5, z: 491 },
     facing: Math.PI,
-    lines: [
-      'Take this. A piece of an old map.',
-      "It only shows the cave and Ashwick for now — you'll have to find the rest yourself.",
-    ],
-    grants: 'ripMap',
+    ethos:
+      "I tore this from a book my brother left when he disappeared. The map is incomplete on purpose. He said no one is ready to see the whole road at once. I think he was right. You'll earn the rest. Or you won't.",
+    grants: ['ripMap'],
+    receivedLine: '(You received a ripped map.)',
   },
 ];
 

@@ -5,9 +5,11 @@ import { FRIENDS } from '../data/friends.js';
 import { makeVillagerMesh } from '../scene/Westwind.js';
 import { Save } from './Save.js';
 
-// Manages the three friend NPCs in Westwind: spawns their meshes, detects
-// proximity, shows an interaction prompt, and opens DialoguePanel with a
-// multi-line conversation when the player presses E.
+// Consolidation — each friend now gives starting items. Dialogue is:
+//   1. "I'm leaving today." (button)
+//   2. [friend ethos paragraph]
+//   3. "Then take this." (button)
+//   4. item granted, panel closes
 
 const INTERACT_RADIUS = 3;
 
@@ -38,9 +40,13 @@ function makePrompt() {
   return el;
 }
 
+function friendGiftFlag(id) {
+  return `friend${id.charAt(0).toUpperCase() + id.slice(1)}Gifted`;
+}
+
 export const FriendNPCs = {
   spawned: false,
-  entries: [], // { friend, mesh, worldPos }
+  entries: [],
   activeId: null,
   prompt: null,
   travelRef: null,
@@ -76,7 +82,6 @@ export const FriendNPCs = {
       if (e.key !== 'e' && e.key !== 'E') return;
       if (this.dialogueOpen) return;
       if (!this.activeId) return;
-      // Don't trigger if in a village trade / any modal
       if (state.currentVillage) return;
       const entry = this.entries.find((x) => x.friend.id === this.activeId);
       if (!entry) return;
@@ -86,13 +91,11 @@ export const FriendNPCs = {
 
   update(playerPos, time) {
     if (!this.spawned) return;
-    // Idle breathing
     for (const { mesh } of this.entries) {
       mesh.position.y =
         mesh.userData.baseY + Math.sin(time * 1.4 + mesh.userData.phase) * 0.02;
     }
 
-    // Proximity detection — find the closest friend within radius
     let best = null;
     let bestDist = Infinity;
     for (const entry of this.entries) {
@@ -110,8 +113,7 @@ export const FriendNPCs = {
       this.activeId = newId;
       if (this.prompt) {
         if (newId) {
-          const nm = best.friend.name;
-          this.prompt.textContent = `Press E — Talk to ${nm}`;
+          this.prompt.textContent = `Press E — Talk to ${best.friend.name}`;
           this.prompt.style.opacity = '1';
         } else {
           this.prompt.style.opacity = '0';
@@ -126,48 +128,83 @@ export const FriendNPCs = {
     if (this.prompt) this.prompt.style.opacity = '0';
     if (this.travelRef?.pause) this.travelRef.pause();
 
-    const lines = friend.lines.slice();
-    const showNext = () => {
-      if (lines.length === 0) {
-        // Grant item if any
-        if (friend.grants) {
-          state.items[friend.grants] = true;
-          notify();
-          Save.write(state);
-          DialoguePanel.open({
-            title: friend.name,
-            body: `(You received a ripped map.)`,
-            buttons: [
-              {
-                label: 'Thank you.',
-                onClick: () => {
-                  DialoguePanel.close();
-                  this.dialogueOpen = false;
-                  if (this.travelRef?.resume) this.travelRef.resume();
-                },
-              },
-            ],
-          });
-          return;
-        }
-        DialoguePanel.close();
-        this.dialogueOpen = false;
-        if (this.travelRef?.resume) this.travelRef.resume();
-        return;
-      }
-      const line = lines.shift();
+    const alreadyGifted = state.flags[friendGiftFlag(friend.id)] === true;
+
+    const close = () => {
+      DialoguePanel.close();
+      this.dialogueOpen = false;
+      if (this.travelRef?.resume) this.travelRef.resume();
+    };
+
+    if (alreadyGifted) {
       DialoguePanel.open({
         title: friend.name,
-        body: line,
-        buttons: [
-          {
-            label: lines.length === 0 && !friend.grants ? 'Farewell.' : 'Continue',
-            onClick: showNext,
-          },
-        ],
+        body: 'Be careful out there. Come back to us.',
+        buttons: [{ label: 'Farewell.', onClick: close }],
       });
-    };
-    showNext();
+      return;
+    }
+
+    // Step 1 — the player announces they're leaving.
+    DialoguePanel.open({
+      title: friend.name,
+      body: '(Ask to be ready for the road.)',
+      buttons: [
+        {
+          label: "I'm leaving today.",
+          onClick: () => this._showEthos(friend, close),
+        },
+        {
+          label: 'Nevermind.',
+          onClick: close,
+        },
+      ],
+    });
+  },
+
+  _showEthos(friend, close) {
+    DialoguePanel.open({
+      title: friend.name,
+      body: friend.ethos,
+      buttons: [
+        {
+          label: 'Then you can spare something for the road?',
+          onClick: () => this._showGift(friend, close),
+        },
+      ],
+    });
+  },
+
+  _showGift(friend, close) {
+    DialoguePanel.open({
+      title: friend.name,
+      body: 'Then take this.',
+      buttons: [
+        {
+          label: '(Accept.)',
+          onClick: () => {
+            for (const key of friend.grants) {
+              state.items[key] = true;
+            }
+            state.flags[friendGiftFlag(friend.id)] = true;
+            notify();
+            Save.write(state);
+            DialoguePanel.open({
+              title: friend.name,
+              body: friend.receivedLine,
+              buttons: [{ label: 'Thank you.', onClick: close }],
+            });
+          },
+        },
+      ],
+    });
+  },
+
+  missingFriend() {
+    for (const f of FRIENDS) {
+      if (!state.flags[friendGiftFlag(f.id)]) return f;
+    }
+    return null;
   },
 
   dispose() {
