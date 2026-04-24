@@ -108,8 +108,13 @@ function showHUDChrome() {
 // Player placement helpers
 // ---------------------------------------------------------------------------
 
-function teleportPlayer(x, z, rotationY = Math.PI) {
+let _teleportSeq = 0;
+let _lastTeleport = '';
+
+function teleportPlayer(x, z, rotationY = Math.PI, reason = '') {
   if (!Travel.player) return;
+  _teleportSeq++;
+  _lastTeleport = reason || _lastTeleport || 'unknown';
   Travel.player.position.set(x, 0, z);
   Travel._yaw = rotationY;
   Travel.player.rotation.y = rotationY;
@@ -132,7 +137,12 @@ async function enterCabin() {
   setCabinVisible(true);
 
   const spawn = CabinInterior.getPlayerSpawn();
-  teleportPlayer(spawn.position.x, spawn.position.z, spawn.rotationY);
+  teleportPlayer(
+    spawn.position.x,
+    spawn.position.z,
+    spawn.rotationY,
+    'enterCabin',
+  );
 
   Travel.pause();
   hideHUDChrome();
@@ -157,7 +167,12 @@ async function enterWestwind() {
   setCabinVisible(false);
 
   const spawn = Westwind.getArrivalSpawn();
-  teleportPlayer(spawn.position.x, spawn.position.z, spawn.rotationY);
+  teleportPlayer(
+    spawn.position.x,
+    spawn.position.z,
+    spawn.rotationY,
+    'enterWestwind',
+  );
 
   FriendNPCs.spawn(SceneManager.scene, Travel);
 
@@ -203,7 +218,7 @@ async function resumeWorldFromSave() {
   const px = state.playerPos?.x ?? 0;
   const pz = state.playerPos?.z ?? 500;
   const yaw = state.cameraYaw ?? Math.PI;
-  teleportPlayer(px, pz, yaw);
+  teleportPlayer(px, pz, yaw, 'resumeWorldFromSave');
 
   // Consolidation — if somehow the save left timePaused stuck after
   // leaving Westwind, clear it now.
@@ -232,7 +247,7 @@ async function enterCave(caveId) {
   state.currentCaveId = caveId;
 
   const spawn = CaveInterior.enter(caveId);
-  if (spawn) teleportPlayer(spawn.x, spawn.z, spawn.rotationY);
+  if (spawn) teleportPlayer(spawn.x, spawn.z, spawn.rotationY, 'enterCave');
   Mining.syncDepletion();
 
   Save.write(state);
@@ -255,7 +270,7 @@ async function exitCave() {
   setWorldVisible(true);
   setCabinVisible(false);
 
-  teleportPlayer(cave.position.x, cave.position.z + 3.2, 0);
+  teleportPlayer(cave.position.x, cave.position.z + 3.2, 0, 'exitCave');
 
   Save.write(state);
   Travel.resume();
@@ -282,7 +297,7 @@ async function resumeCaveFromSave() {
   const finalPos = withinCave
     ? { x: saved.x, z: saved.z, rotationY: Math.PI }
     : spawn;
-  teleportPlayer(finalPos.x, finalPos.z, finalPos.rotationY);
+  teleportPlayer(finalPos.x, finalPos.z, finalPos.rotationY, 'resumeCaveFromSave');
   Mining.syncDepletion();
 
   showHUDChrome();
@@ -431,6 +446,8 @@ function start() {
         envVisible: !!Environment.group?.visible,
         starsVisible: !!Environment.stars?.visible,
         westwindVisible: !!Westwind.group?.visible,
+        teleportSeq: _teleportSeq,
+        lastTeleport: _lastTeleport,
         playerPos: state.playerPos,
         cameraPos: SceneManager.camera
           ? {
