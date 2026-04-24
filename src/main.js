@@ -431,6 +431,14 @@ function start() {
         envVisible: !!Environment.group?.visible,
         starsVisible: !!Environment.stars?.visible,
         westwindVisible: !!Westwind.group?.visible,
+        playerPos: state.playerPos,
+        cameraPos: SceneManager.camera
+          ? {
+              x: Number(SceneManager.camera.position.x.toFixed(2)),
+              y: Number(SceneManager.camera.position.y.toFixed(2)),
+              z: Number(SceneManager.camera.position.z.toFixed(2)),
+            }
+          : null,
       });
 
       ensureSceneVisibility();
