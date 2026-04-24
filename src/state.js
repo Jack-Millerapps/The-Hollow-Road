@@ -60,6 +60,9 @@ function freshDefaults() {
       friendTomasGifted: false,
       friendElenGifted: false,
       brotherGaveBackpack: false,
+      // Friends-arrive sequence + HUD tutorial (bugs 6 & 7)
+      friendsArrived: false,
+      seenHudTutorial: false,
     },
     // -- Phase 1 --------------------------------------------------------------
     playerName: '',
@@ -71,6 +74,7 @@ function freshDefaults() {
     maxStamina: 1.0,
     isSprinting: false,
     timePaused: false,
+    dialogueActive: false,
     // -- Phase 3 --------------------------------------------------------------
     offRoad: false,
     currentCaveId: null,

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { caves, CAVE_TRIGGER_RADIUS } from '../data/caves.js';
+import { Collision } from '../game/Collision.js';
 
 // Phase 3 — for each cave in caves.js we build a small overworld landmark:
 // two angled boulders forming an arch, a black "void" behind, two amber
@@ -256,6 +257,10 @@ export const CaveEntrance = {
       const mesh = buildEntrance(cave);
       parent.add(mesh);
       this.entries.push({ cave, mesh });
+      // Flanking boulder colliders so the player can't walk through the
+      // arch walls. The center mouth is left open.
+      Collision.addCircle(cave.position.x - 1.9, cave.position.z, 1.2);
+      Collision.addCircle(cave.position.x + 1.9, cave.position.z, 1.2);
     }
     scene.add(parent);
     this.group = parent;

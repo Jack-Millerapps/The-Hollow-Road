@@ -1,5 +1,6 @@
 import { state, subscribe } from '../state.js';
 import { DayNight } from '../scene/DayNight.js';
+import { PauseMenu } from './PauseMenu.js';
 
 // ---------------------------------------------------------------------------
 // HUD — consolidation patch.
@@ -57,13 +58,21 @@ export const HUD = {
 
   mount({ onMenu } = {}) {
     this.root = document.getElementById('ui-root');
-    this.onMenu = onMenu;
+    // Default: open the pause menu when clicked. main.js can override.
+    this.onMenu = onMenu || (() => PauseMenu.openMenu?.());
 
-    // Top-left menu button.
+    // Remove any stale pre-Phase-4 menu button (the "Menu" text pill the old
+    // PauseMenu used to mount) or any element tagged as a hamburger.
+    this.root
+      ?.querySelectorAll('.hamburger, .menu-button, [data-hamburger]')
+      .forEach((el) => el.remove());
+
+    // Top-left menu button (the ONE true menu button).
     const menuBtn = document.createElement('button');
+    menuBtn.id = 'hud-menu-btn';
     menuBtn.type = 'button';
     menuBtn.title = 'Menu (Esc)';
-    menuBtn.textContent = '≡';
+    menuBtn.textContent = '☰'; // triple bar / hamburger glyph
     Object.assign(menuBtn.style, {
       position: 'fixed',
       top: '18px',
@@ -74,13 +83,18 @@ export const HUD = {
       border: '1px solid rgba(200, 170, 120, 0.45)',
       background: 'rgba(12, 10, 8, 0.78)',
       color: '#e5d9b6',
-      font: '22px Georgia, serif',
+      font: '20px Georgia, serif',
       cursor: 'pointer',
       zIndex: '40',
       pointerEvents: 'auto',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0',
     });
     menuBtn.addEventListener('click', () => this.onMenu?.());
     this.root.appendChild(menuBtn);
+    this.menuBtn = menuBtn;
 
     // Top-center currency strip.
     const strip = document.createElement('div');

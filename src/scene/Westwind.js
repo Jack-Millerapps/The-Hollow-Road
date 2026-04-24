@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { SceneManager } from './SceneManager.js';
+import { Collision } from '../game/Collision.js';
 
 // Westwind — the player's hometown, perched just north of the existing
 // road network. Builds a small village and a dirt path running south to
@@ -535,7 +537,7 @@ export const Westwind = {
     exitPath.position.set(0, 0.02, -70);
     group.add(exitPath);
 
-    // Player's cabin (home)
+    // Player's cabin (home). Local (-6.5, 0, 4); world (CENTER + local).
     const playerCabin = makeCabin({ warmGlow: true });
     playerCabin.position.set(-6.5, 0, 4);
     playerCabin.rotation.y = 0.2;
@@ -543,8 +545,9 @@ export const Westwind = {
     if (playerCabin.userData.windowLights) {
       this.windowLights.push(...playerCabin.userData.windowLights);
     }
+    Collision.addBox(CENTER.x - 6.5, CENTER.z + 4, 2.5, 2.0);
 
-    // Three neighbor cabins
+    // Three neighbor cabins.
     const neighbor1 = makeCabin({ warmGlow: true });
     neighbor1.position.set(7.5, 0, 4);
     neighbor1.rotation.y = -0.25;
@@ -552,6 +555,7 @@ export const Westwind = {
     if (neighbor1.userData.windowLights) {
       this.windowLights.push(...neighbor1.userData.windowLights);
     }
+    Collision.addBox(CENTER.x + 7.5, CENTER.z + 4, 2.5, 2.0);
 
     const neighbor2 = makeCabin({ warmGlow: true });
     neighbor2.position.set(-7.5, 0, -7);
@@ -560,6 +564,7 @@ export const Westwind = {
     if (neighbor2.userData.windowLights) {
       this.windowLights.push(...neighbor2.userData.windowLights);
     }
+    Collision.addBox(CENTER.x - 7.5, CENTER.z - 7, 2.5, 2.0);
 
     const neighbor3 = makeCabin({ warmGlow: true });
     neighbor3.position.set(8.5, 0, -7);
@@ -568,11 +573,13 @@ export const Westwind = {
     if (neighbor3.userData.windowLights) {
       this.windowLights.push(...neighbor3.userData.windowLights);
     }
+    Collision.addBox(CENTER.x + 8.5, CENTER.z - 7, 2.5, 2.0);
 
-    // Well at the center
+    // Well at the center.
     const well = makeWell();
     well.position.set(0, 0, -1);
     group.add(well);
+    Collision.addCircle(CENTER.x + 0, CENTER.z - 1, 1.3);
 
     // Signpost pointing south (toward (-z) in world, but Westwind is at +z so
     // "south" from here is toward lower z). In the group we rotate so the
@@ -583,7 +590,7 @@ export const Westwind = {
     group.add(signpost);
     this.signpost = signpost;
 
-    // Village lanterns on posts
+    // Village lanterns on posts.
     const lanternSpots = [
       [-3, 0, 2],
       [3, 0, 2],
@@ -597,15 +604,23 @@ export const Westwind = {
       lp.position.set(x, y, z);
       group.add(lp);
       this.lanterns.push(lp);
+      // Register the lantern's PointLight with the scene light budget so it
+      // competes fairly for active-light slots. Without this, the lanterns
+      // rendered as unlit geometry at night (Bug 3).
+      if (lp.userData.light) {
+        SceneManager.registerPointLight(lp.userData.light);
+      }
+      // Lantern post collider.
+      Collision.addCircle(CENTER.x + x, CENTER.z + z, 0.35);
     }
 
-    // Surrounding low forest
+    // Surrounding low forest.
     for (let i = 0; i < 60; i++) {
       const angle = Math.random() * Math.PI * 2;
       const radius = 18 + Math.random() * 22;
       const tx = Math.cos(angle) * radius;
       const tz = Math.sin(angle) * radius;
-      // Keep a clear corridor to the south (path out)
+      // Keep a clear corridor to the south (path out).
       if (Math.abs(tx) < 2.5 && tz < -10) continue;
       const tree = makeTree();
       tree.position.set(tx, 0, tz);
@@ -614,6 +629,10 @@ export const Westwind = {
       tree.scale.setScalar(s);
       group.add(tree);
       this.trees.push(tree);
+      // Only register near-corridor trees to keep collider count cheap.
+      if (radius < 32) {
+        Collision.addCircle(CENTER.x + tx, CENTER.z + tz, 0.55);
+      }
     }
 
     scene.add(group);

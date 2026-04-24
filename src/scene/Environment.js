@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ROAD_SEGMENTS_DATA } from './Road.js';
 import { SceneManager } from './SceneManager.js';
+import { Collision } from '../game/Collision.js';
 
 // ---------------------------------------------------------------------------
 // Environment — consolidation patch.
@@ -302,6 +303,12 @@ export const Environment = {
       m.compose(pos, q, scl);
       trunkInst.setMatrixAt(placed, m);
       canopyInst.setMatrixAt(placed, m);
+      // Only register colliders for trees genuinely next to the road —
+      // distant instances are unreachable for the player anyway and
+      // registering all 1400 would waste per-frame work.
+      if (off < 12) {
+        Collision.addCircle(x, z, 0.55 * s);
+      }
       placed++;
     }
     trunkInst.count = placed;

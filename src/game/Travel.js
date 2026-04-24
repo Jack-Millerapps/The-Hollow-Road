@@ -10,6 +10,9 @@ import { VeilWander } from './VeilWander.js';
 import { FriendNPCs } from './FriendNPCs.js';
 import { FirstNightWarning } from '../ui/FirstNightWarning.js';
 import { DayNight } from '../scene/DayNight.js';
+import { Collision } from './Collision.js';
+
+const PLAYER_RADIUS = 0.5;
 
 // CHANGE 9 — player speeds and cycle durations
 const WALK_SPEED = 4.0;
@@ -253,11 +256,16 @@ export const Travel = {
       return;
     }
 
-    if (this.paused) {
+    if (this.paused || state.dialogueActive) {
       if (state.isSprinting) state.isSprinting = false;
       this._updateStamina(clampedDelta, false);
       this._updateCamera(clampedDelta);
       if (this.character) this.character.update(clampedDelta, false, now);
+      // Release the pointer lock so the UI is clickable without fighting
+      // mouselook.
+      if (state.dialogueActive && this._pointerLocked) {
+        document.exitPointerLock?.();
+      }
       return;
     }
 
@@ -290,15 +298,37 @@ export const Travel = {
       const nf = fwd / len;
       const ns = strafe / len;
       const step = speed * clampedDelta;
-      // Movement relative to yaw (no pitch component).
       const sinY = Math.sin(this._yaw);
       const cosY = Math.cos(this._yaw);
       const moveX = ns * step * cosY + nf * step * sinY;
       const moveZ = -ns * step * sinY + nf * step * cosY;
-      this.player.position.x += moveX;
-      this.player.position.z += moveZ;
-      this.distanceSinceEvent += Math.hypot(moveX, moveZ);
-      moved = true;
+
+      // Axis-separated collision: test X and Z independently so the player
+      // slides along walls instead of jamming. Colliders are disabled inside
+      // caves (CaveInterior builds its own geometry that the player is
+      // meant to traverse freely).
+      const useCollision = !inCave;
+      const curX = this.player.position.x;
+      const curZ = this.player.position.z;
+
+      let newX = curX + moveX;
+      let newZ = curZ + moveZ;
+
+      if (useCollision) {
+        if (moveX !== 0 && Collision.hits(newX, curZ, PLAYER_RADIUS)) {
+          newX = curX;
+        }
+        if (moveZ !== 0 && Collision.hits(newX, newZ, PLAYER_RADIUS)) {
+          newZ = curZ;
+        }
+      }
+
+      const actualDX = newX - curX;
+      const actualDZ = newZ - curZ;
+      this.player.position.x = newX;
+      this.player.position.z = newZ;
+      this.distanceSinceEvent += Math.hypot(actualDX, actualDZ);
+      moved = actualDX !== 0 || actualDZ !== 0;
     }
 
     this._updateStamina(clampedDelta, canSprint);
@@ -309,7 +339,10 @@ export const Travel = {
     if (!state.flags.hasLeftWestwind && !inCave &&
         this.player.position.z < WESTWIND_EXIT_Z) {
       const missing = FriendNPCs.missingFriend();
-      if (missing) {
+      if (!state.flags.friendsArrived) {
+        this.player.position.z = WESTWIND_EXIT_Z + 1.5;
+        this._showSoftPrompt('Wait — your friends are coming to see you off.');
+      } else if (missing) {
         this.player.position.z = WESTWIND_EXIT_Z + 1.5;
         this._showSoftPrompt(
           `You're not ready yet. Talk to ${missing.name} first.`,

@@ -3,9 +3,10 @@ import { state } from '../state.js';
 import { SceneManager } from './SceneManager.js';
 import { DialoguePanel } from '../ui/DialoguePanel.js';
 import { TradePanel } from '../ui/TradePanel.js';
+import { Environment } from './Environment.js';
 
 // ---------------------------------------------------------------------------
-// Day / night cycle (consolidation patch).
+// Day / night cycle.
 //
 // Total cycle length is 8.5 minutes = 510 seconds:
 //   5 day + 1 sunset + 2 night + 0.5 sunrise.
@@ -26,6 +27,8 @@ const PHASES = [
     ambientIntensity: 0.55,
     fogColor: 0x8a9a8a,
     fogDensity: 0.0015,
+    skyColor: 0x8a9a8a,
+    starOpacity: 0.0,
   },
   {
     name: 'sunset',
@@ -36,6 +39,8 @@ const PHASES = [
     ambientIntensity: 0.4,
     fogColor: 0x4a2a1a,
     fogDensity: 0.004,
+    skyColor: 0x4a2a1a,
+    starOpacity: 0.6,
   },
   {
     name: 'night',
@@ -46,6 +51,8 @@ const PHASES = [
     ambientIntensity: 0.2,
     fogColor: 0x040608,
     fogDensity: 0.008,
+    skyColor: 0x040608,
+    starOpacity: 1.0,
   },
   {
     name: 'sunrise',
@@ -56,6 +63,8 @@ const PHASES = [
     ambientIntensity: 0.45,
     fogColor: 0x6a4a3a,
     fogDensity: 0.004,
+    skyColor: 0x6a4a3a,
+    starOpacity: 0.3,
   },
 ];
 
@@ -116,6 +125,7 @@ function applyPhase(info) {
   const moonLight = SceneManager.moonLight;
   const ambient = SceneManager.ambient;
   const fog = SceneManager.fog;
+  const scene = SceneManager.scene;
 
   if (moonLight) {
     lerpHex(current.moonColor, next.moonColor, k, moonLight.color);
@@ -133,14 +143,32 @@ function applyPhase(info) {
     fog.density =
       current.fogDensity + (next.fogDensity - current.fogDensity) * k;
   }
-  if (SceneManager.scene && SceneManager.scene.background) {
-    _tmpColor.copy(fog.color).multiplyScalar(0.55);
-    SceneManager.scene.background.copy(_tmpColor);
+
+  // Sky background — lerp per-phase target colors directly (no darkening
+  // multiplier). This is what was missing; the scene.background used to be
+  // fixed to the initial fog-derived hex and never moved with the cycle.
+  if (scene) {
+    lerpHex(current.skyColor, next.skyColor, k, _tmpColor);
+    if (scene.background && scene.background.isColor) {
+      scene.background.copy(_tmpColor);
+    } else {
+      scene.background = _tmpColor.clone();
+    }
+  }
+
+  // Stars fade across phases — 0 during day, 1 during night.
+  const stars = Environment?.stars;
+  if (stars?.material) {
+    const starOpacity =
+      current.starOpacity + (next.starOpacity - current.starOpacity) * k;
+    stars.material.opacity = Math.max(0, Math.min(1, starOpacity));
+    stars.visible = stars.material.opacity > 0.01;
   }
 }
 
 function reconcilePause() {
-  const anyPanel = !!DialoguePanel.root || !!TradePanel.root;
+  const anyPanel =
+    !!DialoguePanel.root || !!TradePanel.root || !!state.dialogueActive;
   const offWorld = state.currentScene !== 'world';
   state.timePaused = anyPanel || offWorld;
 }
@@ -176,9 +204,17 @@ export const DayNight = {
     wrapPanel(TradePanel);
 
     try {
-      _debugLog = new URLSearchParams(window.location.search).get('debug') === '1';
+      _debugLog =
+        new URLSearchParams(window.location.search).get('debug') === '1';
     } catch {
       _debugLog = false;
+    }
+    // Always log the first handful of phase transitions so sky-bug debugging
+    // doesn't require manual URL flags.
+    if (typeof window !== 'undefined') {
+      window.__hollowRoadDayNightDebug = () => {
+        _debugLog = true;
+      };
     }
 
     if (startPhase) {
@@ -189,7 +225,6 @@ export const DayNight = {
     applyPhase(phaseAt(state.gameTime || 0));
   },
 
-  // Force the cycle clock to the start of a named phase.
   setStartPhase(name) {
     state.gameTime = phaseStartOffset(name);
     applyPhase(phaseAt(state.gameTime));
@@ -203,9 +238,21 @@ export const DayNight = {
       if (_debugLog && _logAccum >= 1) {
         _logAccum = 0;
         const info = phaseAt(state.gameTime);
+        const fog = SceneManager.fog;
+        const moon = SceneManager.moonLight;
+        const amb = SceneManager.ambient;
         // eslint-disable-next-line no-console
         console.log(
-          `[DayNight] phase: ${info.phase.name}, gameTime: ${state.gameTime.toFixed(1)}`,
+          `[DayNight] phase=${info.phase.name} t=${state.gameTime.toFixed(1)}s ` +
+            `moonI=${moon ? moon.intensity.toFixed(2) : '?'} ` +
+            `ambI=${amb ? amb.intensity.toFixed(2) : '?'} ` +
+            `fogD=${fog ? fog.density.toExponential(2) : '?'} ` +
+            `fogHex=#${fog ? fog.color.getHexString() : '?'} ` +
+            `skyHex=#${
+              SceneManager.scene?.background?.isColor
+                ? SceneManager.scene.background.getHexString()
+                : '?'
+            }`,
         );
       }
     }

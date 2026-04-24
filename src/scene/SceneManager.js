@@ -62,11 +62,13 @@ export const SceneManager = {
   init() {
     const scene = new THREE.Scene();
 
-    const fogColor = new THREE.Color(0x0f111a);
-    // Consolidation — default to daylight fog density; DayNight overrides each frame.
+    const fogColor = new THREE.Color(0x8a9a8a);
+    // Default to daylight fog density; DayNight overrides each frame.
     const fog = new THREE.FogExp2(fogColor.getHex(), 0.0015);
     scene.fog = fog;
-    scene.background = fogColor.clone().multiplyScalar(0.55);
+    // DayNight mutates this color each frame — keep as a Color (not a Texture)
+    // so `.copy()` from the phase-lerp works.
+    scene.background = new THREE.Color(0x8a9a8a);
 
     // Extended far plane so the (much bigger) 16k-unit world is visible.
     const camera = new THREE.PerspectiveCamera(

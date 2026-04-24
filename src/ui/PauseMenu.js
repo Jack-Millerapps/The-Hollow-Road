@@ -112,15 +112,10 @@ export const PauseMenu = {
     this.onPause = onPause;
     this.onResume = onResume;
 
-    const root = document.getElementById('ui-root');
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'menu-button';
-    btn.textContent = 'Menu';
-    btn.style.display = 'none';
-    btn.addEventListener('click', () => this.openMenu());
-    root.appendChild(btn);
-    this.button = btn;
+    // The duplicate "Menu" text pill was removed in the HUD rebuild — the
+    // HUD now owns the single top-left menu button. We keep PauseMenu as a
+    // headless controller (openMenu / closeMenu) driven by HUD + Escape.
+    this.button = null;
 
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.open) {
@@ -130,9 +125,8 @@ export const PauseMenu = {
     });
   },
 
-  setVisible(v) {
-    if (this.button) this.button.style.display = v ? 'inline-block' : 'none';
-  },
+  // No-op — button visibility is now HUD-controlled.
+  setVisible() {},
 
   openMenu() {
     if (this.open) return;

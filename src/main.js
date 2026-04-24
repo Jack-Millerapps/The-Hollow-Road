@@ -34,6 +34,8 @@ import { QuestLog } from './ui/QuestLog.js';
 import { Exchanger } from './game/Exchanger.js';
 import { FPSCounter } from './ui/FPSCounter.js';
 import { ControlsIntro } from './ui/ControlsIntro.js';
+import { ObjectiveTracker } from './ui/ObjectiveTracker.js';
+import { HUDTutorial } from './ui/HUDTutorial.js';
 
 // ---------------------------------------------------------------------------
 // Fade overlay helpers
@@ -153,8 +155,30 @@ async function enterWestwind() {
 
   await setFade(0, 1600);
 
-  // Consolidation — show the one-time controls overlay + opening line.
-  ControlsIntro.maybeShow();
+  // First-visit flow: controls overlay → friends come → HUD tutorial.
+  if (!state.flags.friendsArrived) {
+    // Show the controls overlay first (if not seen), wait for dismissal.
+    if (!state.flags.seenControls) {
+      await new Promise((resolve) => {
+        const prevDismiss = ControlsIntro.dismiss.bind(ControlsIntro);
+        ControlsIntro.dismiss = function (...args) {
+          const ret = prevDismiss(...args);
+          ControlsIntro.dismiss = prevDismiss;
+          resolve();
+          return ret;
+        };
+        if (!ControlsIntro.maybeShow()) resolve();
+      });
+    }
+
+    // Friends walk up to the player one at a time.
+    await FriendNPCs.runArrivalSequence(Travel);
+
+    // Then the HUD tutorial.
+    HUDTutorial.maybeShow();
+  } else {
+    ControlsIntro.maybeShow();
+  }
 }
 
 async function resumeWorldFromSave() {
@@ -296,6 +320,7 @@ function start() {
   QuestLog.mount();
   Exchanger.init(scene, { travel: Travel });
   FPSCounter.mount();
+  ObjectiveTracker.mount();
 
   void Epilogue;
 

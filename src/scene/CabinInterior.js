@@ -256,11 +256,12 @@ export const CabinInterior = {
 
     // Room dimensions — intentionally larger than a "realistic" cabin so
     // that the third-person camera (which sits ~7.4 units behind the
-    // player) still fits inside the walls while the player is near the
-    // door.
-    const W = 14;
-    const D = 18;
-    const H = 3.6;
+    // player at y=3.6) still fits inside the walls without clipping.
+    // H raised so camera doesn't intersect the ceiling mesh (was the cause
+    // of the "half the screen is brown" bug).
+    const W = 16;
+    const D = 20;
+    const H = 5.6;
     const wallThickness = 0.2;
     const wallMat = mat(0x4a2e18, { roughness: 0.95 });
 
@@ -420,19 +421,20 @@ export const CabinInterior = {
     if (this.group) this.group.visible = false;
   },
 
-  // Player-facing spawn: biased toward the south side of the room so the
-  // chase camera fits inside the north wall, with the player oriented
-  // toward the door.
+  // Player-facing spawn: at the foot of the bed, roughly centered on X,
+  // pushed forward enough that the chase camera (7.4u behind, 3.6u up)
+  // lands well inside the cabin with no wall clipping. Player faces +Z
+  // (the door) so all four walls are visible in frame.
   getPlayerSpawn() {
     return {
-      position: { x: this.origin.x, z: this.origin.z + 2 },
+      position: { x: this.origin.x, z: this.origin.z + 4 },
       rotationY: Math.PI, // face +Z (toward the door)
     };
   },
 
   getDoorWorldPos(out = new THREE.Vector3()) {
     out.copy(this.origin);
-    out.z += 9; // south wall with D=18
+    out.z += 10; // south wall with D=20
     return out;
   },
 
