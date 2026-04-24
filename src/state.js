@@ -1,22 +1,120 @@
-export const state = {
-  currencies: { gold: 50, memories: 3, promises: 2, years: 1, secrets: 2 },
-  reputation: { ashwick: 0, veilMarket: 0, stonehush: 0 },
-  wholeness: 1.0,
-  inventory: [],
-  cameraZ: 0,
-  playerPos: { x: 0, z: 0 },
-  isWalking: false,
-  currentVillage: null,
-  tradeComplete: { ashwick: false, veilMarket: false, stonehush: false },
-  dominantSacrifice: null,
-  spent: { gold: 0, memories: 0, promises: 0, years: 0, secrets: 0 },
-  seenRoadEvents: new Set(),
-  flags: {
-    endingStarted: false,
-    endingComplete: false,
-    nextVillageHintShown: false,
-  },
-};
+// ---------------------------------------------------------------------------
+// The Hollow Road — global game state
+//
+// SAVE_VERSION is bumped whenever the shape of `state` changes so that older
+// saves can be loaded safely. See src/game/Save.js for the migration flow.
+// ---------------------------------------------------------------------------
+
+export const SAVE_VERSION = 4;
+
+// Canonical "blank slate" used both at boot and as the baseline to merge
+// older saves against. Always construct the nested objects via the helper
+// so that a save restore never mutates this shared template.
+function freshDefaults() {
+  return {
+    currencies: { gold: 50, memories: 3, promises: 2, years: 1, secrets: 2 },
+    reputation: { ashwick: 0, veilMarket: 0, stonehush: 0, deeproot: 0, mirrorTown: 0 },
+    wholeness: 1.0,
+    inventory: [],
+    items: {
+      backpack: true,
+      shovel: true,
+      pickaxe: true,
+      ripMap: false,
+      watch: true,
+      sleepingBag: true,
+    },
+    cameraZ: 0,
+    playerPos: { x: 0, z: 0 },
+    isWalking: false,
+    currentVillage: null,
+    tradeComplete: {
+      ashwick: false,
+      veilMarket: false,
+      stonehush: false,
+      deeproot: false,
+      mirrorTown: false,
+    },
+    dominantSacrifice: null,
+    spent: { gold: 0, memories: 0, promises: 0, years: 0, secrets: 0 },
+    seenRoadEvents: new Set(),
+    flags: {
+      endingStarted: false,
+      endingComplete: false,
+      nextVillageHintShown: false,
+      hasLeftWestwind: false,
+      // Phase 4 task flags
+      ashwickTaskDone: false,
+      stonehushTaskDone: false,
+      deeprootTaskDone: false,
+      mirrorSeen: false,
+      // Phase 4 one-shot story choice flags
+      treeAccepted: false,
+      veilFirstEncounterDone: false,
+    },
+    // -- Phase 1 --------------------------------------------------------------
+    playerName: '',
+    hasSeenIntro: false,
+    currentScene: 'cutscene', // "cutscene" | "cabin" | "world" | "cave"
+    gameTime: 0,
+    // -- Phase 2 --------------------------------------------------------------
+    stamina: 1.0,
+    maxStamina: 1.0,
+    isSprinting: false,
+    timePaused: false,
+    // -- Phase 3 --------------------------------------------------------------
+    offRoad: false,
+    currentCaveId: null,
+    mapPieces: new Set(),
+    mined: {},
+    trollsTraded: [],
+    // -- Phase 4 --------------------------------------------------------------
+    totalGoblinThefts: 0,
+    tasksCompleted: [],
+    veilMarketSpawnCount: 0,
+    mapShopsUsed: [],
+    playtimeSeconds: 0,
+    // Save metadata
+    saveVersion: SAVE_VERSION,
+  };
+}
+
+export const state = freshDefaults();
+
+// Expose a factory so Save.js (or tests) can spin up a clean state object
+// without duplicating the schema.
+export function createDefaultState() {
+  return freshDefaults();
+}
+
+// Shallow-merge a snapshot onto the live state. Missing keys get defaults
+// from `freshDefaults()`. Deep objects (currencies / items / flags / etc.)
+// are merged per-key so future additions never clobber saved progress.
+export function mergeDefaults(target) {
+  const d = freshDefaults();
+  for (const key of Object.keys(d)) {
+    if (target[key] === undefined) {
+      target[key] = d[key];
+      continue;
+    }
+    // Merge nested plain-object maps (currencies, items, flags, etc.)
+    if (
+      d[key] &&
+      typeof d[key] === 'object' &&
+      !Array.isArray(d[key]) &&
+      !(d[key] instanceof Set) &&
+      typeof target[key] === 'object' &&
+      target[key] !== null &&
+      !Array.isArray(target[key]) &&
+      !(target[key] instanceof Set)
+    ) {
+      for (const sub of Object.keys(d[key])) {
+        if (target[key][sub] === undefined) target[key][sub] = d[key][sub];
+      }
+    }
+  }
+  return target;
+}
 
 const subs = new Set();
 
@@ -49,12 +147,19 @@ export function gain(type, amount) {
   state.currencies[type] = (state.currencies[type] ?? 0) + amount;
   if (type === 'years') {
     state.wholeness = Math.min(1, state.wholeness + 0.15 * amount);
+  } else if (type === 'memories') {
+    state.wholeness = Math.min(1, state.wholeness + 0.05 * amount);
   }
   notify();
 }
 
 export function addInventory(item) {
   state.inventory.push(item);
+  notify();
+}
+
+export function grantItem(key) {
+  state.items[key] = true;
   notify();
 }
 

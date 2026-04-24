@@ -2,9 +2,27 @@ import { state, spend, canAfford, addInventory, notify } from '../state.js';
 import { TradePanel } from '../ui/TradePanel.js';
 import { DialoguePanel } from '../ui/DialoguePanel.js';
 
+// List of all map pieces the world can yield. Kept in sync with CAVE_PIECES
+// in src/data/caves.js — the caves module is the authoritative owner of the
+// piece ids, but we duplicate the list here to avoid a circular import.
+const ALL_MAP_PIECES = [
+  'ashwickPiece',
+  'veilPiece',
+  'stonePiece',
+  'deepPiece',
+  'mirrorPiece',
+];
+
+function pickRandomUnownedPiece() {
+  const owned = state.mapPieces instanceof Set ? state.mapPieces : new Set();
+  const remaining = ALL_MAP_PIECES.filter((id) => !owned.has(id));
+  if (remaining.length === 0) return null;
+  return remaining[Math.floor(Math.random() * remaining.length)];
+}
+
 function classifyWrongness(option, village) {
   // If the NPC's true want is memories or years (deep cost), offering promises
-  // is perceived as cheap. Other wrong choices are neutral (no rep change).
+  // or gold is perceived as cheap. Other wrong choices are neutral.
   const trueOpt = village.options.find((o) => o.isTrue);
   if (!trueOpt) return 0;
   const trueType = Object.keys(trueOpt.cost)[0];
@@ -32,28 +50,49 @@ export const TradeSystem = {
     }
 
     let repDelta = 0;
-    if (option.isTrue) {
+    let bodyText = option.outcome;
+    let headerNote = '';
+
+    // Phase 4 — handle the Veil Market "Whisper of the Road" special effect.
+    if (option.specialEffect === 'whisperOfRoad') {
+      const piece = pickRandomUnownedPiece();
+      if (piece) {
+        if (!(state.mapPieces instanceof Set)) state.mapPieces = new Set();
+        state.mapPieces.add(piece);
+        addInventory({
+          name: `Whisper: ${piece}`,
+          effect: 'mapPiece',
+          source: village.name,
+        });
+        headerNote = `A new piece of the map is yours.`;
+      } else {
+        headerNote = 'You already hold every piece of the road they know.';
+      }
+      // Whispers do not mark the village's main trade as complete.
+      state.tradeComplete[village.name] = state.tradeComplete[village.name] || false;
+    } else if (option.isTrue) {
       repDelta = 1;
       addInventory({ ...village.sells, source: village.name });
+      headerNote = `You received ${village.sells.name}.`;
+      state.tradeComplete[village.name] = true;
     } else {
       repDelta = classifyWrongness(option, village);
+      state.tradeComplete[village.name] = true;
+      if (repDelta < 0) headerNote = 'Something in the room turns away from you.';
     }
-    state.reputation[village.name] += repDelta;
-    state.tradeComplete[village.name] = true;
+
+    if (typeof state.reputation[village.name] === 'number') {
+      state.reputation[village.name] += repDelta;
+    } else {
+      state.reputation[village.name] = repDelta;
+    }
     notify();
 
     TradePanel.close();
 
-    const repNote =
-      option.isTrue
-        ? `You received ${village.sells.name}.`
-        : repDelta < 0
-        ? "Something in the room turns away from you."
-        : '';
-
     DialoguePanel.open({
       title: village.displayName,
-      body: [option.outcome, repNote].filter(Boolean).join('\n\n'),
+      body: [bodyText, headerNote].filter(Boolean).join('\n\n'),
       buttons: [
         {
           label: 'Walk on',

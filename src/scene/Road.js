@@ -158,11 +158,30 @@ function createCobblestoneNormal(colorCanvas) {
   return tex;
 }
 
-const SEGMENTS = [
-  { start: { x: 0, z: 0 }, end: { x: 0, z: -200 } },
-  { start: { x: 0, z: -200 }, end: { x: -120, z: -350 } },
-  { start: { x: 0, z: -200 }, end: { x: 120, z: -350 } },
+// Phase 2 — cobblestone route from Westwind's southern edge all the way
+// down to the Unnamed Village. Exported so Minimap.js can render the same
+// path. Each entry is a world-space (x, z) waypoint.
+export const ROAD_WAYPOINTS = [
+  { x: 0, z: 110 }, // Westwind southern edge (dirt path handoff)
+  { x: 0, z: 70 }, // Ashwick
+  { x: 0, z: 40 }, // Veil Market
+  { x: -8, z: 15 }, // gentle bend west before Stonehush
+  { x: -25, z: -20 }, // Stonehush
+  { x: -10, z: -55 }, // bend back east toward Deeproot
+  { x: 20, z: -80 }, // Deeproot
+  { x: 30, z: -100 }, // Mirror Town
+  { x: 18, z: -135 }, // bend back toward center
+  { x: 0, z: -170 }, // The Unnamed Village
+  { x: 0, z: -195 }, // open road past the village (ending threshold)
 ];
+
+const SEGMENTS = [];
+for (let i = 0; i < ROAD_WAYPOINTS.length - 1; i++) {
+  SEGMENTS.push({
+    start: ROAD_WAYPOINTS[i],
+    end: ROAD_WAYPOINTS[i + 1],
+  });
+}
 
 const EDGE_MAT = new THREE.MeshStandardMaterial({
   color: 0x5a4226,

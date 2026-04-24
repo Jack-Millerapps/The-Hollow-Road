@@ -1,26 +1,37 @@
 import { villages } from '../data/villages.js';
+import { ROAD_WAYPOINTS } from '../scene/Road.js';
 
 const SIZE = 180;
 const FULL_SIZE = 500;
-const WORLD_SPAN = 600;
 
-// World-to-minimap coordinate mapping.
-// The minimap shows a 600x600 unit area centered on (0, 0, -175).
-// mapX = (worldX + 300) / 600 * size
-// mapY = (worldZ + 475) / 600 * size
+// Phase 2 — minimap now spans from Westwind (z ~120) down to the ending
+// threshold (z ~-200). Centered so the whole rescaled route fits.
+const WORLD_X_MIN = -60;
+const WORLD_X_MAX = 60;
+const WORLD_Z_MIN = -210;
+const WORLD_Z_MAX = 140;
+const WORLD_W = WORLD_X_MAX - WORLD_X_MIN;
+const WORLD_H = WORLD_Z_MAX - WORLD_Z_MIN;
+
 function worldToMap(x, z, size) {
-  const scale = size / WORLD_SPAN;
+  // Preserve aspect by using the longer dimension for the map span.
+  const span = Math.max(WORLD_W, WORLD_H);
+  const scale = size / span;
+  const offsetX = (span - WORLD_W) / 2;
+  const offsetZ = (span - WORLD_H) / 2;
   return {
-    x: (x + 300) * scale,
-    y: (z + 475) * scale,
+    x: (x - WORLD_X_MIN + offsetX) * scale,
+    y: (z - WORLD_Z_MIN + offsetZ) * scale,
   };
 }
 
-const SEGMENTS = [
-  [{ x: 0, z: 0 },    { x: 0,    z: -200 }],
-  [{ x: 0, z: -200 }, { x: -120, z: -350 }],
-  [{ x: 0, z: -200 }, { x: 120,  z: -350 }],
-];
+const SEGMENTS = [];
+for (let i = 0; i < ROAD_WAYPOINTS.length - 1; i++) {
+  SEGMENTS.push([ROAD_WAYPOINTS[i], ROAD_WAYPOINTS[i + 1]]);
+}
+// Westwind dirt path marker (not cobblestone, but draw it so the hometown is
+// visible on the map).
+SEGMENTS.unshift([{ x: 0, z: 130 }, { x: 0, z: 110 }]);
 
 function drawMap(ctx, size, playerPos, villagesArr, state, showAllLabels) {
   ctx.clearRect(0, 0, size, size);
@@ -127,15 +138,8 @@ export const Minimap = {
     root.appendChild(hint);
     this.hint = hint;
 
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'm' || e.key === 'M') {
-        e.preventDefault();
-        this.toggleFullscreen();
-      } else if (e.key === 'Escape' && this.open) {
-        e.preventDefault();
-        this.closeFullscreen();
-      }
-    });
+    // Phase 3 — the M-key fullscreen is now owned by src/ui/Map.js (the
+    // ripped travel map). The corner minimap here remains always-on.
   },
 
   update(playerPos, villagesArr, state) {
