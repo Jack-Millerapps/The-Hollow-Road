@@ -216,14 +216,38 @@ function buildSegment(scene, start, end, texture) {
 export const Road = {
   texture: null,
   segments: [],
+  scene: null,
 
   init(scene) {
+    this.scene = scene;
     const texture = createCobblestoneTexture();
     texture.repeat.set(2, 14);
     this.texture = texture;
     this.segments = RAW_SEGMENTS.map((s) =>
       buildSegment(scene, s.start, s.end, texture),
     ).filter(Boolean);
+    // Guard: every segment group MUST be parented directly to the scene so
+    // the road stays fixed in world space. If anything (a previous bug, a
+    // future regression, or an accidental player.add()) reparented a segment
+    // off the scene, detach it and re-add to the scene root.
+    this._enforceSceneParent();
+  },
+
+  _enforceSceneParent() {
+    if (!this.scene) return;
+    for (const seg of this.segments) {
+      if (!seg) continue;
+      if (seg.parent !== this.scene) {
+        if (seg.parent) seg.parent.remove(seg);
+        this.scene.add(seg);
+      }
+    }
+  },
+
+  // Single-mesh accessor for parent assertions: returns the first segment so
+  // callers can verify Road.mesh.parent === scene.
+  get mesh() {
+    return this.segments[0] || null;
   },
 
   update(delta, isWalking) {

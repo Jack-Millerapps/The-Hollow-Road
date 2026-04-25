@@ -95,11 +95,13 @@ export const SceneManager = {
     scene.background = new THREE.Color(0x8a9a8a);
 
     // Extended far plane so the (much bigger) 16k-unit world is visible.
+    // Far plane must cover the full ~16.5k-unit road; 1200 caused distant
+    // terrain and props to clip out long before ChunkManager hid them.
     const camera = new THREE.PerspectiveCamera(
       60,
       window.innerWidth / window.innerHeight,
       0.1,
-      1200,
+      32000,
     );
     camera.position.set(0, 2.5, 0);
     camera.lookAt(0, 2.5, -10);

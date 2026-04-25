@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getSoftCircleTexture } from './spriteTextures.js';
+import { ChunkManager } from '../game/ChunkManager.js';
 
 const registry = {
   ashwick: {
@@ -416,6 +417,9 @@ function buildAshwick(scene) {
   scene.add(group);
   registry.ashwick.group = group;
   registry.ashwick.millPivot = pivot;
+  // Chunk-register at the village's world position so the whole Ashwick
+  // group hides when the player is more than LOAD_RADIUS away.
+  ChunkManager.register(group, group.position.x, group.position.z);
 }
 
 // ============================================================
@@ -694,6 +698,7 @@ function buildVeilMarket(scene) {
 
   scene.add(group);
   registry.veilMarket.group = group;
+  ChunkManager.register(group, group.position.x, group.position.z);
 }
 
 // ============================================================
@@ -953,6 +958,7 @@ function buildStonehush(scene) {
 
   scene.add(group);
   registry.stonehush.group = group;
+  ChunkManager.register(group, group.position.x, group.position.z);
 }
 
 // ============================================================

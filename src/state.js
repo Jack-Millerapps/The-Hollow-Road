@@ -96,6 +96,10 @@ function freshDefaults() {
     // View state
     cameraYaw: 0,
     cameraPitch: 0,
+    // -- Pause + physics ------------------------------------------------------
+    paused: false,
+    velocityY: 0,
+    isGrounded: false,
     saveVersion: SAVE_VERSION,
   };
 }

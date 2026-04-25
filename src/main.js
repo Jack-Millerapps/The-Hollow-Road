@@ -37,6 +37,9 @@ import { ControlsIntro } from './ui/ControlsIntro.js';
 import { ObjectiveTracker } from './ui/ObjectiveTracker.js';
 import { HUDTutorial } from './ui/HUDTutorial.js';
 import { DebugOverlay } from './ui/DebugOverlay.js';
+// Engine fixes (this prompt)
+import { ChunkManager } from './game/ChunkManager.js';
+import { PauseManager } from './game/PauseManager.js';
 
 // ---------------------------------------------------------------------------
 // Fade overlay helpers
@@ -101,7 +104,7 @@ function showHUDChrome() {
   const s = document.createElement('style');
   s.id = 'hud-hide-style';
   s.textContent = `
-    #ui-root.${HUD_HIDE_CLASS} > *:not(.panel-backdrop):not(.inv-backdrop):not(.pause-backdrop):not(.troll-backdrop) {
+    #ui-root.${HUD_HIDE_CLASS} > *:not(.panel-backdrop):not(.inv-backdrop):not(.pm-backdrop):not(.troll-backdrop) {
       display: none !important;
     }
   `;
@@ -119,7 +122,8 @@ function teleportPlayer(x, z, rotationY = Math.PI, reason = '') {
   if (!Travel.player) return;
   _teleportSeq++;
   _lastTeleport = reason || _lastTeleport || 'unknown';
-  Travel.player.position.set(x, 0, z);
+  const gy = Travel.getGroundY?.() ?? 0;
+  Travel.player.position.set(x, gy, z);
   Travel._yaw = rotationY;
   Travel.player.rotation.y = rotationY;
   state.playerPos = { x, z };
@@ -251,12 +255,27 @@ async function enterCave(caveId) {
   state.currentCaveId = caveId;
 
   const spawn = CaveInterior.enter(caveId);
+  // Fix 6 — caves are flat at floor y=0 for now. Travel reads the value to
+  // resolve gravity collisions against the cave floor.
+  Travel.setGroundY(CaveInterior.getActive()?.floorY ?? 0);
   if (spawn) teleportPlayer(spawn.x, spawn.z, spawn.rotationY, 'enterCave');
   Mining.syncDepletion();
 
   Save.write(state);
   Travel.resume();
   await setFade(0, 800);
+  // Best-effort pointer lock for cave look — may only succeed if still tied
+  // to the initiating user gesture on some browsers.
+  const canvas = SceneManager.renderer?.domElement;
+  if (canvas && state.currentScene === 'cave') {
+    requestAnimationFrame(() => {
+      try {
+        if (!PauseManager.isPaused() && !state.dialogueActive) {
+          canvas.requestPointerLock?.();
+        }
+      } catch { /* ignore */ }
+    });
+  }
 }
 
 async function exitCave() {
@@ -274,6 +293,8 @@ async function exitCave() {
   setWorldVisible(true);
   setCabinVisible(false);
 
+  // Fix 6 — restore world ground level when leaving the cave.
+  Travel.resetGroundY();
   teleportPlayer(cave.position.x, cave.position.z + 3.2, 0, 'exitCave');
 
   Save.write(state);
@@ -294,6 +315,7 @@ async function resumeCaveFromSave() {
 
   const spawn = CaveInterior.enter(caveId);
   const active = CaveInterior.getActive();
+  Travel.setGroundY(active?.floorY ?? 0);
   const origin = active.origin;
   const saved = state.playerPos || { x: 0, z: 0 };
   const withinCave =
@@ -307,6 +329,16 @@ async function resumeCaveFromSave() {
   showHUDChrome();
   Travel.resume();
   await setFade(0, 1200);
+  const canvas = SceneManager.renderer?.domElement;
+  if (canvas && state.currentScene === 'cave') {
+    requestAnimationFrame(() => {
+      try {
+        if (!PauseManager.isPaused() && !state.dialogueActive) {
+          canvas.requestPointerLock?.();
+        }
+      } catch { /* ignore */ }
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -339,6 +371,9 @@ function applySceneVisibility(sc) {
 
 function start() {
   const { scene, camera, renderer } = SceneManager.init();
+  // ChunkManager must know the camera before any scene module registers
+  // objects (so frustum-test setup is valid from the first frame).
+  ChunkManager.setCamera(camera);
   Road.init(scene);
   Environment.init(scene);
   for (const v of villages) VillageBuilder.buildVillage(v.name, scene);
@@ -348,6 +383,7 @@ function start() {
 
   HUD.mount();
   Travel.init(camera, scene, { canvas: renderer.domElement });
+  PauseManager.setCanvas(renderer.domElement);
   // Debug overlay is opt-in to avoid impacting performance.
   const debugEnabled =
     new URLSearchParams(window.location.search).get('debug') === '1';
@@ -364,10 +400,7 @@ function start() {
   applySceneVisibility(state.currentScene);
 
   InventoryPanel.mount();
-  PauseMenu.mount({
-    onPause: () => Travel.pause(),
-    onResume: () => Travel.resume(),
-  });
+  PauseMenu.mount();
 
   StaminaBar.mount();
   Watch.mount();
@@ -443,6 +476,10 @@ function start() {
         TrollTrade.update(delta, state.playerPos);
       }
       if (BrotherScene.mesh) BrotherScene.update(delta, t);
+
+      // ChunkManager — runs every frame BEFORE renderer.render() to set
+      // visibility based on player chunk + camera frustum.
+      ChunkManager.update(state.playerPos.x, state.playerPos.z);
 
       SceneManager.updateShadowFollow(state.playerPos);
       SceneManager.render();

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { SceneManager } from './SceneManager.js';
 import { Collision } from '../game/Collision.js';
+import { ChunkManager } from '../game/ChunkManager.js';
 import { getSoftCircleTexture } from './spriteTextures.js';
 
 // Westwind — the player's hometown, perched just north of the existing
@@ -639,6 +640,11 @@ export const Westwind = {
     }
 
     scene.add(group);
+
+    // Chunk-register Westwind at its center so the village shows only when
+    // the player is within LOAD_RADIUS.
+    ChunkManager.register(group, CENTER.x, CENTER.z);
+
     return group;
   },
 

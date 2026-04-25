@@ -11,10 +11,10 @@ import { FriendNPCs } from './FriendNPCs.js';
 import { FirstNightWarning } from '../ui/FirstNightWarning.js';
 import { DayNight } from '../scene/DayNight.js';
 import { Collision } from './Collision.js';
+import { PauseManager } from './PauseManager.js';
 
 const PLAYER_RADIUS = 0.5;
 
-// CHANGE 9 — player speeds and cycle durations
 const WALK_SPEED = 4.0;
 const SPRINT_SPEED = 9.0;
 const CAVE_SPEED = 2.2;
@@ -23,7 +23,7 @@ const SPRINT_REGEN = 0.15;
 const SPRINT_GRACE = 0.2;
 
 // Mouse-look tuning
-const MOUSE_SENS_X = 0.0022; // rad per px
+const MOUSE_SENS_X = 0.0022;
 const MOUSE_SENS_Y = 0.0022;
 const PITCH_LIMIT = (60 * Math.PI) / 180;
 
@@ -31,16 +31,24 @@ const EVENT_INTERVAL = 42;
 const EVENT_CHANCE = 0.34;
 const ROAD_LATERAL_LIMIT = 10;
 
+// Fix 5 — gravity and jump tuning.
+const GRAVITY = -18; // u/s²
+const JUMP_FORCE = 7; // u/s
+const DEFAULT_GROUND_Y = 0;
+const EYE_HEIGHT = 1.7;
+
+// Fix 7 — camera FOV tuning.
+const FOV_WALK = 50;
+const FOV_SPRINT = 55;
+
 const CAMERA_OFFSET = new THREE.Vector3(0, 3.6, 7.4);
 const LOOK_OFFSET = new THREE.Vector3(0, 1.55, 0);
 
-// Pre-allocated scratch vectors reused every frame by the camera update path.
-// Allocating fresh Vector3 objects per frame triggers GC pressure at 60fps.
 const _scratchOffset = new THREE.Vector3();
 const _scratchTargetPos = new THREE.Vector3();
 const _scratchTargetLook = new THREE.Vector3();
 
-const WESTWIND_EXIT_Z = 470; // ~30 units south of Westwind centre (z=500), past the signpost
+const WESTWIND_EXIT_Z = 470;
 
 export const Travel = {
   scene: null,
@@ -54,16 +62,19 @@ export const Travel = {
   walkForward: false,
   _cameraPos: new THREE.Vector3(),
   _cameraLook: new THREE.Vector3(),
+  _renderedYaw: 0, // for camera-yaw lerp (Fix 7)
   _lastTime: 0,
   _sprintLocked: false,
   _pitch: 0,
   _yaw: 0,
   _pointerLocked: false,
-  _mobileDrag: null, // { lastX, lastY }
+  _mobileDrag: null,
   _canvas: null,
   _softPrompt: null,
   _softPromptTimer: 0,
   _lastNotifyMs: 0,
+  // Ground level — overridden when entering/exiting caves.
+  _groundY: DEFAULT_GROUND_Y,
 
   init(camera, scene, opts = {}) {
     this.scene = scene;
@@ -73,14 +84,19 @@ export const Travel = {
     this.player = new THREE.Object3D();
     const startX = state.playerPos?.x ?? 0;
     const startZ = state.playerPos?.z ?? 500;
-    this.player.position.set(startX, 0, startZ);
-    this._yaw = state.cameraYaw ?? Math.PI; // facing -Z by default
+    this.player.position.set(startX, this._groundY, startZ);
+    this._yaw = state.cameraYaw ?? Math.PI;
     this._pitch = state.cameraPitch ?? 0;
+    this._renderedYaw = this._yaw;
     this.player.rotation.y = this._yaw;
     scene.add(this.player);
 
     this.character = new Character();
     this.player.add(this.character.root);
+
+    // Initial vertical state — player is grounded.
+    state.velocityY = 0;
+    state.isGrounded = true;
 
     this.triggered = new Set();
     this.distanceSinceEvent = 0;
@@ -90,11 +106,18 @@ export const Travel = {
     this._lastTime = performance.now() / 1000;
     this._sprintLocked = false;
 
+    // Initialize camera FOV.
+    if (this.camera && this.camera.fov !== FOV_WALK) {
+      this.camera.fov = FOV_WALK;
+      this.camera.updateProjectionMatrix();
+    }
+
     this._setCameraFromPlayer();
 
     window.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
       this.keys.add(k);
+      this._handleSpecialKey(e);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
     window.addEventListener('blur', () => {
@@ -109,11 +132,35 @@ export const Travel = {
     notify();
   },
 
+  // Fix 1 — Escape and pause hook. Other panels (inventory, map, quest log,
+  // troll trade) consume Escape themselves; if any of those listeners ran
+  // first they'll have called preventDefault(), which is our signal to bail.
+  _handleSpecialKey(e) {
+    if (e.key !== 'Escape') return;
+    if (e.defaultPrevented) return;
+    // Belt + suspenders: also detect open panels by their DOM markers in
+    // case a future panel forgets to preventDefault().
+    const otherPanelOpen =
+      !!document.querySelector(
+        '.panel-backdrop, .inv-backdrop, .troll-backdrop',
+      );
+    if (otherPanelOpen) return;
+
+    e.preventDefault();
+    if (this._pointerLocked) {
+      try { document.exitPointerLock?.(); } catch {}
+      PauseManager.pause();
+    } else if (PauseManager.isPaused()) {
+      PauseManager.resume();
+    }
+  },
+
   _initPointerLock() {
     if (!this._canvas) return;
     this._canvas.addEventListener('click', () => {
-      if (state.currentScene !== 'world') return;
-      if (this.paused) return;
+      if (state.currentScene !== 'world' && state.currentScene !== 'cave') return;
+      if (this.paused || PauseManager.isPaused()) return;
+      if (state.dialogueActive) return;
       if (document.pointerLockElement !== this._canvas) {
         this._canvas.requestPointerLock?.();
       }
@@ -162,6 +209,20 @@ export const Travel = {
 
   setButtonHeld(held) { this.walkForward = held; },
 
+  // Fix 6 — caves set their floor height when the scene loads. Caves are
+  // currently flat at 0; this hook keeps the architecture in place for
+  // terrain-mapped floors later.
+  setGroundY(y) {
+    this._groundY = Number.isFinite(y) ? y : DEFAULT_GROUND_Y;
+  },
+  resetGroundY() {
+    this._groundY = DEFAULT_GROUND_Y;
+  },
+
+  getGroundY() {
+    return this._groundY;
+  },
+
   pause() {
     this.paused = true;
     if (state.isWalking) { state.isWalking = false; notify(); }
@@ -174,6 +235,7 @@ export const Travel = {
   _setCameraFromPlayer() {
     if (!this.player || !this.camera) return;
     this.player.rotation.y = this._yaw;
+    this._renderedYaw = this._yaw;
     _scratchOffset.copy(CAMERA_OFFSET).applyQuaternion(this.player.quaternion);
     _scratchTargetPos.copy(this.player.position).add(_scratchOffset);
     _scratchTargetLook.copy(this.player.position).add(LOOK_OFFSET);
@@ -184,19 +246,48 @@ export const Travel = {
     this.camera.lookAt(_scratchTargetLook);
   },
 
+  // Fix 7 — smooth camera follow with lerped position and yaw, snappier
+  // vertical tracking, and FOV widening on sprint.
   _updateCamera(delta) {
     if (!this.player || !this.camera) return;
+
+    // Lerp the visible yaw toward the target yaw — gives the camera a touch
+    // of lag on quick spins. The player object's rotation still uses the
+    // raw target yaw (so movement direction is responsive to input).
     this.player.rotation.y = this._yaw;
-    _scratchOffset.copy(CAMERA_OFFSET).applyQuaternion(this.player.quaternion);
+    this._renderedYaw += (this._yaw - this._renderedYaw) * 0.12;
+
+    const cosY = Math.cos(this._renderedYaw);
+    const sinY = Math.sin(this._renderedYaw);
+
+    // Camera offset rotated by the rendered (lagged) yaw.
+    _scratchOffset.set(
+      CAMERA_OFFSET.x * cosY + CAMERA_OFFSET.z * sinY,
+      CAMERA_OFFSET.y,
+      -CAMERA_OFFSET.x * sinY + CAMERA_OFFSET.z * cosY,
+    );
+
     _scratchTargetPos.copy(this.player.position).add(_scratchOffset);
     _scratchTargetLook.copy(this.player.position).add(LOOK_OFFSET);
     _scratchTargetLook.y += Math.tan(this._pitch) * 4;
-    const posK = 1 - Math.exp(-delta * 9);
-    const lookK = 1 - Math.exp(-delta * 11);
-    this._cameraPos.lerp(_scratchTargetPos, posK);
-    this._cameraLook.lerp(_scratchTargetLook, lookK);
+
+    // Position lerp factor 0.15 per frame (per the spec).
+    this._cameraPos.lerp(_scratchTargetPos, 0.15);
+    // Vertical tracking — snappier (0.2/frame) so the camera follows jumps
+    // and ground transitions tightly.
+    this._cameraPos.y += (_scratchTargetPos.y - this._cameraPos.y) * 0.2;
+    this._cameraLook.lerp(_scratchTargetLook, 0.18);
+
     this.camera.position.copy(this._cameraPos);
     this.camera.lookAt(this._cameraLook);
+
+    // FOV — lerp toward target based on sprint state.
+    const targetFov = state.isSprinting ? FOV_SPRINT : FOV_WALK;
+    if (Math.abs(this.camera.fov - targetFov) > 0.05) {
+      this.camera.fov += (targetFov - this.camera.fov) * 0.08;
+      this.camera.updateProjectionMatrix();
+    }
+
     state.cameraYaw = this._yaw;
     state.cameraPitch = this._pitch;
   },
@@ -245,6 +336,49 @@ export const Travel = {
     if (this._softPrompt) this._softPrompt.style.opacity = '0';
   },
 
+  // Fix 5 — gravity & jump physics. Runs every frame, regardless of dialogue
+  // state (so the player can't hover by opening a panel mid-air).
+  _updatePhysics(dt) {
+    if (!this.player) return;
+    // Apply gravity if not grounded.
+    if (!state.isGrounded) {
+      state.velocityY += GRAVITY * dt;
+    }
+    let py = this.player.position.y + state.velocityY * dt;
+    if (py <= this._groundY) {
+      py = this._groundY;
+      state.velocityY = 0;
+      state.isGrounded = true;
+    } else {
+      state.isGrounded = false;
+    }
+    this.player.position.y = py;
+  },
+
+  // Fix 5 — Space-bar jump input. Guarded against pause, dialogue, cutscene,
+  // and any open tutorial / panel overlay (which use Space to dismiss).
+  _consumeJumpInput() {
+    if (!state.isGrounded) return;
+    if (state.dialogueActive) return;
+    if (state.paused || this.paused || PauseManager.isPaused()) return;
+    if (state.currentScene === 'cutscene') return;
+    if (state.flags.endingStarted) return;
+    // Any open backdrop/tutorial consumes Space for "dismiss" — don't double
+    // it up with a jump.
+    if (
+      document.querySelector(
+        '.panel-backdrop, .inv-backdrop, .troll-backdrop, .hud-tut-backdrop, .pm-backdrop, .controls-intro',
+      )
+    ) {
+      return;
+    }
+    // Both ' ' (space) and 'spacebar' have shown up in older browsers.
+    if (this.keys.has(' ') || this.keys.has('spacebar')) {
+      state.velocityY = JUMP_FORCE;
+      state.isGrounded = false;
+    }
+  },
+
   update(delta) {
     if (!this.player) return;
 
@@ -257,25 +391,28 @@ export const Travel = {
     }
 
     if (state.flags.endingStarted) {
+      this._updatePhysics(clampedDelta);
       this._updateCamera(clampedDelta);
       if (this.character) this.character.update(clampedDelta, false, now);
       return;
     }
 
-    if (this.paused || state.dialogueActive) {
+    if (this.paused || PauseManager.isPaused() || state.dialogueActive) {
       if (state.isSprinting) state.isSprinting = false;
       this._updateStamina(clampedDelta, false);
+      // Still apply gravity while paused/in-dialogue so a mid-air pause
+      // resolves correctly when resumed.
+      this._updatePhysics(clampedDelta);
       this._updateCamera(clampedDelta);
       if (this.character) this.character.update(clampedDelta, false, now);
-      // Release the pointer lock so the UI is clickable without fighting
-      // mouselook.
+      // Release pointer lock so dialogue UI is clickable.
       if (state.dialogueActive && this._pointerLocked) {
         document.exitPointerLock?.();
       }
       return;
     }
 
-    // CHANGE 7 — no more Q/E rotation. WASD relative to camera yaw.
+    // --- Movement input ----------------------------------------------------
     const forwardPressed = this.keys.has('w') || this.walkForward;
     const backPressed = this.keys.has('s');
     const strafeLeftPressed = this.keys.has('a');
@@ -290,7 +427,6 @@ export const Travel = {
     if (strafeRightPressed) strafe += 1;
 
     const movingInput = fwd !== 0 || strafe !== 0;
-
     const inCave = state.currentScene === 'cave';
     const canSprint =
       !inCave && shiftHeld && movingInput && !this._sprintLocked &&
@@ -309,11 +445,7 @@ export const Travel = {
       const moveX = ns * step * cosY + nf * step * sinY;
       const moveZ = -ns * step * sinY + nf * step * cosY;
 
-      // Axis-separated collision: test X and Z independently so the player
-      // slides along walls instead of jamming. Colliders are disabled inside
-      // caves (CaveInterior builds its own geometry that the player is
-      // meant to traverse freely).
-      const useCollision = !inCave;
+      const useCollision = true; // Fix 6 — enabled in caves too.
       const curX = this.player.position.x;
       const curZ = this.player.position.z;
 
@@ -337,15 +469,17 @@ export const Travel = {
       moved = actualDX !== 0 || actualDZ !== 0;
     }
 
+    // --- Jump input + gravity ---------------------------------------------
+    this._consumeJumpInput();
+    this._updatePhysics(clampedDelta);
+
     this._updateStamina(clampedDelta, canSprint);
     if (state.isWalking !== moved) state.isWalking = moved;
-    // Mutate the existing object rather than replacing it — avoids a fresh
-    // allocation every frame and lets consumers keep their stable reference.
     if (!state.playerPos) state.playerPos = { x: 0, z: 0 };
     state.playerPos.x = this.player.position.x;
     state.playerPos.z = this.player.position.z;
 
-    // CHANGE 4 / 2 / 6 — crossing south of Westwind for the first time.
+    // --- Westwind exit gate ------------------------------------------------
     if (!state.flags.hasLeftWestwind && !inCave &&
         this.player.position.z < WESTWIND_EXIT_Z) {
       const missing = FriendNPCs.missingFriend();
@@ -358,7 +492,6 @@ export const Travel = {
           `You're not ready yet. Talk to ${missing.name} first.`,
         );
       } else {
-        // First real exit — start the clock at night, unfreeze, and warn.
         state.flags.hasLeftWestwind = true;
         state.timePaused = false;
         DayNight.setStartPhase('night');
@@ -367,12 +500,10 @@ export const Travel = {
       }
     }
 
-    // Off-road tracker used by goblins.
+    // --- Off-road tracker -------------------------------------------------
     if (inCave) {
       state.offRoad = false;
     } else {
-      // Early-exit road-distance check — stops on the first segment within
-      // range, avoiding the full per-segment scan when the player is on-road.
       state.offRoad = !isWithinRoadDistance(
         this.player.position.x,
         this.player.position.z,
@@ -380,9 +511,6 @@ export const Travel = {
       );
     }
 
-    // notify() fans out to every HUD subscriber (StaminaBar, ObjectiveTracker,
-    // Watch, HUD, Map, DebugOverlay). Running that at 60fps dominated the
-    // frame budget; 10Hz is imperceptible for the HUD.
     const nowMs = now * 1000;
     if (nowMs - this._lastNotifyMs > 100) {
       this._lastNotifyMs = nowMs;
@@ -440,7 +568,7 @@ export const Travel = {
       }
     }
 
-    const END_Z = -14800; // just past the Unnamed Village at z=-14500
+    const END_Z = -14800;
     if (this.player.position.z <= END_Z && !state.flags.endingStarted) {
       this.pause();
       Ending.begin();

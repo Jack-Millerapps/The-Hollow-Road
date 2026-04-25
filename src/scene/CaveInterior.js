@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { state, notify } from '../state.js';
 import { caves, CURRENCY_COLORS } from '../data/caves.js';
 import { SceneManager } from './SceneManager.js';
+import { Collision } from '../game/Collision.js';
 
 // ---------------------------------------------------------------------------
 // Phase 3 — Cave interiors.
@@ -122,25 +123,25 @@ function buildCeiling(group, cx, cz, w, d, mat) {
 }
 
 // A wall panel with an optional centered gap (for tunnel openings).
-function buildWallPanel(group, params, mat) {
+function buildWallPanel(group, params, mat, walls) {
   const { cx, cz, length, axis, gap } = params;
   if (!gap) {
-    buildWallSegment(group, cx, cz, length, axis, mat);
+    buildWallSegment(group, cx, cz, length, axis, mat, walls);
     return;
   }
   const halfGap = gap / 2;
   const segLen = (length - gap) / 2;
   if (segLen <= 0.01) return;
   if (axis === 'x') {
-    buildWallSegment(group, cx - (halfGap + segLen / 2), cz, segLen, axis, mat);
-    buildWallSegment(group, cx + (halfGap + segLen / 2), cz, segLen, axis, mat);
+    buildWallSegment(group, cx - (halfGap + segLen / 2), cz, segLen, axis, mat, walls);
+    buildWallSegment(group, cx + (halfGap + segLen / 2), cz, segLen, axis, mat, walls);
   } else {
-    buildWallSegment(group, cx, cz - (halfGap + segLen / 2), segLen, axis, mat);
-    buildWallSegment(group, cx, cz + (halfGap + segLen / 2), segLen, axis, mat);
+    buildWallSegment(group, cx, cz - (halfGap + segLen / 2), segLen, axis, mat, walls);
+    buildWallSegment(group, cx, cz + (halfGap + segLen / 2), segLen, axis, mat, walls);
   }
 }
 
-function buildWallSegment(group, cx, cz, length, axis, mat) {
+function buildWallSegment(group, cx, cz, length, axis, mat, walls) {
   const w = axis === 'x' ? length : WALL_THICKNESS;
   const d = axis === 'x' ? WALL_THICKNESS : length;
   const mesh = new THREE.Mesh(
@@ -150,15 +151,18 @@ function buildWallSegment(group, cx, cz, length, axis, mat) {
   mesh.position.set(cx, ROOM_HEIGHT / 2, cz);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  // Slight per-segment scale wobble so walls feel irregular.
   const axisScale = 0.92 + ((Math.sin(cx * 7.3 + cz * 1.9) + 1) * 0.5) * 0.22;
   mesh.scale.y = axisScale;
   mesh.position.y = (ROOM_HEIGHT * axisScale) / 2;
   group.add(mesh);
+  // Record cave-local box-collider footprint (Fix 6).
+  if (walls) {
+    walls.push({ cx, cz, hw: w / 2, hd: d / 2 });
+  }
 }
 
 // Describe which sides of a room are open (tunnels). openSides: {n,s,e,w}.
-function buildRoom(group, room, materials, rng) {
+function buildRoom(group, room, materials, rng, walls) {
   const { cx, cz, w, d, openSides } = room;
   buildFloor(group, cx, cz, w, d, materials.floor);
   buildCeiling(group, cx, cz, w, d, materials.ceiling);
@@ -169,24 +173,28 @@ function buildRoom(group, room, materials, rng) {
     group,
     { cx, cz: cz - d / 2, length: w, axis: 'x', gap: openSides.n ? gap : 0 },
     materials.stone,
+    walls,
   );
-  // South wall (z = cz + d/2)
+  // South wall
   buildWallPanel(
     group,
     { cx, cz: cz + d / 2, length: w, axis: 'x', gap: openSides.s ? gap : 0 },
     materials.stone,
+    walls,
   );
-  // West wall (x = cx - w/2)
+  // West wall
   buildWallPanel(
     group,
     { cx: cx - w / 2, cz, length: d, axis: 'z', gap: openSides.w ? gap : 0 },
     materials.stone,
+    walls,
   );
-  // East wall (x = cx + w/2)
+  // East wall
   buildWallPanel(
     group,
     { cx: cx + w / 2, cz, length: d, axis: 'z', gap: openSides.e ? gap : 0 },
     materials.stone,
+    walls,
   );
 
   // Debris — small rough boulders scattered on the floor for flavor.
@@ -216,7 +224,7 @@ function buildRoom(group, room, materials, rng) {
 
 // Tunnel connecting two room centers. We pick axis-aligned tunnels only, so
 // callers must make sure rooms align on either x or z.
-function buildTunnel(group, from, to, materials) {
+function buildTunnel(group, from, to, materials, walls) {
   const w = Math.abs(from.cx - to.cx);
   const d = Math.abs(from.cz - to.cz);
   const midX = (from.cx + to.cx) / 2;
@@ -231,15 +239,13 @@ function buildTunnel(group, from, to, materials) {
   if (axis === 'x') {
     buildFloor(group, midX, midZ, length, TUNNEL_WIDTH, materials.floor);
     buildCeiling(group, midX, midZ, length, TUNNEL_WIDTH, materials.ceiling);
-    // north & south walls
-    buildWallSegment(group, midX, midZ - TUNNEL_WIDTH / 2, length, 'x', materials.stone);
-    buildWallSegment(group, midX, midZ + TUNNEL_WIDTH / 2, length, 'x', materials.stone);
+    buildWallSegment(group, midX, midZ - TUNNEL_WIDTH / 2, length, 'x', materials.stone, walls);
+    buildWallSegment(group, midX, midZ + TUNNEL_WIDTH / 2, length, 'x', materials.stone, walls);
   } else {
     buildFloor(group, midX, midZ, TUNNEL_WIDTH, length, materials.floor);
     buildCeiling(group, midX, midZ, TUNNEL_WIDTH, length, materials.ceiling);
-    // east & west walls
-    buildWallSegment(group, midX - TUNNEL_WIDTH / 2, midZ, length, 'z', materials.stone);
-    buildWallSegment(group, midX + TUNNEL_WIDTH / 2, midZ, length, 'z', materials.stone);
+    buildWallSegment(group, midX - TUNNEL_WIDTH / 2, midZ, length, 'z', materials.stone, walls);
+    buildWallSegment(group, midX + TUNNEL_WIDTH / 2, midZ, length, 'z', materials.stone, walls);
   }
 }
 
@@ -486,16 +492,19 @@ function buildCave(cave, caveIndex) {
 
   const rooms = makeRooms();
 
-  buildRoom(group, rooms.entry, materials, rng);
-  buildRoom(group, rooms.mine1, materials, rng);
-  buildRoom(group, rooms.mine2, materials, rng);
-  buildRoom(group, rooms.alcove, materials, rng);
-  buildRoom(group, rooms.troll, materials, rng);
+  // walls: list of cave-local box-collider footprints {cx, cz, hw, hd}
+  // populated by buildWallSegment (Fix 6).
+  const walls = [];
+  buildRoom(group, rooms.entry, materials, rng, walls);
+  buildRoom(group, rooms.mine1, materials, rng, walls);
+  buildRoom(group, rooms.mine2, materials, rng, walls);
+  buildRoom(group, rooms.alcove, materials, rng, walls);
+  buildRoom(group, rooms.troll, materials, rng, walls);
 
-  buildTunnel(group, rooms.entry, rooms.mine1, materials);
-  buildTunnel(group, rooms.mine1, rooms.mine2, materials);
-  buildTunnel(group, rooms.mine2, rooms.alcove, materials);
-  buildTunnel(group, rooms.mine2, rooms.troll, materials);
+  buildTunnel(group, rooms.entry, rooms.mine1, materials, walls);
+  buildTunnel(group, rooms.mine1, rooms.mine2, materials, walls);
+  buildTunnel(group, rooms.mine2, rooms.alcove, materials, walls);
+  buildTunnel(group, rooms.mine2, rooms.troll, materials, walls);
 
   // Ore nodes — 4-6 per cave, distributed across mine1 and mine2.
   const totalNodes = 4 + Math.floor(rng() * 3); // 4..6
@@ -544,10 +553,11 @@ function buildCave(cave, caveIndex) {
     bedPos,
     troll,
     exitPortal,
-    // Local coords for spawn: center of entry room, facing south.
+    walls, // cave-local box footprints for collider registration (Fix 6)
+    activeColliders: [], // populated when this cave is active
     spawnLocal: { x: rooms.entry.cx, z: rooms.entry.cz + 1.5, rotationY: Math.PI },
-    // Compass target: center of troll chamber.
     compassLocal: { x: rooms.troll.cx, z: rooms.troll.cz },
+    floorY: 0, // cave floor height — flat for now
   };
 }
 
@@ -733,6 +743,11 @@ export const CaveInterior = {
     entry.group.visible = true;
     this.active = entry;
 
+    // Fix 6 — register cave wall colliders. Translate cave-local footprints
+    // to world coords using the cave origin and remember them so we can
+    // remove on exit.
+    this.registerColliders(entry);
+
     // Compute world-space spawn.
     const local = restorePlayerLocal || entry.spawnLocal;
     const spawn = {
@@ -743,10 +758,36 @@ export const CaveInterior = {
     return spawn;
   },
 
+  // Fix 6 — register every wall in the active cave as a box collider so the
+  // player can't walk through walls. Called from enter().
+  registerColliders(entry) {
+    if (!entry || !Array.isArray(entry.walls)) return;
+    if (entry.activeColliders && entry.activeColliders.length) {
+      // Defensive: clear any prior registration.
+      this.unregisterColliders(entry);
+    }
+    entry.activeColliders = [];
+    const ox = entry.origin.x;
+    const oz = entry.origin.z;
+    for (const w of entry.walls) {
+      const c = Collision.addBox(ox + w.cx, oz + w.cz, w.hw, w.hd);
+      if (c) entry.activeColliders.push(c);
+    }
+  },
+
+  unregisterColliders(entry) {
+    if (!entry || !entry.activeColliders) return;
+    for (const c of entry.activeColliders) Collision.remove(c);
+    entry.activeColliders = [];
+  },
+
   // Exit the active cave. Returns cave metadata (world entrance pos).
   exit() {
     const entry = this.active;
     if (!entry) return null;
+    // Fix 6 — drop the cave's wall colliders before hiding the geometry so
+    // the world's normal collision set is fully restored.
+    this.unregisterColliders(entry);
     entry.group.visible = false;
     this.active = null;
     this._atExit = false;

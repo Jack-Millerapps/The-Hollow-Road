@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ROAD_SEGMENTS_DATA } from './Road.js';
 import { SceneManager } from './SceneManager.js';
 import { Collision } from '../game/Collision.js';
+import { ChunkManager } from '../game/ChunkManager.js';
 
 // ---------------------------------------------------------------------------
 // Environment — consolidation patch.
@@ -160,6 +161,26 @@ export const Environment = {
     this._buildLanterns(group);
 
     scene.add(group);
+
+    // ChunkManager registration. The Environment InstancedMeshes (trees,
+    // grass, rocks, hills, lantern poles/cores) span the entire ~16,500-unit
+    // world; they are registered as "global" entries so chunk distance
+    // hiding doesn't toggle the whole world off. Three.js's per-mesh
+    // frustum culling still applies to each InstancedMesh.
+    if (this.hillInst) ChunkManager.registerGlobal(this.hillInst);
+    if (this.treeInst?.trunk) ChunkManager.registerGlobal(this.treeInst.trunk);
+    if (this.treeInst?.canopy) ChunkManager.registerGlobal(this.treeInst.canopy);
+    if (this.grassInst) ChunkManager.registerGlobal(this.grassInst);
+    if (this.rockInst) ChunkManager.registerGlobal(this.rockInst);
+    if (this.lanternPoles) ChunkManager.registerGlobal(this.lanternPoles);
+    if (this.lanternCores) ChunkManager.registerGlobal(this.lanternCores);
+    // Per-position lantern point lights are registered with their world
+    // position so distant ones get hidden (and skipped by the renderer).
+    for (const light of this.lanternLights) {
+      const p = new THREE.Vector3();
+      light.getWorldPosition(p);
+      ChunkManager.register(light, p.x, p.z);
+    }
   },
 
   _buildGround(group) {
@@ -515,10 +536,15 @@ export const Environment = {
       const m = this.lanternCores.material;
       m.emissiveIntensity = 2.0 + Math.sin(time * 3.2) * 0.25;
     }
-    // Stars opacity is also driven by DayNight.applyPhase — this just adds a
-    // gentle breathing flicker on top. Safe to skip when stars are hidden.
-    if (this.stars?.visible) {
-      this.stars.material.opacity = 0.85 + Math.sin(time * 0.7) * 0.08;
+    // Stars opacity is owned by DayNight (Fix 3 — phase target lerp). We add
+    // a small breathing modulation on top, but only when stars are at least
+    // partly visible so we never override the day/sunrise zero target.
+    if (this.stars?.visible && this.stars.material) {
+      const base = this.stars.material.opacity;
+      if (base > 0.02) {
+        const flicker = 1 + Math.sin(time * 0.7) * 0.05;
+        this.stars.material.opacity = Math.max(0, Math.min(1, base * flicker));
+      }
     }
   },
 

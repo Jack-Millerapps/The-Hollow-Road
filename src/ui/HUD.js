@@ -1,20 +1,16 @@
 import { state, subscribe } from '../state.js';
 import { DayNight } from '../scene/DayNight.js';
-import { PauseMenu } from './PauseMenu.js';
+import { PauseManager } from '../game/PauseManager.js';
 
 // ---------------------------------------------------------------------------
 // HUD — consolidation patch.
 //
 // Layout:
-//   - Top-left: menu button (40px, icon only)
-//   - Top-center: horizontal currency strip (gold / memories / promises /
-//     years / secrets)
+//   - Top-left: a single "Menu" text button (Cinzel Decorative, warm gold)
+//   - Top-center: horizontal currency strip
 //   - Top-right: day / night phase indicator
-//   - Bottom-right: watch (when owned) — rendered by src/ui/Watch.js
-//   - Bottom-left: stamina bar — rendered by src/ui/StaminaBar.js
-//
-// No reputation badges, no wholeness bar.
-// An FPS counter is mounted separately (src/ui/FPSCounter.js).
+//   - Bottom-right: watch (when owned)
+//   - Bottom-left: stamina bar
 // ---------------------------------------------------------------------------
 
 const CURRENCY_LABELS = [
@@ -31,6 +27,16 @@ const PHASE_ICONS = {
   night: '☾',
   sunrise: '◑',
 };
+
+function ensureMenuFont() {
+  if (document.getElementById('hud-cinzel-font')) return;
+  const link = document.createElement('link');
+  link.id = 'hud-cinzel-font';
+  link.rel = 'stylesheet';
+  link.href =
+    'https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&display=swap';
+  document.head.appendChild(link);
+}
 
 function pillCSS(extra = {}) {
   const base = {
@@ -55,42 +61,50 @@ export const HUD = {
   onMenu: null,
   _currencyEls: {},
   _phaseEl: null,
+  menuBtn: null,
 
   mount({ onMenu } = {}) {
     this.root = document.getElementById('ui-root');
-    // Default: open the pause menu when clicked. main.js can override.
-    this.onMenu = onMenu || (() => PauseMenu.openMenu?.());
+    ensureMenuFont();
 
-    // Remove any stale pre-Phase-4 menu button (the "Menu" text pill the old
-    // PauseMenu used to mount) or any element tagged as a hamburger.
+    this.onMenu = onMenu || (() => PauseManager.toggle());
+
+    // Strip any stale pre-existing menu buttons from older builds.
     this.root
-      ?.querySelectorAll('.hamburger, .menu-button, [data-hamburger]')
+      ?.querySelectorAll(
+        '.hamburger, .menu-button, [data-hamburger], #hud-menu-btn',
+      )
       .forEach((el) => el.remove());
 
-    // Top-left menu button (the ONE true menu button).
+    // Top-left "Menu" text button — single source of truth.
     const menuBtn = document.createElement('button');
     menuBtn.id = 'hud-menu-btn';
     menuBtn.type = 'button';
     menuBtn.title = 'Menu (Esc)';
-    menuBtn.textContent = '☰'; // triple bar / hamburger glyph
+    menuBtn.textContent = 'Menu';
     Object.assign(menuBtn.style, {
       position: 'fixed',
-      top: '18px',
+      top: '14px',
       left: '18px',
-      width: '40px',
-      height: '40px',
-      borderRadius: '50%',
-      border: '1px solid rgba(200, 170, 120, 0.45)',
-      background: 'rgba(12, 10, 8, 0.78)',
-      color: '#e5d9b6',
-      font: '20px Georgia, serif',
+      padding: '0',
+      background: 'transparent',
+      border: 'none',
+      color: '#c8903a',
+      fontFamily: "'Cinzel Decorative', Cinzel, Georgia, serif",
+      fontSize: '11px',
+      fontWeight: '400',
+      letterSpacing: '0.32em',
+      textTransform: 'uppercase',
       cursor: 'pointer',
       zIndex: '40',
       pointerEvents: 'auto',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '0',
+      textShadow: '0 0 6px rgba(200, 144, 58, 0.35)',
+    });
+    menuBtn.addEventListener('mouseenter', () => {
+      menuBtn.style.color = '#e8dcc8';
+    });
+    menuBtn.addEventListener('mouseleave', () => {
+      menuBtn.style.color = '#c8903a';
     });
     menuBtn.addEventListener('click', () => this.onMenu?.());
     this.root.appendChild(menuBtn);
