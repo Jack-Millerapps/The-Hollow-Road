@@ -9,9 +9,13 @@ import * as THREE from 'three';
 // object lives in exactly one chunk and is shown/hidden as the player moves.
 //
 // Per-frame, two passes run:
-//   1. Chunk pass — sets chunk.visible based on distance to player.
-//      Inside  LOAD_RADIUS  → chunk visible
-//      Outside UNLOAD_RADIUS → chunk hidden
+//   1. Chunk pass — sets chunk.visible based on distance + facing.
+//      - Load: chunk is active if it falls inside LOAD_RADIUS of the player
+//        OR of a point shifted forward (LOOKAHEAD) so content streams in
+//        before it enters the camera frustum (reduces pop-in / hitches).
+//      - Unload: uses player position; chunks *behind* the view direction
+//        keep a larger UNLOAD_BEHIND radius so turning around does not reveal
+//        empty space; chunks *ahead* use a tighter UNLOAD_AHEAD to save work.
 //   2. Frustum pass — for each object in an active chunk, hide it if its
 //      world bounding sphere falls outside the camera frustum.
 //
@@ -19,8 +23,15 @@ import * as THREE from 'three';
 // ---------------------------------------------------------------------------
 
 export const CHUNK_SIZE = 500;
-export const LOAD_RADIUS = 1500;
-export const UNLOAD_RADIUS = 2000;
+export const LOAD_RADIUS = 1600;
+/** Extra world-units forward (along camera yaw) for the second load anchor. */
+export const LOAD_LOOKAHEAD = 720;
+/** Unload when past this distance from player — ahead of facing (deg > 0). */
+export const UNLOAD_AHEAD = 2200;
+/** Unload when past this distance — behind facing; larger so trail stays hot. */
+export const UNLOAD_BEHIND = 3600;
+/** Legacy single radius — used only when yaw is omitted (symmetric fallback). */
+export const UNLOAD_RADIUS = UNLOAD_AHEAD;
 
 const _frustum = new THREE.Frustum();
 const _projScreenMatrix = new THREE.Matrix4();
@@ -92,6 +103,9 @@ function getOrCreateChunk(cx, cz) {
 export const ChunkManager = {
   CHUNK_SIZE,
   LOAD_RADIUS,
+  LOAD_LOOKAHEAD,
+  UNLOAD_AHEAD,
+  UNLOAD_BEHIND,
   UNLOAD_RADIUS,
   camera: null,
 
@@ -141,10 +155,25 @@ export const ChunkManager = {
   },
 
   // Per-frame update — call BEFORE renderer.render().
-  update(playerX, playerZ) {
+  // `yaw` — player / camera yaw on Y (radians), same as Travel / state.cameraYaw.
+  // When omitted, unload uses UNLOAD_AHEAD for all directions (symmetric).
+  update(playerX, playerZ, yaw = null) {
     const camera = this.camera;
     const loadSq = LOAD_RADIUS * LOAD_RADIUS;
-    const unloadSq = UNLOAD_RADIUS * UNLOAD_RADIUS;
+    const hasYaw = Number.isFinite(yaw);
+    let fwdX = 0;
+    let fwdZ = -1;
+    let lx = playerX;
+    let lz = playerZ;
+    if (hasYaw) {
+      // Match Travel.js facing: local -Z in XZ is (-sin(yaw), -cos(yaw)).
+      fwdX = -Math.sin(yaw);
+      fwdZ = -Math.cos(yaw);
+      lx = playerX + fwdX * LOAD_LOOKAHEAD;
+      lz = playerZ + fwdZ * LOAD_LOOKAHEAD;
+    }
+    const unloadAheadSq = UNLOAD_AHEAD * UNLOAD_AHEAD;
+    const unloadBehindSq = UNLOAD_BEHIND * UNLOAD_BEHIND;
 
     if (camera) {
       camera.updateMatrixWorld(true);
@@ -152,20 +181,32 @@ export const ChunkManager = {
 
     const newActive = new Set();
 
-    // Pass 1 — chunk visibility based on distance to player.
+    // Pass 1 — chunk visibility: dual load anchors + asymmetric unload.
     for (const chunk of chunks.values()) {
       const dx = chunk.centerX - playerX;
       const dz = chunk.centerZ - playerZ;
-      const dSq = dx * dx + dz * dz;
+      const dPlayerSq = dx * dx + dz * dz;
 
-      if (dSq < loadSq) {
+      const dxL = chunk.centerX - lx;
+      const dzL = chunk.centerZ - lz;
+      const dLookSq = dxL * dxL + dzL * dzL;
+
+      const inLoadBubble = dPlayerSq < loadSq || dLookSq < loadSq;
+
+      const unloadMid = (UNLOAD_AHEAD + UNLOAD_BEHIND) * 0.5;
+      const unloadSymSq = unloadMid * unloadMid;
+      let unloadSq = unloadSymSq;
+      if (hasYaw) {
+        const along = dx * fwdX + dz * fwdZ;
+        unloadSq = along < 0 ? unloadBehindSq : unloadAheadSq;
+      }
+
+      if (inLoadBubble) {
         chunk.setActive(true);
         newActive.add(chunkKey(chunk.cx, chunk.cz));
-      } else if (dSq > unloadSq) {
+      } else if (dPlayerSq > unloadSq) {
         chunk.setActive(false);
-      }
-      // Between LOAD and UNLOAD: hysteresis band, leave previous state.
-      else if (chunk.active) {
+      } else if (chunk.active) {
         newActive.add(chunkKey(chunk.cx, chunk.cz));
       }
     }

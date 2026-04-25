@@ -479,7 +479,11 @@ function start() {
 
       // ChunkManager — runs every frame BEFORE renderer.render() to set
       // visibility based on player chunk + camera frustum.
-      ChunkManager.update(state.playerPos.x, state.playerPos.z);
+      ChunkManager.update(
+        state.playerPos.x,
+        state.playerPos.z,
+        state.cameraYaw,
+      );
 
       SceneManager.updateShadowFollow(state.playerPos);
       SceneManager.render();
