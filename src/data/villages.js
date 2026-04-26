@@ -48,7 +48,7 @@ export const villages = [
   {
     name: 'veilMarket',
     position: { x: 0, z: -2500 },
-    radius: 18,
+    radius: 26,
     displayName: 'The Veil Market',
     flavor: "Everything here was someone else's. Including the silence.",
     npc: 'The Auctioneer',
@@ -89,7 +89,7 @@ export const villages = [
   {
     name: 'stonehush',
     position: { x: -800, z: -5000 },
-    radius: 24,
+    radius: 30,
     displayName: 'Stonehush',
     flavor: 'She places a finger to her lips. Then points at your hands.',
     npc: 'The Weaver',
@@ -120,7 +120,7 @@ export const villages = [
   {
     name: 'deeproot',
     position: { x: 600, z: -6000 },
-    radius: 22,
+    radius: 30,
     displayName: 'Deeproot',
     flavor: 'Roots thick as a man’s arm break the stones of the road.',
     npc: 'The Root-keeper',
@@ -152,7 +152,7 @@ export const villages = [
   {
     name: 'mirrorTown',
     position: { x: 200, z: -7800 },
-    radius: 22,
+    radius: 30,
     displayName: 'Mirror Town',
     flavor: 'Every window shows you, but not the you that is walking.',
     npc: 'The Glassmaker',
