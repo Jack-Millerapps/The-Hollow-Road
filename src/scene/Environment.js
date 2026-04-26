@@ -12,9 +12,10 @@ import { ChunkManager } from '../game/ChunkManager.js';
 // enforced via SceneManager.registerPointLight() + cullPointLights() so
 // only the 4 nearest PointLights are active at any time.
 //
-// Frustum culling runs each frame on the environment group itself (via
-// `updateCulling(camera)`) — distant sections are hidden so draw calls and
-// transform work scale with what the player can actually see.
+// World-spanning InstancedMeshes must use frustumCulled = false: Three.js
+// only bounds the base geometry (near the origin), not every instance, so
+// with culling on the whole forest/hills mesh disappears when you face away
+// from that default sphere. ChunkManager + fog still limit what matters.
 // ---------------------------------------------------------------------------
 
 const ROAD_HALF_WIDTH = 3.2;
@@ -149,7 +150,8 @@ export const Environment = {
 
   init(scene) {
     const group = new THREE.Group();
-    group.frustumCulled = true;
+    // Do not cull the whole group — children include mis-bounded InstancedMeshes.
+    group.frustumCulled = false;
     this.group = group;
 
     this._buildGround(group);
@@ -162,11 +164,10 @@ export const Environment = {
 
     scene.add(group);
 
-    // ChunkManager registration. The Environment InstancedMeshes (trees,
-    // grass, rocks, hills, lantern poles/cores) span the entire ~16,500-unit
-    // world; they are registered as "global" entries so chunk distance
-    // hiding doesn't toggle the whole world off. Three.js's per-mesh
-    // frustum culling still applies to each InstancedMesh.
+    // ChunkManager registration. InstancedMeshes span the whole road; they
+    // are "global" so chunk distance does not hide them. Mesh-level frustum
+    // culling is off on those meshes (see _build*), since their bounds are
+    // not expanded to all instances.
     if (this.hillInst) ChunkManager.registerGlobal(this.hillInst);
     if (this.treeInst?.trunk) ChunkManager.registerGlobal(this.treeInst.trunk);
     if (this.treeInst?.canopy) ChunkManager.registerGlobal(this.treeInst.canopy);
@@ -300,7 +301,7 @@ export const Environment = {
     }
     inst.count = placed;
     inst.instanceMatrix.needsUpdate = true;
-    inst.frustumCulled = true;
+    inst.frustumCulled = false;
     group.add(inst);
     this.hillInst = inst;
   },
@@ -357,8 +358,8 @@ export const Environment = {
     canopyInst.castShadow = false;
     trunkInst.receiveShadow = true;
     canopyInst.receiveShadow = true;
-    trunkInst.frustumCulled = true;
-    canopyInst.frustumCulled = true;
+    trunkInst.frustumCulled = false;
+    canopyInst.frustumCulled = false;
     group.add(trunkInst);
     group.add(canopyInst);
     this.treeInst = { trunk: trunkInst, canopy: canopyInst };
@@ -394,7 +395,7 @@ export const Environment = {
     }
     inst.count = placed;
     inst.instanceMatrix.needsUpdate = true;
-    inst.frustumCulled = true;
+    inst.frustumCulled = false;
     group.add(inst);
     this.grassInst = inst;
   },
@@ -429,7 +430,7 @@ export const Environment = {
     inst.instanceMatrix.needsUpdate = true;
     inst.castShadow = false;
     inst.receiveShadow = true;
-    inst.frustumCulled = true;
+    inst.frustumCulled = false;
     group.add(inst);
     this.rockInst = inst;
   },
@@ -521,8 +522,8 @@ export const Environment = {
     poleInst.castShadow = false;
     coreInst.castShadow = false;
     poleInst.receiveShadow = true;
-    poleInst.frustumCulled = true;
-    coreInst.frustumCulled = true;
+    poleInst.frustumCulled = false;
+    coreInst.frustumCulled = false;
     group.add(poleInst);
     group.add(coreInst);
     this.lanternPoles = poleInst;

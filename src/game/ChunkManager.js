@@ -116,8 +116,9 @@ export const ChunkManager = {
   // Register a Three.js Object3D at world (x, z). The object's `visible`
   // flag is now owned by ChunkManager. options.global = true means the
   // object spans many chunks (e.g. an InstancedMesh of trees over the whole
-  // world) — chunk distance hiding is skipped for it; only frustum culling
-  // applies (and even that defers to three.js's built-in mesh culling).
+  // world) — chunk distance hiding is skipped. Those meshes use
+  // frustumCulled=false in Environment because Three.js cannot bound all
+  // instances from the base geometry alone.
   register(object, worldX, worldZ, options = {}) {
     if (!object) return null;
     const [cx, cz] = chunkCoordsForWorld(worldX, worldZ);
@@ -227,10 +228,8 @@ export const ChunkManager = {
         for (const entry of chunk.objects) {
           const obj = entry.object;
           if (!obj) continue;
-          // Global entries (large InstancedMeshes spanning the world) defer
-          // to three.js's built-in per-mesh frustum culling. Forcing them
-          // through a single bounding sphere here would hide everything when
-          // the player faces away from the world's centroid.
+          // Global InstancedMeshes are not frustum-tested here (their bounds
+          // are wrong); Environment sets frustumCulled=false on those meshes.
           if (entry.global) {
             obj.visible = true;
             continue;
