@@ -11,6 +11,7 @@ import { CaveInterior } from './scene/CaveInterior.js';
 import { villages } from './data/villages.js';
 import { caves } from './data/caves.js';
 import { Travel } from './game/Travel.js';
+import { RoadEvents } from './game/RoadEvents.js';
 import { HUD } from './ui/HUD.js';
 import { Map as WorldMap } from './ui/Map.js';
 import { Save } from './game/Save.js';
@@ -383,6 +384,10 @@ function start() {
 
   HUD.mount();
   Travel.init(camera, scene, { canvas: renderer.domElement });
+  RoadEvents.init(scene, {
+    pause: () => Travel.pause(),
+    resume: () => Travel.resume(),
+  });
   PauseManager.setCanvas(renderer.domElement);
   // Debug overlay is opt-in to avoid impacting performance.
   const debugEnabled =
@@ -467,6 +472,7 @@ function start() {
         Goblins.update(delta, state.playerPos);
         VeilWander.update(delta, state.playerPos);
         Exchanger.update(state.playerPos);
+        RoadEvents.update(delta, state.playerPos, Travel);
       } else {
         Goblins.update(delta, state.playerPos);
       }

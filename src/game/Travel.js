@@ -161,6 +161,14 @@ export const Travel = {
       if (state.currentScene !== 'world' && state.currentScene !== 'cave') return;
       if (this.paused || PauseManager.isPaused()) return;
       if (state.dialogueActive) return;
+      if (state.needsPointerRelock) {
+        try {
+          this._canvas.requestPointerLock?.();
+          state.needsPointerRelock = false;
+          notify();
+        } catch { /* ignore */ }
+        return;
+      }
       if (document.pointerLockElement !== this._canvas) {
         this._canvas.requestPointerLock?.();
       }
@@ -397,18 +405,21 @@ export const Travel = {
       return;
     }
 
-    if (this.paused || PauseManager.isPaused() || state.dialogueActive) {
+    if (this.paused || PauseManager.isPaused()) {
       if (state.isSprinting) state.isSprinting = false;
       this._updateStamina(clampedDelta, false);
-      // Still apply gravity while paused/in-dialogue so a mid-air pause
-      // resolves correctly when resumed.
       this._updatePhysics(clampedDelta);
       this._updateCamera(clampedDelta);
       if (this.character) this.character.update(clampedDelta, false, now);
-      // Release pointer lock so dialogue UI is clickable.
-      if (state.dialogueActive && this._pointerLocked) {
-        document.exitPointerLock?.();
-      }
+      return;
+    }
+
+    if (state.dialogueActive) {
+      if (state.isSprinting) state.isSprinting = false;
+      this._updateStamina(clampedDelta, false);
+      this._updatePhysics(clampedDelta);
+      if (this._pointerLocked) document.exitPointerLock?.();
+      if (this.character) this.character.update(clampedDelta, false, now);
       return;
     }
 
@@ -494,8 +505,12 @@ export const Travel = {
       } else {
         state.flags.hasLeftWestwind = true;
         state.timePaused = false;
-        DayNight.setStartPhase('night');
-        FirstNightWarning.maybeShow();
+        if (state.flags.leg1Complete) {
+          DayNight.setStartPhase('night');
+          FirstNightWarning.maybeShow();
+        } else {
+          DayNight.setStartPhase('day');
+        }
         notify();
       }
     }
@@ -544,6 +559,9 @@ export const Travel = {
       const dist = Math.hypot(dx, dz);
       if (dist < village.radius) {
         this.triggered.add(village.name);
+        if (village.name === 'ashwick' && !state.flags.leg1Complete) {
+          RoadEvents.markLeg1Complete();
+        }
         this.pause();
         state.currentVillage = village.name;
         notify();
@@ -561,10 +579,13 @@ export const Travel = {
     if (this.distanceSinceEvent >= EVENT_INTERVAL) {
       this.distanceSinceEvent = 0;
       if (Math.random() < EVENT_CHANCE) {
-        this.pause();
-        RoadEvents.trigger(() => this.resume());
-        this._updateCamera(clampedDelta);
-        return;
+        RoadEvents.tryBeginEvent(
+          { x: this.player.position.x, z: this.player.position.z },
+          this._yaw,
+          () => {
+            this.distanceSinceEvent = 0;
+          },
+        );
       }
     }
 

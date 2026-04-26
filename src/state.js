@@ -2,7 +2,7 @@
 // The Hollow Road — global game state
 // ---------------------------------------------------------------------------
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 function freshDefaults() {
   return {
@@ -63,6 +63,8 @@ function freshDefaults() {
       // Friends-arrive sequence + HUD tutorial (bugs 6 & 7)
       friendsArrived: false,
       seenHudTutorial: false,
+      /** False until first Ashwick zone entry — blocks night on leg 1. */
+      leg1Complete: false,
     },
     // -- Phase 1 --------------------------------------------------------------
     playerName: '',
@@ -100,6 +102,7 @@ function freshDefaults() {
     paused: false,
     velocityY: 0,
     isGrounded: false,
+    needsPointerRelock: false,
     saveVersion: SAVE_VERSION,
   };
 }

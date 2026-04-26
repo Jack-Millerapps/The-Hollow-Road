@@ -68,6 +68,21 @@ export const DialoguePanel = {
     this.root = null;
     if (!opts.keepFlag) {
       state.dialogueActive = false;
+      const canvas = document.querySelector('#app canvas');
+      const canLock =
+        canvas &&
+        (state.currentScene === 'world' || state.currentScene === 'cave') &&
+        !state.paused;
+      if (canLock) {
+        const p = canvas.requestPointerLock?.();
+        if (p && typeof p.catch === 'function') {
+          p.catch(() => {
+            state.needsPointerRelock = true;
+          });
+        } else if (!document.pointerLockElement) {
+          state.needsPointerRelock = true;
+        }
+      }
     }
   },
 };

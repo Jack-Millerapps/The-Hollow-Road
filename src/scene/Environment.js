@@ -192,7 +192,9 @@ export const Environment = {
       roughness: 0.98,
       metalness: 0,
     });
-    // Huge ground plane covering the whole route.
+    // Huge ground plane covering the whole route (18k along Z). Continuity
+    // with Westwind→Ashwick relies on SceneManager camera far (~32k) plus
+    // ChunkManager on instanced props (see Prompt A / B Fix 5).
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(3000, 18000, 1, 1),
       groundMat,

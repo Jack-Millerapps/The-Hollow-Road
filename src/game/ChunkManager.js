@@ -149,6 +149,22 @@ export const ChunkManager = {
     if (i >= 0) arr.splice(i, 1);
   },
 
+  // Move a registered object to the chunk cell that contains (worldX, worldZ).
+  // Used by moving actors (goblins, road props) so chunk visibility stays correct.
+  moveEntryToWorld(entry, worldX, worldZ) {
+    if (!entry || entry.global || !entry.chunk) return;
+    entry.x = worldX;
+    entry.z = worldZ;
+    const [cx, cz] = chunkCoordsForWorld(worldX, worldZ);
+    if (entry.chunk.cx === cx && entry.chunk.cz === cz) return;
+    const arr = entry.chunk.objects;
+    const i = arr.indexOf(entry);
+    if (i >= 0) arr.splice(i, 1);
+    const newChunk = getOrCreateChunk(cx, cz);
+    entry.chunk = newChunk;
+    newChunk.add(entry);
+  },
+
   clear() {
     chunks.clear();
     _activeKeys.clear();

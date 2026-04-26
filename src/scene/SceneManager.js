@@ -214,6 +214,12 @@ export const SceneManager = {
     this._pointLights.push(light);
   },
 
+  unregisterPointLight(light) {
+    if (!light) return;
+    const i = this._pointLights.indexOf(light);
+    if (i >= 0) this._pointLights.splice(i, 1);
+  },
+
   // Throttled — sub-frame precision isn't necessary for which lanterns glow.
   cullPointLights() {
     if (this._pointLights.length === 0 || !this.camera) return;

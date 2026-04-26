@@ -61,6 +61,8 @@ export const roadEvents = [
   {
     id: 'signpost',
     title: 'A Signpost',
+    signText:
+      'The Weaver at Stonehush counts in years, not coins. Bring what you cannot afford to lose.',
     text:
       "A weathered post leans at the road's edge. Words have been carved, scratched out, carved again. You can just make out the last line:",
     options: [

@@ -85,6 +85,19 @@ function phaseStartOffset(name) {
   return 0;
 }
 
+// Leg 1 (Westwind → Ashwick): never leave the "day" slice of the cycle so
+// sunset/night never render. Clamp wrapped cycle time to the blue-sky part.
+const LEG1_MAX_WITHIN_CYCLE = 168;
+
+function effectiveGameTime() {
+  let t = state.gameTime || 0;
+  if (state.flags?.leg1Complete) return t;
+  const base = Math.floor(t / CYCLE_LENGTH) * CYCLE_LENGTH;
+  const w = t - base;
+  if (w > LEG1_MAX_WITHIN_CYCLE) return base + LEG1_MAX_WITHIN_CYCLE;
+  return t;
+}
+
 function phaseAt(time) {
   const wrapped = ((time % CYCLE_LENGTH) + CYCLE_LENGTH) % CYCLE_LENGTH;
   let acc = 0;
@@ -243,12 +256,12 @@ export const DayNight = {
     }
 
     reconcilePause();
-    applyPhase(phaseAt(state.gameTime || 0), 1.0);
+    applyPhase(phaseAt(effectiveGameTime()), 1.0);
   },
 
   setStartPhase(name) {
     state.gameTime = phaseStartOffset(name);
-    applyPhase(phaseAt(state.gameTime), 1.0);
+    applyPhase(phaseAt(effectiveGameTime()), 1.0);
   },
 
   update(delta) {
@@ -256,10 +269,17 @@ export const DayNight = {
     const wasPaused = state.timePaused || state.currentScene !== 'world';
     if (!wasPaused) {
       state.gameTime = (state.gameTime || 0) + delta;
+      if (!state.flags?.leg1Complete) {
+        const base = Math.floor(state.gameTime / CYCLE_LENGTH) * CYCLE_LENGTH;
+        const w = state.gameTime - base;
+        if (w > LEG1_MAX_WITHIN_CYCLE) {
+          state.gameTime = base + LEG1_MAX_WITHIN_CYCLE;
+        }
+      }
       _logAccum += delta;
       if (_debugLog && _logAccum >= 1) {
         _logAccum = 0;
-        const info = phaseAt(state.gameTime);
+        const info = phaseAt(effectiveGameTime());
         const fog = SceneManager.fog;
         const moon = SceneManager.moonLight;
         const amb = SceneManager.ambient;
@@ -280,20 +300,20 @@ export const DayNight = {
     }
     // Apply every frame so scene.background and stars always lerp smoothly
     // (even when paused, so resume looks consistent).
-    applyPhase(phaseAt(state.gameTime || 0), delta);
+    applyPhase(phaseAt(effectiveGameTime()), delta);
   },
 
   getCurrentPhase() {
-    return phaseAt(state.gameTime || 0).phase.name;
+    return phaseAt(effectiveGameTime()).phase.name;
   },
   getPhaseProgress() {
-    return phaseAt(state.gameTime || 0).progress;
+    return phaseAt(effectiveGameTime()).progress;
   },
   getPhaseInfo() {
-    return phaseAt(state.gameTime || 0);
+    return phaseAt(effectiveGameTime());
   },
   timeUntilNight() {
-    const info = phaseAt(state.gameTime || 0);
+    const info = phaseAt(effectiveGameTime());
     const offset = phaseStartOffset('night');
     let delta = offset - info.timeInCycle;
     if (delta < 0) delta += CYCLE_LENGTH;
