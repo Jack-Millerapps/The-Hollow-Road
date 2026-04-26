@@ -8,6 +8,10 @@ import {
 
 const KEY = 'hollowRoadSave';
 
+// When deleting save we must block writes until reload — otherwise the
+// autosave interval can repopulate localStorage before navigation completes.
+let _writesEnabled = true;
+
 function cloneDeep(obj) {
   try {
     return JSON.parse(JSON.stringify(obj));
@@ -52,6 +56,11 @@ function showMigrationNotice(fromVersion) {
 }
 
 export const Save = {
+  /** When false, `write()` is a no-op (used while wiping save before reload). */
+  setWritesEnabled(on) {
+    _writesEnabled = !!on;
+  },
+
   exists() {
     try {
       return localStorage.getItem(KEY) !== null;
@@ -87,6 +96,7 @@ export const Save = {
   },
 
   write(src = state) {
+    if (!_writesEnabled) return false;
     try {
       const payload = {
         saveVersion: SAVE_VERSION,

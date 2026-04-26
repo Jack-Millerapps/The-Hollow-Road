@@ -371,6 +371,18 @@ function applySceneVisibility(sc) {
 // ---------------------------------------------------------------------------
 
 function start() {
+  try {
+    const u = new URL(window.location.href);
+    if (u.searchParams.has('_new')) {
+      u.searchParams.delete('_new');
+      const tail = u.searchParams.toString();
+      const q = tail ? `?${tail}` : '';
+      history.replaceState(null, '', `${u.pathname}${q}${u.hash}`);
+    }
+  } catch {
+    /* ignore */
+  }
+
   const { scene, camera, renderer } = SceneManager.init();
   // ChunkManager must know the camera before any scene module registers
   // objects (so frustum-test setup is valid from the first frame).

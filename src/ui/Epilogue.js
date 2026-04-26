@@ -194,14 +194,16 @@ export const Epilogue = {
       btn.style.background = 'rgba(0, 0, 0, 0.4)';
     });
     btn.addEventListener('click', () => {
+      Save.setWritesEnabled(false);
       Save.clear();
       try {
         Save.resetInMemory?.();
       } catch {
         // ignore — page reload will start fresh either way.
       }
-      // Full reload back to the intro cutscene.
-      window.location.reload();
+      const { origin, pathname, search } = window.location;
+      const sep = search && search.length > 0 ? '&' : '?';
+      window.location.replace(`${origin}${pathname}${search}${sep}_new=1`);
     });
     btnWrap.appendChild(btn);
     panel.appendChild(btnWrap);

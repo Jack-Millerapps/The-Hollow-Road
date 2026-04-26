@@ -181,6 +181,8 @@ function showToast(msg, durationMs = 1500) {
 
 function deleteSaveAndReload() {
   if (!window.confirm('Erase all saved progress? This cannot be undone.')) return;
+  // Stop autosave (and any other callers) from re-writing the slot before we navigate.
+  Save.setWritesEnabled(false);
   Save.clear();
   try {
     if (document.pointerLockElement) document.exitPointerLock?.();
@@ -207,7 +209,12 @@ function deleteSaveAndReload() {
   // eslint-disable-next-line no-unused-expressions
   fade.offsetWidth;
   fade.style.opacity = '1';
-  setTimeout(() => window.location.reload(), 700);
+  setTimeout(() => {
+    const { origin, pathname, search } = window.location;
+    const sep = search && search.length > 0 ? '&' : '?';
+    // replace() drops the current history entry; fresh query avoids stale bfcache quirks.
+    window.location.replace(`${origin}${pathname}${search}${sep}_new=1`);
+  }, 700);
 }
 
 function quitToMenu() {
