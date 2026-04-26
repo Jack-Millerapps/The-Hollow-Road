@@ -365,6 +365,14 @@ function applySceneVisibility(sc) {
     setCabinVisible(false);
     const active = CaveInterior.getActive?.();
     if (active?.group) active.group.visible = true;
+  } else if (sc === 'cutscene') {
+    // Name-entry intro is full-screen DOM (z-index above canvas). Hide the
+    // 3D world so we never rely on an opaque fade-overlay (that would read as
+    // "stuck black" if the intro layer fails).
+    setWorldVisible(false);
+    setCabinVisible(false);
+    const active = CaveInterior.getActive?.();
+    if (active?.group) active.group.visible = false;
   }
 }
 
@@ -457,7 +465,10 @@ function start() {
   const fade = document.getElementById('fade-overlay');
   if (fade) {
     fade.style.transition = 'none';
-    fade.style.opacity = '1';
+    // Keep transparent: IntroCutscene is its own fullscreen layer. A solid
+    // black fade here sits above the canvas and below the intro (z-index),
+    // but if anything blocks the intro the game looked permanently black.
+    fade.style.opacity = '0';
     fade.style.pointerEvents = 'none';
   }
 
