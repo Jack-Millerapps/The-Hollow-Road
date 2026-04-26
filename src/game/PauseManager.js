@@ -86,6 +86,15 @@ function ensureStyle() {
   color: #e8dcc8;
   border-color: #8a6330;
 }
+.pm-btn.pm-danger {
+  color: #c87868;
+  border-color: #5a2820;
+}
+.pm-btn.pm-danger:hover {
+  background: rgba(60, 24, 18, 0.92);
+  color: #f0c8c0;
+  border-color: #8a4030;
+}
 .pm-toast {
   margin-top: 16px;
   font-size: 12px;
@@ -135,6 +144,13 @@ function buildOverlay() {
   });
   btns.appendChild(saveBtn);
 
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'pm-btn pm-danger';
+  deleteBtn.type = 'button';
+  deleteBtn.textContent = 'Delete Save';
+  deleteBtn.addEventListener('click', () => deleteSaveAndReload());
+  btns.appendChild(deleteBtn);
+
   const quitBtn = document.createElement('button');
   quitBtn.className = 'pm-btn';
   quitBtn.textContent = 'Quit to Menu';
@@ -161,6 +177,37 @@ function showToast(msg, durationMs = 1500) {
     _toastEl.textContent = '';
     _toastTimer = 0;
   }, durationMs);
+}
+
+function deleteSaveAndReload() {
+  if (!window.confirm('Erase all saved progress? This cannot be undone.')) return;
+  Save.clear();
+  try {
+    if (document.pointerLockElement) document.exitPointerLock?.();
+  } catch {}
+  state.paused = false;
+  state.timePaused = false;
+  hideOverlay();
+  notify();
+  let fade = document.getElementById('fade-overlay');
+  if (!fade) {
+    fade = document.createElement('div');
+    fade.id = 'fade-overlay';
+    Object.assign(fade.style, {
+      position: 'fixed',
+      inset: '0',
+      background: '#000',
+      opacity: '0',
+      zIndex: '70',
+      pointerEvents: 'none',
+    });
+    document.body.appendChild(fade);
+  }
+  fade.style.transition = 'opacity 600ms ease';
+  // eslint-disable-next-line no-unused-expressions
+  fade.offsetWidth;
+  fade.style.opacity = '1';
+  setTimeout(() => window.location.reload(), 700);
 }
 
 function quitToMenu() {
