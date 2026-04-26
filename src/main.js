@@ -366,10 +366,10 @@ function applySceneVisibility(sc) {
     const active = CaveInterior.getActive?.();
     if (active?.group) active.group.visible = true;
   } else if (sc === 'cutscene') {
-    // Name-entry intro is full-screen DOM (z-index above canvas). Hide the
-    // 3D world so we never rely on an opaque fade-overlay (that would read as
-    // "stuck black" if the intro layer fails).
-    setWorldVisible(false);
+    // Keep the world visible behind the name-entry intro. The intro layer
+    // starts at opacity 0 for a short time; if the world is hidden here the
+    // canvas reads as solid black until the intro fades in (felt "stuck").
+    setWorldVisible(true);
     setCabinVisible(false);
     const active = CaveInterior.getActive?.();
     if (active?.group) active.group.visible = false;
@@ -514,11 +514,9 @@ function start() {
 
       // ChunkManager — runs every frame BEFORE renderer.render() to set
       // visibility based on player chunk + camera frustum.
-      ChunkManager.update(
-        state.playerPos.x,
-        state.playerPos.z,
-        state.cameraYaw,
-      );
+      const px = state.playerPos?.x ?? 0;
+      const pz = state.playerPos?.z ?? 0;
+      ChunkManager.update(px, pz, state.cameraYaw);
 
       SceneManager.updateShadowFollow(state.playerPos);
       SceneManager.render();
@@ -592,6 +590,13 @@ function start() {
       // it; treat those as "start the cabin intro" and immediately rewrite the
       // save on exit to world.
       enterCabin();
+      return;
+    }
+    // Stale/unknown scene (e.g. persisted "cutscene" after the name intro) —
+    // do not leave the player on a black canvas with no IntroCutscene branch.
+    if (state.hasSeenIntro && state.playerName) {
+      if (!state.flags.friendsArrived) void enterCabin();
+      else void enterWestwind();
       return;
     }
   }

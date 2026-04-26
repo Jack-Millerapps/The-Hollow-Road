@@ -30,7 +30,7 @@ function makeStyleTag() {
 .intro-cutscene {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: 200;
   background: radial-gradient(ellipse at center, #0a0604 0%, #000000 65%);
   color: #e8c98a;
   display: flex;
@@ -39,8 +39,8 @@ function makeStyleTag() {
   flex-direction: column;
   font-family: 'Cormorant Garamond', 'Cormorant', Georgia, serif;
   overflow: hidden;
-  opacity: 0;
-  transition: opacity 1.6s ease;
+  opacity: 1;
+  transition: opacity 0.6s ease;
   user-select: none;
   pointer-events: auto;
 }
@@ -173,13 +173,14 @@ export const IntroCutscene = {
 
     document.body.appendChild(root);
     this.root = root;
+    // Show the layer immediately — the root used to stay at opacity 0 for
+    // ~2s while fading in, which left a transparent hole over a hidden/empty
+    // canvas (reads as a frozen black screen).
+    root.style.opacity = '1';
 
-    // 1. Fade from black.
-    await wait(200);
-    await fadeTo(root, 1, 1800);
-    await wait(900);
+    await wait(350);
 
-    // 2. First line fades in.
+    // 1. First line fades in.
     line.textContent = 'Seek the end and you will find clarity.';
     await fadeTo(line, 1, 1800);
 
