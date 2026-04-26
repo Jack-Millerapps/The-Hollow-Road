@@ -43,6 +43,7 @@ import { DebugOverlay } from './ui/DebugOverlay.js';
 import { ChunkManager } from './game/ChunkManager.js';
 import { PauseManager } from './game/PauseManager.js';
 import { BackgroundMusic } from './game/BackgroundMusic.js';
+import { Tutorial } from './game/Tutorial.js';
 
 // ---------------------------------------------------------------------------
 // Fade overlay helpers
@@ -193,6 +194,8 @@ async function enterWestwind() {
 
   await setFade(0, 1600);
 
+  Tutorial.onWestwindEntered();
+
   // First-visit flow: controls overlay → friends come → HUD tutorial.
   if (!state.flags.friendsArrived) {
     // Show the controls overlay first (if not seen), wait for dismissal.
@@ -238,6 +241,7 @@ async function resumeWorldFromSave() {
   showHUDChrome();
   Travel.resume();
   await setFade(0, 1200);
+  Tutorial.onWestwindEntered();
 }
 
 // ---------------------------------------------------------------------------
@@ -405,6 +409,7 @@ function start() {
   CaveEntrance.build(scene);
 
   HUD.mount();
+  Tutorial.mount();
   Travel.init(camera, scene, { canvas: renderer.domElement });
   AshwickNPCs.init(scene);
   RoadEvents.init(scene, {

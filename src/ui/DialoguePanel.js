@@ -56,7 +56,10 @@ export const DialoguePanel = {
     panel.appendChild(btnWrap);
 
     backdrop.appendChild(panel);
-    document.getElementById('ui-root').appendChild(backdrop);
+    // Mount on body so #ui-root can be hidden during intro / cabin without
+    // hiding dialogue.
+    backdrop.style.zIndex = '250';
+    document.body.appendChild(backdrop);
     this.root = backdrop;
     state.dialogueActive = true;
   },

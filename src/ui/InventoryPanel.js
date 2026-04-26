@@ -1,4 +1,5 @@
 import { state, subscribe } from '../state.js';
+import { Tutorial } from '../game/Tutorial.js';
 
 // Togglable inventory UI. Opens/closes on the `I` key.
 
@@ -179,6 +180,7 @@ export const InventoryPanel = {
     document.getElementById('ui-root').appendChild(backdrop);
     this.root = backdrop;
     this.render();
+    Tutorial.notifyInventoryOpened();
   },
 
   close() {

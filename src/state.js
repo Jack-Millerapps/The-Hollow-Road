@@ -2,7 +2,7 @@
 // The Hollow Road — global game state
 // ---------------------------------------------------------------------------
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 function freshDefaults() {
   return {
@@ -66,6 +66,16 @@ function freshDefaults() {
       seenHudTutorial: false,
       /** False until first Ashwick zone entry — blocks night on leg 1. */
       leg1Complete: false,
+      /** One-time contextual tutorial (Tutorial.js). */
+      tutorialComplete: false,
+      tutorialS1Move: false,
+      tutorialS2Look: false,
+      tutorialS3Interact: false,
+      tutorialS4Inventory: false,
+      tutorialS5Night: false,
+      tutorialS6Cave: false,
+      tutorialS7Quest: false,
+      tutorialS8Currency: false,
     },
     // -- Phase 1 --------------------------------------------------------------
     playerName: '',

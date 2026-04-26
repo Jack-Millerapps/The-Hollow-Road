@@ -144,91 +144,103 @@ export const IntroCutscene = {
   async start(onComplete) {
     makeStyleTag();
 
-    const root = document.createElement('div');
-    root.className = 'intro-cutscene';
+    const uiRoot = document.getElementById('ui-root');
+    let uiPrev = '';
+    if (uiRoot) {
+      uiPrev = uiRoot.style.display || '';
+      uiRoot.style.display = 'none';
+    }
 
-    const lantern = document.createElement('div');
-    lantern.className = 'lantern';
-    root.appendChild(lantern);
+    let name = '';
+    try {
+      const root = document.createElement('div');
+      root.className = 'intro-cutscene';
 
-    const line = document.createElement('div');
-    line.className = 'line';
-    line.textContent = '';
-    root.appendChild(line);
+      const lantern = document.createElement('div');
+      lantern.className = 'lantern';
+      root.appendChild(lantern);
 
-    const inputWrap = document.createElement('div');
-    inputWrap.className = 'input-wrap';
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.autocomplete = 'off';
-    input.spellcheck = false;
-    input.maxLength = 24;
-    input.placeholder = '';
-    inputWrap.appendChild(input);
-    const hint = document.createElement('div');
-    hint.className = 'hint';
-    hint.textContent = 'Press Enter';
-    inputWrap.appendChild(hint);
-    root.appendChild(inputWrap);
+      const line = document.createElement('div');
+      line.className = 'line';
+      line.textContent = '';
+      root.appendChild(line);
 
-    document.body.appendChild(root);
-    this.root = root;
-    // Show the layer immediately — the root used to stay at opacity 0 for
-    // ~2s while fading in, which left a transparent hole over a hidden/empty
-    // canvas (reads as a frozen black screen).
-    root.style.opacity = '1';
+      const inputWrap = document.createElement('div');
+      inputWrap.className = 'input-wrap';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      input.maxLength = 24;
+      input.placeholder = '';
+      inputWrap.appendChild(input);
+      const hint = document.createElement('div');
+      hint.className = 'hint';
+      hint.textContent = 'Press Enter';
+      inputWrap.appendChild(hint);
+      root.appendChild(inputWrap);
 
-    await wait(350);
+      document.body.appendChild(root);
+      this.root = root;
+      // Show the layer immediately — the root used to stay at opacity 0 for
+      // ~2s while fading in, which left a transparent hole over a hidden/empty
+      // canvas (reads as a frozen black screen).
+      root.style.opacity = '1';
 
-    // 1. First line fades in.
-    line.textContent = 'Seek the end and you will find clarity.';
-    await fadeTo(line, 1, 1800);
+      await wait(350);
 
-    // 3. Hold on first line.
-    await wait(3000);
+      // 1. First line fades in.
+      line.textContent = 'Seek the end and you will find clarity.';
+      await fadeTo(line, 1, 1800);
 
-    // Fade it out, swap to prompt.
-    await fadeTo(line, 0, 1200);
-    line.textContent = 'What is your name, traveler?';
-    await fadeTo(line, 1, 1400);
+      // 3. Hold on first line.
+      await wait(3000);
 
-    // 4. Reveal the input.
-    await fadeTo(inputWrap, 1, 900);
-    setTimeout(() => input.focus(), 50);
+      // Fade it out, swap to prompt.
+      await fadeTo(line, 0, 1200);
+      line.textContent = 'What is your name, traveler?';
+      await fadeTo(line, 1, 1400);
 
-    const name = await new Promise((resolve) => {
-      const onKey = (e) => {
-        if (e.key === 'Enter') {
-          const val = input.value.trim();
-          if (!val) return;
-          input.removeEventListener('keydown', onKey);
-          resolve(val);
-        }
-      };
-      input.addEventListener('keydown', onKey);
-    });
+      // 4. Reveal the input.
+      await fadeTo(inputWrap, 1, 900);
+      setTimeout(() => input.focus(), 50);
 
-    input.disabled = true;
-    await fadeTo(inputWrap, 0, 800);
+      name = await new Promise((resolve) => {
+        const onKey = (e) => {
+          if (e.key === 'Enter') {
+            const val = input.value.trim();
+            if (!val) return;
+            input.removeEventListener('keydown', onKey);
+            resolve(val);
+          }
+        };
+        input.addEventListener('keydown', onKey);
+      });
 
-    // 5. Personalized line.
-    await fadeTo(line, 0, 900);
-    line.textContent = `${name}… hmm, that's a great name.`;
-    await fadeTo(line, 1, 1400);
+      input.disabled = true;
+      await fadeTo(inputWrap, 0, 800);
 
-    // Persist early so a reload keeps the name.
-    state.playerName = name;
-    state.hasSeenIntro = true;
-    notify();
-    Save.write(state);
+      // 5. Personalized line.
+      await fadeTo(line, 0, 900);
+      line.textContent = `${name}… hmm, that's a great name.`;
+      await fadeTo(line, 1, 1400);
 
-    // 6. Hold, then fade to black.
-    await wait(3000);
-    await fadeTo(line, 0, 900);
-    await fadeTo(root, 0, 1600);
+      // Persist early so a reload keeps the name.
+      state.playerName = name;
+      state.hasSeenIntro = true;
+      notify();
+      Save.write(state);
 
-    root.remove();
-    this.root = null;
+      // 6. Hold, then fade to black.
+      await wait(3000);
+      await fadeTo(line, 0, 900);
+      await fadeTo(root, 0, 1600);
+
+      root.remove();
+      this.root = null;
+    } finally {
+      if (uiRoot) uiRoot.style.display = uiPrev;
+    }
 
     if (typeof onComplete === 'function') onComplete({ name });
   },

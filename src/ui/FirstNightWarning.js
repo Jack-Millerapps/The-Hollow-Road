@@ -117,5 +117,6 @@ export const FirstNightWarning = {
     const wrap = this.root;
     this.root = null;
     setTimeout(() => wrap.remove(), 700);
+    notify();
   },
 };

@@ -1,5 +1,6 @@
 import { state } from '../state.js';
 import { QuestSystem } from '../game/QuestSystem.js';
+import { Tutorial } from '../game/Tutorial.js';
 
 // Press J to open. Shows active quests with current step + hint.
 
@@ -164,6 +165,7 @@ export const QuestLog = {
     wrap.appendChild(panel);
     document.body.appendChild(wrap);
     this.root = wrap;
+    Tutorial.notifyQuestLogOpened();
   },
 
   close() {

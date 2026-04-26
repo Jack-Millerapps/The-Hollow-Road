@@ -47,6 +47,8 @@ const LOOK_OFFSET = new THREE.Vector3(0, 1.55, 0);
 const _scratchOffset = new THREE.Vector3();
 const _scratchTargetPos = new THREE.Vector3();
 const _scratchTargetLook = new THREE.Vector3();
+const _rollQuat = new THREE.Quaternion();
+const _rollAxis = new THREE.Vector3(0, 0, 1);
 
 const WESTWIND_EXIT_Z = 470;
 
@@ -75,6 +77,9 @@ export const Travel = {
   _lastNotifyMs: 0,
   // Ground level — overridden when entering/exiting caves.
   _groundY: DEFAULT_GROUND_Y,
+  _lastYawForRoll: 0,
+  _cameraRoll: 0,
+  _walkCycle: 0,
 
   init(camera, scene, opts = {}) {
     this.scene = scene;
@@ -105,6 +110,9 @@ export const Travel = {
     this.walkForward = false;
     this._lastTime = performance.now() / 1000;
     this._sprintLocked = false;
+    this._lastYawForRoll = this._yaw;
+    this._cameraRoll = 0;
+    this._walkCycle = 0;
 
     // Initialize camera FOV.
     if (this.camera && this.camera.fov !== FOV_WALK) {
@@ -255,9 +263,15 @@ export const Travel = {
   },
 
   // Fix 7 — smooth camera follow with lerped position and yaw, snappier
-  // vertical tracking, and FOV widening on sprint.
-  _updateCamera(delta) {
+  // vertical tracking, FOV widening on sprint, walk bob, turn roll,
+  // exhausted sprint shake (Prompt D).
+  _updateCamera(delta, camOpts = {}) {
     if (!this.player || !this.camera) return;
+
+    const inCave = camOpts.inCave === true;
+    const horizDist = camOpts.horizDist ?? 0;
+    const movedWalk = camOpts.movedWalk === true;
+    const exhausted = (state.stamina ?? 1) < 0.1;
 
     // Lerp the visible yaw toward the target yaw — gives the camera a touch
     // of lag on quick spins. The player object's rotation still uses the
@@ -288,6 +302,33 @@ export const Travel = {
 
     this.camera.position.copy(this._cameraPos);
     this.camera.lookAt(this._cameraLook);
+
+    const dYaw = this._yaw - this._lastYawForRoll;
+    this._lastYawForRoll = this._yaw;
+    let tiltTarget = 0;
+    if (Math.abs(dYaw) > 0.0004) {
+      tiltTarget = THREE.MathUtils.clamp(dYaw * 9, -0.04, 0.04);
+    }
+    this._cameraRoll += (tiltTarget - this._cameraRoll) * 0.1;
+    if (Math.abs(dYaw) < 0.00025) {
+      this._cameraRoll += (0 - this._cameraRoll) * 0.08;
+    }
+    if (!inCave) {
+      _rollQuat.setFromAxisAngle(_rollAxis, this._cameraRoll);
+      this.camera.quaternion.multiply(_rollQuat);
+    }
+
+    if (!inCave && movedWalk) {
+      this._walkCycle += horizDist * 0.38;
+      const bob = Math.sin(this._walkCycle * Math.PI * 2) * 0.04;
+      this.camera.position.y += bob;
+    }
+
+    if (exhausted && state.isSprinting && !inCave) {
+      this.camera.position.x += (Math.random() - 0.5) * 0.02;
+      this.camera.position.y += (Math.random() - 0.5) * 0.02;
+      this.camera.position.z += (Math.random() - 0.5) * 0.02;
+    }
 
     // FOV — lerp toward target based on sprint state.
     const targetFov = state.isSprinting ? FOV_SPRINT : FOV_WALK;
@@ -375,7 +416,7 @@ export const Travel = {
     // it up with a jump.
     if (
       document.querySelector(
-        '.panel-backdrop, .inv-backdrop, .troll-backdrop, .hud-tut-backdrop, .pm-backdrop, .controls-intro',
+        '.panel-backdrop, .inv-backdrop, .troll-backdrop, .hud-tut-backdrop, .pm-backdrop, .controls-intro, .hr-tutorial-tip',
       )
     ) {
       return;
@@ -398,9 +439,11 @@ export const Travel = {
       if (this._softPromptTimer <= 0) this._hideSoftPrompt();
     }
 
+    const caveScene = state.currentScene === 'cave';
+
     if (state.flags.endingStarted) {
       this._updatePhysics(clampedDelta);
-      this._updateCamera(clampedDelta);
+      this._updateCamera(clampedDelta, { inCave: caveScene });
       if (this.character) this.character.update(clampedDelta, false, now);
       return;
     }
@@ -409,7 +452,7 @@ export const Travel = {
       if (state.isSprinting) state.isSprinting = false;
       this._updateStamina(clampedDelta, false);
       this._updatePhysics(clampedDelta);
-      this._updateCamera(clampedDelta);
+      this._updateCamera(clampedDelta, { inCave: caveScene });
       if (this.character) this.character.update(clampedDelta, false, now);
       return;
     }
@@ -419,6 +462,7 @@ export const Travel = {
       this._updateStamina(clampedDelta, false);
       this._updatePhysics(clampedDelta);
       if (this._pointerLocked) document.exitPointerLock?.();
+      this._updateCamera(clampedDelta, { inCave: caveScene });
       if (this.character) this.character.update(clampedDelta, false, now);
       return;
     }
@@ -446,6 +490,8 @@ export const Travel = {
     state.isSprinting = canSprint;
 
     let moved = false;
+    let actualDX = 0;
+    let actualDZ = 0;
     if (movingInput) {
       const len = Math.hypot(fwd, strafe);
       const nf = fwd / len;
@@ -472,13 +518,19 @@ export const Travel = {
         }
       }
 
-      const actualDX = newX - curX;
-      const actualDZ = newZ - curZ;
+      actualDX = newX - curX;
+      actualDZ = newZ - curZ;
       this.player.position.x = newX;
       this.player.position.z = newZ;
       this.distanceSinceEvent += Math.hypot(actualDX, actualDZ);
       moved = actualDX !== 0 || actualDZ !== 0;
     }
+
+    const camOpts = {
+      inCave,
+      movedWalk: moved && !canSprint && movingInput,
+      horizDist: Math.hypot(actualDX, actualDZ),
+    };
 
     // --- Jump input + gravity ---------------------------------------------
     this._consumeJumpInput();
@@ -533,7 +585,10 @@ export const Travel = {
     }
     if (this.character) this.character.update(clampedDelta, moved, now);
 
-    if (inCave) { this._updateCamera(clampedDelta); return; }
+    if (inCave) {
+      this._updateCamera(clampedDelta, camOpts);
+      return;
+    }
 
     if (VeilWander.consumeTradeRequest()) {
       this.pause();
@@ -545,7 +600,7 @@ export const Travel = {
         this.resume();
         notify();
       });
-      this._updateCamera(clampedDelta);
+      this._updateCamera(clampedDelta, camOpts);
       return;
     }
 
@@ -571,7 +626,7 @@ export const Travel = {
           this.resume();
           notify();
         });
-        this._updateCamera(clampedDelta);
+        this._updateCamera(clampedDelta, camOpts);
         return;
       }
     }
@@ -595,6 +650,6 @@ export const Travel = {
       Ending.begin();
     }
 
-    this._updateCamera(clampedDelta);
+    this._updateCamera(clampedDelta, camOpts);
   },
 };
