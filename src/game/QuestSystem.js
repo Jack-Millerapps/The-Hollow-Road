@@ -1,6 +1,7 @@
-import { state, notify } from '../state.js';
+import { state, notify, grantItem } from '../state.js';
 import { DialoguePanel } from '../ui/DialoguePanel.js';
 import { Save } from './Save.js';
+import { setMillWheelSpinning } from '../scene/AshwickTown.js';
 
 // ---------------------------------------------------------------------------
 // QuestSystem — replaces SpecialTasks.js. Each destination's main NPC offers
@@ -29,7 +30,13 @@ function ensureQuest(name) {
   if (!state.quests[name]) {
     state.quests[name] = { step: 0, done: false, branch: null };
   }
-  return state.quests[name];
+  const q = state.quests[name];
+  if (name === 'ashwick') {
+    if (q.spokeMaren === undefined) q.spokeMaren = false;
+    if (q.spokeDov === undefined) q.spokeDov = false;
+    if (q.spokeSera === undefined) q.spokeSera = false;
+  }
+  return q;
 }
 
 function giveMapPiece(piece) {
@@ -59,19 +66,23 @@ const QUESTS = {
       },
       {
         id: 'villagers',
-        hint: 'Speak to three Ashwick villagers about the miller\'s son.',
+        hint: 'Speak to townsfolk about the miller\'s son.',
       },
       {
         id: 'grave',
-        hint: 'Find the son\'s grave east of Ashwick.',
+        hint: 'Find the miller\'s son\'s grave at the edge of the eastern fields.',
+      },
+      {
+        id: 'page',
+        hint: 'The grave is empty. Find what happened.',
       },
       {
         id: 'cave',
-        hint: 'Search the small cave east of Ashwick for the son\'s carving.',
+        hint: 'Find the cave east of Ashwick.',
       },
       {
         id: 'choice',
-        hint: 'Return to the miller with the carving — give it, or keep it.',
+        hint: 'Return the carving to the miller.',
       },
     ],
   },
@@ -155,11 +166,140 @@ export const QuestSystem = {
     q.step = def.steps.length;
     q.done = true;
     if (branch) q.branch = branch;
-    if (def.mapReward) giveMapPiece(def.mapReward);
+    const skipMap = name === 'ashwick' && branch === 'kept';
+    if (def.mapReward && !skipMap) giveMapPiece(def.mapReward);
+    if (name === 'ashwick' && branch === 'gave') {
+      state.items.carving = false;
+      setMillWheelSpinning(false);
+    }
     state.tradeComplete[name] = true;
     state.flags[`${name}TaskDone`] = true;
     notify();
     Save.write(state);
+  },
+
+  markAshwickVillager(id) {
+    const q = ensureQuest('ashwick');
+    if (q.done || q.step !== 1) return;
+    if (id === 'maren') q.spokeMaren = true;
+    if (id === 'dov') q.spokeDov = true;
+    if (id === 'sera') q.spokeSera = true;
+    if (q.spokeMaren && q.spokeDov && q.spokeSera) {
+      this.advance('ashwick');
+    }
+    notify();
+    Save.write(state);
+  },
+
+  tryAshwickGrave() {
+    const q = ensureQuest('ashwick');
+    if (q.done || q.step !== 2) return;
+    DialoguePanel.open({
+      title: 'Grave',
+      body: 'The earth has been disturbed. The name is weathered away. Whatever was here is gone.',
+      buttons: [
+        {
+          label: 'Step back.',
+          onClick: () => {
+            DialoguePanel.close();
+            QuestSystem.advance('ashwick');
+            Save.write(state);
+          },
+        },
+      ],
+    });
+  },
+
+  tryAshwickPage() {
+    const q = ensureQuest('ashwick');
+    if (q.done || q.step !== 3) return;
+    DialoguePanel.open({
+      title: 'Torn page',
+      body:
+        'He went to the cave in the hills to the east. He said he heard it singing.',
+      buttons: [
+        {
+          label: 'Fold the page away.',
+          onClick: () => {
+            DialoguePanel.close();
+            QuestSystem.advance('ashwick');
+            Save.write(state);
+          },
+        },
+      ],
+    });
+  },
+
+  tryAshwickShrine() {
+    const q = ensureQuest('ashwick');
+    if (q.done || q.step !== 4) return;
+    grantItem('carving');
+    DialoguePanel.open({
+      title: 'Shrine',
+      body:
+        'Stacked stones and a small wooden figure, worn smooth by hands and weather. You can take it.',
+      buttons: [
+        {
+          label: 'Take the carving.',
+          onClick: () => {
+            DialoguePanel.close();
+            QuestSystem.advance('ashwick');
+            Save.write(state);
+          },
+        },
+      ],
+    });
+  },
+
+  talkAshwickMiller() {
+    const def = QUESTS.ashwick;
+    const q = ensureQuest('ashwick');
+    if (q.done) {
+      DialoguePanel.open({
+        title: def.giver,
+        body: '(He has nothing more to ask of you.)',
+        buttons: [{ label: 'Farewell.', onClick: () => DialoguePanel.close() }],
+      });
+      return;
+    }
+    if (q.step === 0) {
+      DialoguePanel.open({
+        title: def.giver,
+        body: questIntroBody('ashwick'),
+        buttons: [
+          {
+            label: 'I will help.',
+            onClick: () => {
+              DialoguePanel.close();
+              QuestSystem.advance('ashwick');
+              Save.write(state);
+            },
+          },
+          { label: 'Not now.', onClick: () => DialoguePanel.close() },
+        ],
+      });
+      return;
+    }
+    if (q.step === 5) {
+      if (!state.items.carving) {
+        DialoguePanel.open({
+          title: def.giver,
+          body: 'You have not brought it yet. The wheel will not wait.',
+          buttons: [{ label: 'I will keep searching.', onClick: () => DialoguePanel.close() }],
+        });
+        return;
+      }
+      presentFinalChoice('ashwick', def, (branch) => {
+        QuestSystem.complete('ashwick', { branch });
+      });
+      return;
+    }
+    const step = def.steps[q.step];
+    DialoguePanel.open({
+      title: def.giver,
+      body: `(Current task:) ${step ? step.hint : ''}`,
+      buttons: [{ label: 'I understand.', onClick: () => DialoguePanel.close() }],
+    });
   },
 
   // Quick-complete dialogue used by each destination's main NPC. For a
@@ -291,12 +431,39 @@ function presentFinalChoice(name, def, onChoose) {
       buttons: [
         {
           label: 'I give you the carving.',
-          onClick: () => { DialoguePanel.close(); onChoose('gave'); },
+          onClick: () => {
+            DialoguePanel.close();
+            DialoguePanel.open({
+              title: def.giver,
+              body:
+                'He made this when he was six. He said it was me. I always thought it looked like a bird.',
+              buttons: [
+                {
+                  label: '…',
+                  onClick: () => {
+                    DialoguePanel.close();
+                    DialoguePanel.open({
+                      title: def.giver,
+                      body: 'Thank you. I think I can sleep now.',
+                      buttons: [
+                        {
+                          label: 'Farewell.',
+                          onClick: () => {
+                            DialoguePanel.close();
+                            onChoose('gave');
+                          },
+                        },
+                      ],
+                    });
+                  },
+                },
+              ],
+            });
+          },
         },
         {
           label: "I'll keep it. It's worth coin.",
           onClick: () => {
-            // Keep the carving — +30 gold, no rep penalty.
             state.currencies.gold = (state.currencies.gold || 0) + 30;
             notify();
             DialoguePanel.close();

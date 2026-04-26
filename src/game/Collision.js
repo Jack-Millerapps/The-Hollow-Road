@@ -87,6 +87,11 @@ export const Collision = {
     return c;
   },
 
+  /** Alias — same as `addBox(centerX, centerZ, halfW, halfD)`. */
+  registerBox(x, z, halfWidth, halfDepth) {
+    return this.addBox(x, z, halfWidth, halfDepth);
+  },
+
   remove(c) {
     if (!c) return;
     removeFromGrid(c);

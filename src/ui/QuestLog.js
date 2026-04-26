@@ -97,20 +97,46 @@ export const QuestLog = {
       });
       item.appendChild(head);
       const status = document.createElement('div');
-      if (q.done) {
-        status.textContent = `Complete${q.branch ? ` — ${q.branch}` : ''}`;
-        status.style.color = '#8cd7a3';
-      } else {
-        const step = def.steps[q.step];
-        status.textContent = step ? step.hint : 'In progress.';
-      }
-      Object.assign(status.style, {
+      const statusBase = {
         fontStyle: 'italic',
         fontSize: '13px',
         lineHeight: '1.5',
         marginTop: '4px',
-      });
-      item.appendChild(status);
+      };
+      if (q.done) {
+        status.textContent = `Complete${q.branch ? ` — ${q.branch}` : ''}`;
+        status.style.color = '#8cd7a3';
+        Object.assign(status.style, statusBase);
+        item.appendChild(status);
+      } else {
+        const step = def.steps[q.step];
+        if (name === 'ashwick' && q.step === 1 && step?.id === 'villagers') {
+          status.textContent = step.hint;
+          Object.assign(status.style, statusBase);
+          item.appendChild(status);
+          const boxWrap = document.createElement('div');
+          Object.assign(boxWrap.style, {
+            marginTop: '10px',
+            fontSize: '12px',
+            lineHeight: '1.7',
+            fontStyle: 'normal',
+            color: '#c8b898',
+          });
+          const mkRow = (label, done) => {
+            const row = document.createElement('div');
+            row.textContent = `${label}  [ ${done ? '✓' : ' '} ]`;
+            return row;
+          };
+          boxWrap.appendChild(mkRow('Maren', !!q.spokeMaren));
+          boxWrap.appendChild(mkRow('Dov', !!q.spokeDov));
+          boxWrap.appendChild(mkRow('Sera', !!q.spokeSera));
+          item.appendChild(boxWrap);
+        } else {
+          status.textContent = step ? step.hint : 'In progress.';
+          Object.assign(status.style, statusBase);
+          item.appendChild(status);
+        }
+      }
       panel.appendChild(item);
     }
     if (!any) {

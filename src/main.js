@@ -3,6 +3,7 @@ import { SceneManager } from './scene/SceneManager.js';
 import { Road } from './scene/Road.js';
 import { Environment } from './scene/Environment.js';
 import { VillageBuilder } from './scene/VillageBuilder.js';
+import { AshwickNPCs } from './scene/AshwickNPCs.js';
 import { Westwind } from './scene/Westwind.js';
 import { CabinInterior } from './scene/CabinInterior.js';
 import { DayNight } from './scene/DayNight.js';
@@ -41,6 +42,7 @@ import { DebugOverlay } from './ui/DebugOverlay.js';
 // Engine fixes (this prompt)
 import { ChunkManager } from './game/ChunkManager.js';
 import { PauseManager } from './game/PauseManager.js';
+import { BackgroundMusic } from './game/BackgroundMusic.js';
 
 // ---------------------------------------------------------------------------
 // Fade overlay helpers
@@ -390,6 +392,7 @@ function start() {
   Road.init(scene);
   Environment.init(scene);
   for (const v of villages) VillageBuilder.buildVillage(v.name, scene);
+  AshwickNPCs.init(scene);
   Westwind.build(scene);
   CabinInterior.build(scene);
   CaveEntrance.build(scene);
@@ -449,6 +452,8 @@ function start() {
   // reconcilePause().
   DayNight.init();
 
+  BackgroundMusic.init();
+
   const fade = document.getElementById('fade-overlay');
   if (fade) {
     fade.style.transition = 'none';
@@ -485,6 +490,7 @@ function start() {
         VeilWander.update(delta, state.playerPos);
         Exchanger.update(state.playerPos);
         RoadEvents.update(delta, state.playerPos, Travel);
+        AshwickNPCs.update(delta, t, state.playerPos);
       } else {
         Goblins.update(delta, state.playerPos);
       }

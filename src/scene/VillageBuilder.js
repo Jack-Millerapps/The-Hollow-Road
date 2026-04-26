@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { getSoftCircleTexture } from './spriteTextures.js';
 import { ChunkManager } from '../game/ChunkManager.js';
+import { build as buildAshwickTown, update as updateAshwickTown } from './AshwickTown.js';
 
 const registry = {
   ashwick: {
     group: null,
     millPivot: null,
+    millSpinning: true,
     embers: null,
     emberVel: null,
     smoke: null,
@@ -13,6 +15,9 @@ const registry = {
     waterPivot: null,
     windows: [],
     hearth: null,
+    forge: null,
+    tavernWindowMeshes: [],
+    lanternLights: [],
   },
   veilMarket: {
     group: null,
@@ -68,358 +73,11 @@ function glowSprite(color, scale, opacity = 0.6) {
 }
 
 // ============================================================
-// ASHWICK — miller's village. Warm, industrious, firelit.
+// ASHWICK — full town (see AshwickTown.js).
 // ============================================================
 
 function buildAshwick(scene) {
-  const group = new THREE.Group();
-  group.position.set(-120, 0, -350);
-  group.rotation.y = 0.6; // face toward the incoming road from the fork
-
-  const stoneMat = stdMat(0x3c3631, { roughness: 1 });
-  const woodDark = stdMat(0x2a1a0d, { roughness: 0.9 });
-  const woodMid = stdMat(0x4a2d16, { roughness: 0.85 });
-  const woodWarm = stdMat(0x6a4222, { roughness: 0.85 });
-  const roofMat = stdMat(0x2a1608, { roughness: 0.9 });
-  const thatchMat = stdMat(0x3c2b12, { roughness: 1 });
-  const trimMat = stdMat(0x8a5a2a, { roughness: 0.8 });
-
-  // --- Stone foundation ----
-  const foundation = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.6, 4.6), stoneMat);
-  foundation.position.set(0, 0.3, 0);
-  foundation.receiveShadow = true;
-  group.add(foundation);
-
-  // --- Main house body ----
-  const body = new THREE.Mesh(new THREE.BoxGeometry(5, 3.2, 4), woodMid);
-  body.position.set(0, 2.2, 0);
-  body.castShadow = true;
-  body.receiveShadow = true;
-  group.add(body);
-
-  // Horizontal timber planks — decorative bands
-  for (let i = 0; i < 3; i++) {
-    const band = new THREE.Mesh(new THREE.BoxGeometry(5.05, 0.12, 4.05), woodDark);
-    band.position.set(0, 1.1 + i * 1.1, 0);
-    group.add(band);
-  }
-
-  // Vertical corner timbers
-  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.4, 0.2), woodDark);
-    post.position.set(sx * 2.45, 2.2, sz * 1.95);
-    group.add(post);
-  }
-
-  // --- Thatched/sloped roof — two pyramids offset to look asymmetric ---
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(3.9, 1.8, 4), thatchMat);
-  roof.position.set(0, 4.7, 0);
-  roof.rotation.y = Math.PI / 4;
-  roof.castShadow = true;
-  group.add(roof);
-
-  // Decorative roof ridge trim
-  const ridge = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 3.6), woodDark);
-  ridge.position.set(0, 5.5, 0);
-  group.add(ridge);
-
-  // --- Glowing windows ----
-  const winMat = emissiveMat(0x6e3c14, 0xffb450, 2.2, { roughness: 0.4 });
-  const winFrame = woodDark;
-  const makeWindow = (x, y, z, ry = 0) => {
-    const w = new THREE.Group();
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.1, 0.08), winFrame);
-    w.add(frame);
-    const pane = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.9), winMat);
-    pane.position.z = 0.05;
-    w.add(pane);
-    // Cross mullion
-    const mullH = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.05, 0.1), winFrame);
-    mullH.position.z = 0.06;
-    w.add(mullH);
-    const mullV = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.95, 0.1), winFrame);
-    mullV.position.z = 0.06;
-    w.add(mullV);
-    w.position.set(x, y, z);
-    w.rotation.y = ry;
-    registry.ashwick.windows.push(pane);
-    return w;
-  };
-
-  group.add(makeWindow(-1.3, 2.4, 2.02));
-  group.add(makeWindow(1.3, 2.4, 2.02));
-  group.add(makeWindow(-2.52, 2.6, 0, Math.PI / 2));
-  group.add(makeWindow(2.52, 2.6, 0, -Math.PI / 2));
-
-  // --- Door ----
-  const door = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.7, 0.1), woodDark);
-  door.position.set(0, 1.45, 2.02);
-  group.add(door);
-  const doorKnob = new THREE.Mesh(
-    new THREE.SphereGeometry(0.05, 6, 5),
-    stdMat(0x8a5a2a, { metalness: 0.4, roughness: 0.4 }),
-  );
-  doorKnob.position.set(0.3, 1.45, 2.08);
-  group.add(doorKnob);
-
-  // Door lantern
-  const doorLantern = new THREE.Group();
-  doorLantern.position.set(0.75, 2.4, 2.1);
-  const lFrame = new THREE.Mesh(
-    new THREE.BoxGeometry(0.22, 0.28, 0.22),
-    stdMat(0x1a1208, { metalness: 0.5, roughness: 0.5 }),
-  );
-  doorLantern.add(lFrame);
-  const lCore = new THREE.Mesh(
-    new THREE.SphereGeometry(0.06, 6, 6),
-    emissiveMat(0xffc872, 0xff9a36, 3.0),
-  );
-  doorLantern.add(lCore);
-  const lGlow = glowSprite(0xffa050, 1.1, 0.6);
-  doorLantern.add(lGlow);
-  const lLight = new THREE.PointLight(0xffac5a, 1.8, 8, 1.6);
-  doorLantern.add(lLight);
-  registry.ashwick.hearth = { light: lLight, core: lCore, glow: lGlow };
-  group.add(doorLantern);
-
-  // --- Mill tower (conical roof, projecting from main body) ----
-  const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.5, 5.8, 14), woodWarm);
-  tower.position.set(3.4, 3.2, 0.6);
-  tower.castShadow = true;
-  tower.receiveShadow = true;
-  group.add(tower);
-
-  // Tower stone base
-  const towerBase = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.7, 0.7, 14), stoneMat);
-  towerBase.position.set(3.4, 0.35, 0.6);
-  group.add(towerBase);
-
-  // Tower banding
-  for (let i = 0; i < 3; i++) {
-    const band = new THREE.Mesh(new THREE.TorusGeometry(1.45, 0.07, 5, 16), trimMat);
-    band.rotation.x = Math.PI / 2;
-    band.position.set(3.4, 1.3 + i * 1.4, 0.6);
-    group.add(band);
-  }
-
-  // Tower cap
-  const towerCap = new THREE.Mesh(new THREE.ConeGeometry(1.65, 1.4, 14), roofMat);
-  towerCap.position.set(3.4, 6.8, 0.6);
-  group.add(towerCap);
-
-  // --- Windmill blades on a pivot ----
-  const pivot = new THREE.Object3D();
-  pivot.position.set(3.4, 5.0, 2.05);
-  group.add(pivot);
-
-  const bladeSparMat = woodDark;
-  const sailMat = stdMat(0xcab48a, { roughness: 0.9, side: THREE.DoubleSide });
-  for (let i = 0; i < 4; i++) {
-    const wrap = new THREE.Object3D();
-    wrap.rotation.z = (i * Math.PI) / 2;
-
-    const spar = new THREE.Mesh(new THREE.BoxGeometry(0.14, 4.2, 0.14), bladeSparMat);
-    spar.position.y = 2.3;
-    spar.castShadow = true;
-    wrap.add(spar);
-
-    // Canvas sail — slight offset so it looks like cloth stretched along frame
-    const sail = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 3.2), sailMat);
-    sail.position.set(-0.48, 2.4, 0.08);
-    sail.rotation.y = Math.PI / 2;
-    sail.castShadow = true;
-    wrap.add(sail);
-
-    // Cross struts holding the canvas
-    for (let j = 0; j < 4; j++) {
-      const strut = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.05, 0.05), bladeSparMat);
-      strut.position.set(-0.4, 1.2 + j * 0.75, 0);
-      wrap.add(strut);
-    }
-
-    pivot.add(wrap);
-  }
-
-  // Hub
-  const hub = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.32, 0.32, 0.4, 12),
-    stdMat(0x1a0f06, { metalness: 0.4, roughness: 0.4 }),
-  );
-  hub.rotation.x = Math.PI / 2;
-  pivot.add(hub);
-
-  // --- Chimney ----
-  const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.2, 0.7), stoneMat);
-  chimney.position.set(-1.5, 5.2, -0.2);
-  chimney.castShadow = true;
-  group.add(chimney);
-  const chimneyCap = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.2, 0.95), stoneMat);
-  chimneyCap.position.set(-1.5, 6.3, -0.2);
-  group.add(chimneyCap);
-
-  // --- Water wheel on the back ----
-  const waterPivot = new THREE.Object3D();
-  waterPivot.position.set(-2.5, 1.4, -1.8);
-  group.add(waterPivot);
-  registry.ashwick.waterPivot = waterPivot;
-
-  for (let i = 0; i < 8; i++) {
-    const paddle = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.25, 0.08), woodMid);
-    paddle.position.y = 0.95;
-    const wrap = new THREE.Object3D();
-    wrap.rotation.z = (i * Math.PI) / 4;
-    wrap.add(paddle);
-    waterPivot.add(wrap);
-  }
-  const wheelOuter = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.08, 6, 24), woodMid);
-  wheelOuter.rotation.y = Math.PI / 2;
-  waterPivot.add(wheelOuter);
-  const wheelInner = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.06, 6, 20), woodMid);
-  wheelInner.rotation.y = Math.PI / 2;
-  waterPivot.add(wheelInner);
-  const wheelAxle = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.08, 0.08, 1.2, 8),
-    stdMat(0x1a0f06, { metalness: 0.5, roughness: 0.4 }),
-  );
-  wheelAxle.rotation.z = Math.PI / 2;
-  waterPivot.add(wheelAxle);
-
-  // --- Wooden fence around the front ----
-  const fencePostMat = woodDark;
-  const fenceRailMat = woodMid;
-  const fencePosts = [
-    [-3, 0, 3], [-1.5, 0, 3.3], [0, 0, 3.5], [1.5, 0, 3.3], [3, 0, 3],
-    [4.5, 0, 2.2], [5.3, 0, 0.6], [5.2, 0, -1.5], [4.5, 0, -2.8],
-    [-4.5, 0, 2.4], [-5.2, 0, 0.8], [-5.3, 0, -1.0], [-4.8, 0, -2.6],
-  ];
-  for (let i = 0; i < fencePosts.length; i++) {
-    const [x, , z] = fencePosts[i];
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.8, 0.14), fencePostMat);
-    post.position.set(x, 0.4, z);
-    group.add(post);
-    if (i > 0) {
-      const [px, , pz] = fencePosts[i - 1];
-      const dx = x - px;
-      const dz = z - pz;
-      const len = Math.hypot(dx, dz);
-      if (len < 2.2) {
-        const rail = new THREE.Mesh(new THREE.BoxGeometry(len, 0.08, 0.06), fenceRailMat);
-        rail.position.set((x + px) / 2, 0.55, (z + pz) / 2);
-        rail.rotation.y = -Math.atan2(dz, dx);
-        group.add(rail);
-      }
-    }
-  }
-
-  // --- Haybales for flavor ----
-  const hayMat = stdMat(0xa08040, { roughness: 1, flatShading: true });
-  for (let i = 0; i < 3; i++) {
-    const hay = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.1, 12), hayMat);
-    hay.rotation.z = Math.PI / 2;
-    hay.position.set(-4.2 + i * 1.1, 0.55, -3.3);
-    hay.castShadow = true;
-    group.add(hay);
-  }
-
-  // --- Cart ----
-  const cart = new THREE.Group();
-  cart.position.set(2.8, 0, -3.2);
-  const cartBed = new THREE.Mesh(new THREE.BoxGeometry(2, 0.3, 1.2), woodMid);
-  cartBed.position.y = 0.7;
-  cart.add(cartBed);
-  for (const side of [-1, 1]) {
-    const plank = new THREE.Mesh(new THREE.BoxGeometry(2, 0.4, 0.08), woodMid);
-    plank.position.set(0, 1.05, side * 0.55);
-    cart.add(plank);
-  }
-  for (const side of [-1, 1]) {
-    const wheel = new THREE.Mesh(
-      new THREE.TorusGeometry(0.42, 0.08, 6, 16),
-      woodDark,
-    );
-    wheel.position.set(0.6, 0.42, side * 0.65);
-    wheel.rotation.y = Math.PI / 2;
-    cart.add(wheel);
-    const wheel2 = wheel.clone();
-    wheel2.position.x = -0.6;
-    cart.add(wheel2);
-  }
-  cart.rotation.y = -0.8;
-  group.add(cart);
-
-  // --- Warm hearth light from within ----
-  const light1 = new THREE.PointLight(0xffa04a, 2.0, 18, 1.5);
-  light1.position.set(0, 2.8, 0);
-  group.add(light1);
-
-  const light2 = new THREE.PointLight(0xffb44a, 1.3, 14, 1.6);
-  light2.position.set(3.4, 3.2, 1);
-  group.add(light2);
-
-  // --- Ember particle system (rising warm particles from chimney) ----
-  const emberCount = 140;
-  const emberPos = new Float32Array(emberCount * 3);
-  const emberVel = new Float32Array(emberCount * 3);
-  for (let i = 0; i < emberCount; i++) {
-    emberPos[i * 3] = -1.5 + (Math.random() - 0.5) * 0.4;
-    emberPos[i * 3 + 1] = 6.3 + Math.random() * 3;
-    emberPos[i * 3 + 2] = -0.2 + (Math.random() - 0.5) * 0.4;
-    emberVel[i * 3] = (Math.random() - 0.5) * 0.1;
-    emberVel[i * 3 + 1] = 0.3 + Math.random() * 0.4;
-    emberVel[i * 3 + 2] = (Math.random() - 0.5) * 0.1;
-  }
-  const emberGeo = new THREE.BufferGeometry();
-  emberGeo.setAttribute('position', new THREE.BufferAttribute(emberPos, 3));
-  const emberMat = new THREE.PointsMaterial({
-    color: 0xff8040,
-    size: 0.1,
-    transparent: true,
-    opacity: 0.9,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    sizeAttenuation: true,
-    fog: true,
-  });
-  const embers = new THREE.Points(emberGeo, emberMat);
-  group.add(embers);
-  registry.ashwick.embers = embers;
-  registry.ashwick.emberVel = emberVel;
-
-  // --- Gray smoke system — softer, larger, slower ----
-  const smokeCount = 60;
-  const smokePos = new Float32Array(smokeCount * 3);
-  const smokeVel = new Float32Array(smokeCount * 3);
-  for (let i = 0; i < smokeCount; i++) {
-    smokePos[i * 3] = -1.5 + (Math.random() - 0.5) * 0.3;
-    smokePos[i * 3 + 1] = 6.4 + Math.random() * 5;
-    smokePos[i * 3 + 2] = -0.2 + (Math.random() - 0.5) * 0.3;
-    smokeVel[i * 3] = (Math.random() - 0.5) * 0.05;
-    smokeVel[i * 3 + 1] = 0.15 + Math.random() * 0.2;
-    smokeVel[i * 3 + 2] = (Math.random() - 0.5) * 0.05;
-  }
-  const smokeGeo = new THREE.BufferGeometry();
-  smokeGeo.setAttribute('position', new THREE.BufferAttribute(smokePos, 3));
-  const smokeMat = new THREE.PointsMaterial({
-    color: 0x7a7366,
-    size: 0.6,
-    transparent: true,
-    opacity: 0.25,
-    depthWrite: false,
-    blending: THREE.NormalBlending,
-    sizeAttenuation: true,
-    fog: true,
-  });
-  const smoke = new THREE.Points(smokeGeo, smokeMat);
-  group.add(smoke);
-  registry.ashwick.smoke = smoke;
-  registry.ashwick.smokeVel = smokeVel;
-
-  scene.add(group);
-  registry.ashwick.group = group;
-  registry.ashwick.millPivot = pivot;
-  // Chunk-register at the village's world position so the whole Ashwick
-  // group hides when the player is more than LOAD_RADIUS away.
-  ChunkManager.register(group, group.position.x, group.position.z);
+  buildAshwickTown(scene, registry.ashwick);
 }
 
 // ============================================================
@@ -994,60 +652,10 @@ export const VillageBuilder = {
     const updateVeil = villageInRange('veilMarket', playerPos);
     const updateStonehush = villageInRange('stonehush', playerPos);
     if (!updateAshwick && !updateVeil && !updateStonehush) return;
-    // -- Ashwick --
+    // -- Ashwick (town mesh + mill + forge flicker — AshwickTown.js) --
     if (updateAshwick) {
-    if (registry.ashwick.millPivot) {
-      registry.ashwick.millPivot.rotation.z += 0.015;
+      updateAshwickTown(time, playerPos, registry.ashwick);
     }
-    if (registry.ashwick.waterPivot) {
-      registry.ashwick.waterPivot.rotation.x += 0.02;
-    }
-    if (registry.ashwick.embers) {
-      const pos = registry.ashwick.embers.geometry.attributes.position;
-      const vel = registry.ashwick.emberVel;
-      const arr = pos.array;
-      const dt = 1 / 60;
-      for (let i = 0; i < arr.length; i += 3) {
-        arr[i] += vel[i] * dt;
-        arr[i + 1] += vel[i + 1] * dt;
-        arr[i + 2] += vel[i + 2] * dt;
-        if (arr[i + 1] > 11) {
-          arr[i] = -1.5 + (Math.random() - 0.5) * 0.3;
-          arr[i + 1] = 6.4;
-          arr[i + 2] = -0.2 + (Math.random() - 0.5) * 0.3;
-        }
-      }
-      pos.needsUpdate = true;
-    }
-    if (registry.ashwick.smoke) {
-      const pos = registry.ashwick.smoke.geometry.attributes.position;
-      const vel = registry.ashwick.smokeVel;
-      const arr = pos.array;
-      const dt = 1 / 60;
-      for (let i = 0; i < arr.length; i += 3) {
-        arr[i] += vel[i] * dt;
-        arr[i + 1] += vel[i + 1] * dt;
-        arr[i + 2] += vel[i + 2] * dt;
-        if (arr[i + 1] > 14) {
-          arr[i] = -1.5 + (Math.random() - 0.5) * 0.3;
-          arr[i + 1] = 6.4;
-          arr[i + 2] = -0.2 + (Math.random() - 0.5) * 0.3;
-        }
-      }
-      pos.needsUpdate = true;
-    }
-    // Window flicker
-    for (const w of registry.ashwick.windows) {
-      w.material.emissiveIntensity = 1.9 + Math.sin(time * 2.2 + w.id * 0.5) * 0.2 + (Math.random() - 0.5) * 0.1;
-    }
-    if (registry.ashwick.hearth) {
-      const h = registry.ashwick.hearth;
-      const f = 0.9 + Math.sin(time * 7) * 0.08 + (Math.random() - 0.5) * 0.06;
-      h.light.intensity = 1.8 * f;
-      h.core.material.emissiveIntensity = 3.0 * f;
-      h.glow.material.opacity = 0.5 + f * 0.2;
-    }
-    } // end updateAshwick
 
     // -- Veil Market --
     if (updateVeil) {

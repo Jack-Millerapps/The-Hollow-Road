@@ -40,6 +40,11 @@ function classifyWrongness(option, village) {
 
 export const TradeSystem = {
   startTrade(village, onComplete) {
+    // Ashwick uses world NPCs (Aldric + townsfolk); no modal on zone entry.
+    if (village.name === 'ashwick') {
+      if (onComplete) onComplete();
+      return;
+    }
     if (QUEST_VILLAGES.has(village.name)) {
       QuestSystem.talkToQuestNpc(village.name, { onClose: onComplete });
       return;

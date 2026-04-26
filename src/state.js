@@ -2,7 +2,7 @@
 // The Hollow Road — global game state
 // ---------------------------------------------------------------------------
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 function freshDefaults() {
   return {
@@ -25,6 +25,7 @@ function freshDefaults() {
       ripMap: false,
       watch: false,
       sleepingBag: false,
+      carving: false,
     },
     cameraZ: 0,
     playerPos: { x: 0, z: 500 },
@@ -90,7 +91,14 @@ function freshDefaults() {
     playtimeSeconds: 0,
     // Consolidation — quests replace MapShop / SpecialTasks.
     quests: {
-      ashwick: { step: 0, done: false, branch: null },
+      ashwick: {
+        step: 0,
+        done: false,
+        branch: null,
+        spokeMaren: false,
+        spokeDov: false,
+        spokeSera: false,
+      },
       stonehush: { step: 0, done: false, branch: null },
       deeproot: { step: 0, done: false, branch: null },
       mirrorTown: { step: 0, done: false, branch: null },
