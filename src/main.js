@@ -400,13 +400,13 @@ function start() {
   Road.init(scene);
   Environment.init(scene);
   for (const v of villages) VillageBuilder.buildVillage(v.name, scene);
-  AshwickNPCs.init(scene);
   Westwind.build(scene);
   CabinInterior.build(scene);
   CaveEntrance.build(scene);
 
   HUD.mount();
   Travel.init(camera, scene, { canvas: renderer.domElement });
+  AshwickNPCs.init(scene);
   RoadEvents.init(scene, {
     pause: () => Travel.pause(),
     resume: () => Travel.resume(),

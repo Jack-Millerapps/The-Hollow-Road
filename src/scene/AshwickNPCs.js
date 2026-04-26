@@ -260,7 +260,8 @@ function buildNpcList() {
     });
   }
 
-  // 11 watchman
+  // 11 watchman (positions are overridden at night by patrol math; still need
+  // a spawn waypoint for init + day idle at home cabin.)
   list.push({
     id: 'watch',
     name: 'Night watch',
@@ -268,6 +269,7 @@ function buildNpcList() {
     homeCabin: 5,
     group: humanoid({ cloak: 0x1a2030, hat: 0x0a0a14 }),
     patrol: true,
+    dayWaypoints: [cabinWorld(5)],
     nightPos: cabinWorld(5),
   });
 
@@ -282,8 +284,14 @@ function buildNpcList() {
   return list;
 }
 
+function spawnWaypoint(n) {
+  const p = n.dayWaypoints?.[0] ?? n.nightPos ?? { x: AshwickWorld.MILL_X, z: MZ };
+  return { x: Number(p.x) || 0, z: Number(p.z) || MZ };
+}
+
 export const AshwickNPCs = {
   init(scene) {
+    if (!scene?.add) return;
     _scene = scene;
     if (_root) _root.removeFromParent();
     _root = new THREE.Group();
@@ -291,7 +299,9 @@ export const AshwickNPCs = {
     scene.add(_root);
     _npcs = buildNpcList();
     for (const n of _npcs) {
-      n.group.position.set(n.dayWaypoints[0].x, 0, n.dayWaypoints[0].z);
+      if (!n?.group) continue;
+      const wp0 = spawnWaypoint(n);
+      n.group.position.set(wp0.x, 0, wp0.z);
       _root.add(n.group);
     }
     _aiAccum = 0;
@@ -347,8 +357,8 @@ export const AshwickNPCs = {
       }
       n.group.visible = true;
       if (n._hidHome) {
-        const wps0 = n.dayWaypoints?.[0];
-        if (wps0) n.group.position.set(wps0.x, 0, wps0.z);
+        const wp = spawnWaypoint(n);
+        n.group.position.set(wp.x, 0, wp.z);
         n._hidHome = false;
       }
 
@@ -368,16 +378,19 @@ export const AshwickNPCs = {
       if (!wps?.length) continue;
 
       if (aiTick) {
-        const curWp = wps[n.wpIndex];
-        const gx = n.group.position.x;
-        const gz = n.group.position.z;
-        if (dist2(gx, gz, curWp.x, curWp.z) < 0.5) {
-          n.wpIndex = (n.wpIndex + 1) % wps.length;
-          n.pauseUntil = time + 2 + Math.random() * 3;
+        const curWp = wps[n.wpIndex % wps.length];
+        if (curWp) {
+          const gx = n.group.position.x;
+          const gz = n.group.position.z;
+          if (dist2(gx, gz, curWp.x, curWp.z) < 0.5) {
+            n.wpIndex = (n.wpIndex + 1) % wps.length;
+            n.pauseUntil = time + 2 + Math.random() * 3;
+          }
         }
       }
 
       const cur = wps[n.wpIndex % wps.length];
+      if (!cur) continue;
       if (time >= n.pauseUntil) {
         const gx = n.group.position.x;
         const gz = n.group.position.z;
@@ -414,7 +427,7 @@ export const AshwickNPCs = {
     }
 
     const keys = Travel.keys;
-    const eDown = keys.has('e');
+    const eDown = keys?.has?.('e') ?? false;
     const eEdge = eDown && !_prevE;
     _prevE = eDown;
 
