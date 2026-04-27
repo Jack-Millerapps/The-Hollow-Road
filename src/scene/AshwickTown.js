@@ -3,6 +3,7 @@ import { ChunkManager } from '../game/ChunkManager.js';
 import { Collision } from '../game/Collision.js';
 import { SceneManager } from './SceneManager.js';
 import { DayNight } from './DayNight.js';
+import { ModelLoader } from './ModelLoader.js';
 
 /** World-space anchors for quest logic / NPCs (mill is town center). */
 export const AshwickWorld = {
@@ -111,6 +112,32 @@ export function build(scene, reg) {
   scene.add(townRoot);
   reg.group = townRoot;
   reg._townRoot = townRoot;
+
+  // Mill-town GLB shell — backdrop for the town. Streams in via the
+  // 'town:ashwick' tier when the player approaches.
+  const millAnchor = new THREE.Group();
+  millAnchor.position.set(0, 0, 0);
+  townRoot.add(millAnchor);
+  ModelLoader.ensure('townMill')
+    .then(() => {
+      const inst = ModelLoader.instantiate('townMill');
+      if (!inst) return;
+      millAnchor.add(inst.root);
+    })
+    .catch(() => {});
+
+  // Forge GLB next to the blacksmith (replaces the procedural box body but
+  // keeps the emissive forge core + flicker light below).
+  const forgeAnchor = new THREE.Group();
+  forgeAnchor.position.set(-12, 0, -16.5);
+  townRoot.add(forgeAnchor);
+  ModelLoader.ensure('forge')
+    .then(() => {
+      const inst = ModelLoader.instantiate('forge');
+      if (!inst) return;
+      forgeAnchor.add(inst.root);
+    })
+    .catch(() => {});
 
   const woodMill = stdMat(0x5c3a1e);
   const woodTower = stdMat(0x6b4423);

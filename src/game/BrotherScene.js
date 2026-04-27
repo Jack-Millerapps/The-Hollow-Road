@@ -2,8 +2,10 @@ import * as THREE from 'three';
 import { state, notify } from '../state.js';
 import { DialoguePanel } from '../ui/DialoguePanel.js';
 import { CabinInterior } from '../scene/CabinInterior.js';
-import { makeVillagerMesh } from '../scene/Westwind.js';
+import { ModelLoader } from '../scene/ModelLoader.js';
 import { Save } from './Save.js';
+
+const BROTHER_SCALE = 1.55;
 
 // Spawns the brother NPC inside the cabin, runs a branching dialogue via
 // DialoguePanel, then animates the brother to the door, grants the backpack,
@@ -70,17 +72,15 @@ export const BrotherScene = {
   scene: null,
   spawned: false,
   animating: false,
+  mixer: null,
+  actions: null,
 
   spawn(scene) {
     if (this.spawned) return;
     this.spawned = true;
     this.scene = scene;
 
-    const brother = makeVillagerMesh({
-      robeColor: 0x3a3022,
-      skinColor: 0xc9a684,
-    });
-    brother.scale.setScalar(0.95);
+    const brother = new THREE.Group();
     const origin = CabinInterior.origin;
     brother.position.set(origin.x + 1.5, 0, origin.z + 4.2);
     brother.rotation.y = Math.PI;
@@ -88,17 +88,37 @@ export const BrotherScene = {
     brother.userData.walkCycle = 0;
     scene.add(brother);
     this.mesh = brother;
+
+    // Async-attach the GLB; brother is hidden behind cabin walls + dialogue
+    // panels in the moments before any movement, so latency is invisible.
+    ModelLoader.ensure('brother')
+      .then(() => {
+        const inst = ModelLoader.instantiate('brother');
+        if (!inst || !this.mesh) return;
+        inst.root.scale.setScalar(BROTHER_SCALE);
+        this.mesh.add(inst.root);
+        this.mixer = inst.mixer;
+        this.actions = inst.actions;
+        if (this.actions?.walk) {
+          this.actions.walk.reset();
+          this.actions.walk.setEffectiveWeight(0);
+          this.actions.walk.play();
+        }
+      })
+      .catch((e) => console.warn('[BrotherScene] brother GLB failed', e));
   },
 
   update(delta, time) {
     if (!this.mesh) return;
     const base = this.mesh.userData.baseY ?? 0;
-    this.mesh.position.y =
-      base + Math.sin(time * 1.4) * 0.02;
-    if (this.mesh.userData.walking) {
-      this.mesh.rotation.z = Math.sin(time * 8) * 0.05;
-    } else {
-      this.mesh.rotation.z *= 0.9;
+    this.mesh.position.y = base;
+    if (this.mixer) {
+      this.mixer.update(delta);
+      if (this.actions?.walk) {
+        const target = this.mesh.userData.walking ? 1 : 0;
+        const w = this.actions.walk.getEffectiveWeight();
+        this.actions.walk.setEffectiveWeight(w + (target - w) * Math.min(1, delta * 6));
+      }
     }
   },
 

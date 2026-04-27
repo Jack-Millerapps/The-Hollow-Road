@@ -3,6 +3,17 @@ import { getSoftCircleTexture } from './spriteTextures.js';
 import { ChunkManager } from '../game/ChunkManager.js';
 import { Collision } from '../game/Collision.js';
 import { SceneManager } from './SceneManager.js';
+import { ModelLoader } from './ModelLoader.js';
+
+function attachTownShell(parent, modelKey) {
+  ModelLoader.ensure(modelKey)
+    .then(() => {
+      const inst = ModelLoader.instantiate(modelKey);
+      if (!inst) return;
+      parent.add(inst.root);
+    })
+    .catch(() => {});
+}
 
 function stdMat(color, opts = {}) {
   return new THREE.MeshStandardMaterial({
@@ -381,6 +392,8 @@ export function buildStonehushTown(scene, reg) {
   core.position.set(ox, 0, oz);
   group.add(core);
 
+  attachTownShell(core, 'townStone');
+
   const stoneMat = stdMat(0x2c2a28, { roughness: 1 });
   const darkStoneMat = stdMat(0x1e1c1a, { roughness: 1 });
   const mossMat = stdMat(0x1a3012, { roughness: 1 });
@@ -681,6 +694,8 @@ export function buildDeeprootTown(scene, reg) {
   core.position.set(ox, 0, oz);
   group.add(core);
 
+  attachTownShell(core, 'townForest');
+
   const barkMat = stdMat(0x1a1410, { roughness: 0.94 });
   const hutWall = stdMat(0x3a2818, { roughness: 0.9 });
   const roofMat = stdMat(0x0f2814, { roughness: 0.92 });
@@ -802,6 +817,8 @@ export function buildMirrorTown(scene, reg) {
   const core = new THREE.Group();
   core.position.set(ox, 0, oz);
   group.add(core);
+
+  attachTownShell(core, 'townPristine');
 
   const frameMat = stdMat(0x101828, { metalness: 0.35, roughness: 0.55 });
   const glassMat = new THREE.MeshStandardMaterial({

@@ -2,8 +2,15 @@ import * as THREE from 'three';
 import { state, notify } from '../state.js';
 import { DialogueManager } from '../ui/DialogueManager.js';
 import { FRIENDS } from '../data/friends.js';
-import { makeVillagerMesh } from '../scene/Westwind.js';
+import { ModelLoader } from '../scene/ModelLoader.js';
 import { Save } from './Save.js';
+
+const FRIEND_SCALE = 1.55;
+const FRIEND_MODEL_KEYS = {
+  mira: 'friendMira',
+  tomas: 'friendTomas',
+  elen: 'friendElen',
+};
 
 // ---------------------------------------------------------------------------
 // Friend NPCs in Westwind.
@@ -106,10 +113,7 @@ export const FriendNPCs = {
     this.sceneRef = scene;
 
     for (const friend of FRIENDS) {
-      const mesh = makeVillagerMesh({
-        robeColor: friend.robeColor,
-        skinColor: friend.skinColor,
-      });
+      const mesh = new THREE.Group();
       mesh.position.set(friend.position.x, 0, friend.position.z);
       mesh.rotation.y = friend.facing ?? 0;
       mesh.userData.friendId = friend.id;
@@ -117,12 +121,35 @@ export const FriendNPCs = {
       mesh.userData.phase = Math.random() * Math.PI * 2;
       mesh.userData.homeX = friend.position.x;
       mesh.userData.homeZ = friend.position.z;
+      mesh.userData.walking = false;
       scene.add(mesh);
-      this.entries.push({
+      const entry = {
         friend,
         mesh,
         worldPos: new THREE.Vector3(friend.position.x, 0, friend.position.z),
-      });
+        mixer: null,
+        actions: null,
+      };
+      this.entries.push(entry);
+
+      const modelKey = FRIEND_MODEL_KEYS[friend.id];
+      if (modelKey) {
+        ModelLoader.ensure(modelKey)
+          .then(() => {
+            const inst = ModelLoader.instantiate(modelKey);
+            if (!inst || !mesh.parent) return;
+            inst.root.scale.setScalar(FRIEND_SCALE);
+            mesh.add(inst.root);
+            entry.mixer = inst.mixer;
+            entry.actions = inst.actions;
+            if (entry.actions?.walk) {
+              entry.actions.walk.reset();
+              entry.actions.walk.setEffectiveWeight(0);
+              entry.actions.walk.play();
+            }
+          })
+          .catch((e) => console.warn(`[FriendNPCs] ${modelKey} failed`, e));
+      }
     }
 
     this.prompt = makePrompt();
@@ -143,10 +170,20 @@ export const FriendNPCs = {
   update(playerPos, time) {
     if (!this.spawned) return;
 
-    // Idle bob for each NPC.
-    for (const { mesh } of this.entries) {
-      mesh.position.y =
-        mesh.userData.baseY + Math.sin(time * 1.4 + mesh.userData.phase) * 0.02;
+    // Estimate dt from elapsed time for the arrival walker + mixers.
+    const _now = time;
+    const dt = this._lastUpdateT ? Math.min(0.05, _now - this._lastUpdateT) : 1 / 60;
+    this._lastUpdateT = _now;
+
+    // Drive each friend's animation mixer + walk-weight cross-fade.
+    for (const entry of this.entries) {
+      if (!entry.mixer) continue;
+      entry.mixer.update(dt);
+      if (entry.actions?.walk) {
+        const target = entry.mesh.userData.walking ? 1 : 0;
+        const w = entry.actions.walk.getEffectiveWeight();
+        entry.actions.walk.setEffectiveWeight(w + (target - w) * Math.min(1, dt * 6));
+      }
     }
 
     // Arrival-approach walking — one entry moves toward the player until
@@ -159,13 +196,15 @@ export const FriendNPCs = {
       const dz = tz - m.position.z;
       const dist = Math.hypot(dx, dz);
       if (dist > APPROACH_STOP_DISTANCE) {
-        const dt = Math.min(0.05, this._lastDtEstimate || 1 / 60);
-        const step = Math.min(dist - APPROACH_STOP_DISTANCE, APPROACH_SPEED * dt);
+        const stepDt = Math.min(0.05, dt);
+        const step = Math.min(dist - APPROACH_STOP_DISTANCE, APPROACH_SPEED * stepDt);
         m.position.x += (dx / dist) * step;
         m.position.z += (dz / dist) * step;
         m.rotation.y = Math.atan2(dx, dz);
+        m.userData.walking = true;
         this._arrivalWalker.worldPos.set(m.position.x, 0, m.position.z);
       } else if (this._arrivalResolve) {
+        m.userData.walking = false;
         const resolve = this._arrivalResolve;
         this._arrivalResolve = null;
         this._arrivalWalker = null;

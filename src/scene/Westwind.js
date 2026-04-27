@@ -3,6 +3,12 @@ import { SceneManager } from './SceneManager.js';
 import { Collision } from '../game/Collision.js';
 import { ChunkManager } from '../game/ChunkManager.js';
 import { getSoftCircleTexture } from './spriteTextures.js';
+import { ModelLoader } from './ModelLoader.js';
+
+const CABIN_SCALE = 1.0;
+const HAMLET_SCALE = 1.0;
+const LANTERN_SCALE = 1.0;
+const AMBER_SCALE = 1.0;
 
 // Westwind — the player's hometown, perched just north of the existing
 // road network. Builds a small village and a dirt path running south to
@@ -32,314 +38,93 @@ function emissive(color, emitColor, intensity, opts = {}) {
   });
 }
 
-// -- Tree (cluster canopy) ------------------------------------------------
+// -- Tree (GLB conifer) ---------------------------------------------------
 
 function makeTree() {
   const tree = new THREE.Group();
-  const trunkMat = mat(0x2a1a0f, { roughness: 0.95 });
-  const trunkH = 1.6 + Math.random() * 1.2;
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.16, 0.22, trunkH, 7),
-    trunkMat,
-  );
-  trunk.position.y = trunkH / 2;
-  trunk.castShadow = true;
-  trunk.receiveShadow = true;
-  tree.add(trunk);
-
-  const canopyColor = new THREE.Color().setHSL(
-    0.27 + Math.random() * 0.05,
-    0.35,
-    0.11 + Math.random() * 0.05,
-  );
-  const canopyMat = mat(canopyColor.getHex(), { roughness: 0.95 });
-  const count = 4 + Math.floor(Math.random() * 3);
-  for (let i = 0; i < count; i++) {
-    const r = 0.6 + Math.random() * 0.4;
-    const canopy = new THREE.Mesh(
-      new THREE.SphereGeometry(r, 8, 6),
-      canopyMat,
-    );
-    canopy.position.set(
-      (Math.random() - 0.5) * 0.8,
-      trunkH + (Math.random() - 0.3) * 0.7,
-      (Math.random() - 0.5) * 0.8,
-    );
-    canopy.scale.y = 0.85 + Math.random() * 0.3;
-    canopy.castShadow = true;
-    canopy.receiveShadow = true;
-    tree.add(canopy);
-  }
+  ModelLoader.ensure('conifer')
+    .then(() => {
+      const inst = ModelLoader.instantiate('conifer');
+      if (!inst || !tree.parent) return;
+      tree.add(inst.root);
+    })
+    .catch(() => {});
   tree.userData.swayOffset = Math.random() * Math.PI * 2;
   tree.userData.swayAmp = 0.01 + Math.random() * 0.015;
   return tree;
 }
 
-// -- Cabin with thatched roof + window glow -------------------------------
+// -- Cabin (timber GLB) ---------------------------------------------------
+//
+// The user supplied a timber cabin GLB. We use it as the visible body of
+// every cabin and keep a small warm-glow point light + window-glow sprite
+// out of band so the town reads at night even before the GLB resolves.
 
 function makeCabin({ warmGlow = true } = {}) {
   const g = new THREE.Group();
 
-  const W = 4.4;
-  const D = 3.6;
-  const H = 2.4;
+  // Defer GLB attach.
+  ModelLoader.ensure('timberCabin')
+    .then(() => {
+      const inst = ModelLoader.instantiate('timberCabin');
+      if (!inst || !g.parent) return;
+      inst.root.scale.setScalar(CABIN_SCALE);
+      g.add(inst.root);
+    })
+    .catch((e) => console.warn('[Westwind] timberCabin failed', e));
 
-  const wallMat = mat(0x4a2e18, { roughness: 0.95 });
-
-  // Four walls as one hollow-ish structure — just boxes, the interior is
-  // not visible from outside because windows/door are sealed planes.
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(W, H, D),
-    wallMat,
-  );
-  body.position.y = H / 2;
-  body.castShadow = true;
-  body.receiveShadow = true;
-  g.add(body);
-
-  // Log trim — horizontal beams on the side walls
-  const beamMat = mat(0x2a1608, { roughness: 0.95 });
-  for (let i = 0; i < 3; i++) {
-    const beam = new THREE.Mesh(
-      new THREE.BoxGeometry(W + 0.05, 0.08, 0.08),
-      beamMat,
-    );
-    beam.position.set(0, 0.5 + i * 0.7, D / 2 + 0.02);
-    g.add(beam);
-    const beamBack = beam.clone();
-    beamBack.position.z = -D / 2 - 0.02;
-    g.add(beamBack);
-  }
-  // Corner posts
-  for (const dx of [-1, 1]) {
-    for (const dz of [-1, 1]) {
-      const post = new THREE.Mesh(
-        new THREE.BoxGeometry(0.18, H + 0.1, 0.18),
-        beamMat,
-      );
-      post.position.set((W / 2 + 0.05) * dx, H / 2, (D / 2 + 0.05) * dz);
-      g.add(post);
-    }
-  }
-
-  // Thatched roof — two tilted panels forming a gable
-  const thatchMat = mat(0x6a4a1e, { roughness: 1 });
-  const roofLeft = new THREE.Mesh(
-    new THREE.BoxGeometry(W + 0.6, 0.2, D / 2 + 0.6),
-    thatchMat,
-  );
-  roofLeft.position.set(0, H + 0.6, -D / 4);
-  roofLeft.rotation.x = -Math.PI / 6;
-  roofLeft.castShadow = true;
-  g.add(roofLeft);
-  const roofRight = new THREE.Mesh(
-    new THREE.BoxGeometry(W + 0.6, 0.2, D / 2 + 0.6),
-    thatchMat,
-  );
-  roofRight.position.set(0, H + 0.6, D / 4);
-  roofRight.rotation.x = Math.PI / 6;
-  roofRight.castShadow = true;
-  g.add(roofRight);
-
-  // Thatch texture — overlay darker strips
-  for (let i = 0; i < 6; i++) {
-    const strip = new THREE.Mesh(
-      new THREE.BoxGeometry(W + 0.58, 0.04, 0.06),
-      mat(0x4a2e0e, { roughness: 1 }),
-    );
-    const z = -D / 2 + (i / 5) * D;
-    strip.position.set(0, H + 0.95, z);
-    g.add(strip);
-  }
-
-  // Chimney
-  const chimney = new THREE.Mesh(
-    new THREE.BoxGeometry(0.5, 1.0, 0.5),
-    mat(0x2a2420, { roughness: 1 }),
-  );
-  chimney.position.set(W / 2 - 0.6, H + 0.9, -D / 4);
-  chimney.castShadow = true;
-  g.add(chimney);
-
-  // Door
-  const door = new THREE.Mesh(
-    new THREE.BoxGeometry(0.9, 1.7, 0.06),
-    mat(0x2a1608, { roughness: 0.9 }),
-  );
-  door.position.set(0, 0.85, D / 2 + 0.04);
-  g.add(door);
-  const knob = new THREE.Mesh(
-    new THREE.SphereGeometry(0.04, 8, 6),
-    mat(0x6a4626, { metalness: 0.6, roughness: 0.4 }),
-  );
-  knob.position.set(0.3, 0.9, D / 2 + 0.08);
-  g.add(knob);
-  // Door frame
-  const frameMat = mat(0x1e0f05, { roughness: 0.9 });
-  const topFrame = new THREE.Mesh(
-    new THREE.BoxGeometry(1.0, 0.08, 0.1),
-    frameMat,
-  );
-  topFrame.position.set(0, 1.74, D / 2 + 0.05);
-  g.add(topFrame);
-
-  // Windows (front + side) with warm glow
-  function addWindow(x, y, z, ry = 0) {
-    const pane = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.8, 0.7),
-      new THREE.MeshStandardMaterial({
-        color: 0x5a3012,
-        emissive: warmGlow ? 0xffaa44 : 0x4a3020,
-        emissiveIntensity: warmGlow ? 1.8 : 0.2,
+  if (warmGlow) {
+    const glow = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: getSoftCircleTexture(),
+        color: 0xffaa55,
         transparent: true,
-        opacity: 0.9,
-        roughness: 0.4,
-        side: THREE.DoubleSide,
+        opacity: 0.45,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
       }),
     );
-    pane.position.set(x, y, z);
-    pane.rotation.y = ry;
-    g.add(pane);
-    // Cross bars
-    for (const vertical of [true, false]) {
-      const bar = new THREE.Mesh(
-        vertical
-          ? new THREE.BoxGeometry(0.04, 0.7, 0.02)
-          : new THREE.BoxGeometry(0.8, 0.04, 0.02),
-        mat(0x2a1608, { roughness: 0.9 }),
-      );
-      bar.position.set(x, y, z);
-      bar.rotation.y = ry;
-      g.add(bar);
-    }
-    if (warmGlow) {
-      const glow = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: getSoftCircleTexture(),
-          color: 0xffaa55,
-          transparent: true,
-          opacity: 0.55,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-        }),
-      );
-      glow.position.set(x, y, z);
-      glow.scale.set(1.4, 1.2, 1);
-      g.add(glow);
+    glow.position.set(0, 1.6, 0);
+    glow.scale.set(2.6, 2.0, 1);
+    g.add(glow);
 
-      const light = new THREE.PointLight(0xffa040, 0.8, 8, 2);
-      light.position.set(x * 1.1, y, z * 1.1);
-      g.add(light);
-      g.userData.windowLights = g.userData.windowLights || [];
-      g.userData.windowLights.push({ pane, light });
-    }
+    const light = new THREE.PointLight(0xffa040, 0.9, 14, 2);
+    light.position.set(0, 1.6, 0);
+    g.add(light);
+    g.userData.windowLights = [{ pane: glow, light }];
   }
-
-  // Front-facing window
-  addWindow(-1.2, 1.4, D / 2 + 0.04, 0);
-  // Side window
-  addWindow(W / 2 + 0.04, 1.4, 0.3, Math.PI / 2);
 
   return g;
 }
 
-// -- Well -----------------------------------------------------------------
+// -- Well (GLB) -----------------------------------------------------------
 
 function makeWell() {
   const g = new THREE.Group();
-  const stoneMat = mat(0x3a342e, { roughness: 1 });
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.0, 1.1, 0.9, 16),
-    stoneMat,
-  );
-  base.position.y = 0.45;
-  base.castShadow = true;
-  base.receiveShadow = true;
-  g.add(base);
-  // Stone lip
-  const lip = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.1, 1.0, 0.15, 16),
-    mat(0x2a2420, { roughness: 1 }),
-  );
-  lip.position.y = 0.93;
-  g.add(lip);
-  // Water inside
-  const water = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.92, 0.92, 0.05, 14),
-    emissive(0x0a1020, 0x1a2438, 0.4, { roughness: 0.2 }),
-  );
-  water.position.y = 0.7;
-  g.add(water);
-  // Roof posts
-  const postMat = mat(0x2a1608, { roughness: 0.95 });
-  for (const dz of [-1, 1]) {
-    const post = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.1, 2.4, 8),
-      postMat,
-    );
-    post.position.set(0, 1.2, 0.9 * dz);
-    g.add(post);
-  }
-  // Cross bar
-  const cross = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.08, 0.08, 2.0, 8),
-    postMat,
-  );
-  cross.rotation.x = Math.PI / 2;
-  cross.position.y = 2.4;
-  g.add(cross);
-  // Thatched mini-roof
-  const thatchMat = mat(0x6a4a1e, { roughness: 1 });
-  const roof = new THREE.Mesh(
-    new THREE.BoxGeometry(3.0, 0.2, 2.4),
-    thatchMat,
-  );
-  roof.position.y = 2.6;
-  g.add(roof);
-  // Bucket hanging
-  const bucket = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.18, 0.22, 0.3, 10),
-    mat(0x3a2411, { roughness: 0.9 }),
-  );
-  bucket.position.set(0, 1.9, 0);
-  g.add(bucket);
-  // Rope
-  const rope = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.02, 0.02, 0.5, 6),
-    mat(0x6a5840, { roughness: 0.95 }),
-  );
-  rope.position.set(0, 2.2, 0);
-  g.add(rope);
+  ModelLoader.ensure('well')
+    .then(() => {
+      const inst = ModelLoader.instantiate('well');
+      if (!inst || !g.parent) return;
+      g.add(inst.root);
+    })
+    .catch(() => {});
   return g;
 }
 
-// -- Lantern post (shared style with Environment but standalone) ----------
+// -- Lantern post (GLB) ---------------------------------------------------
 
 function makeLanternPost() {
   const g = new THREE.Group();
-  const poleMat = mat(0x0c0904, { roughness: 0.85 });
-  const pole = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.06, 0.08, 3.2, 8),
-    poleMat,
-  );
-  pole.position.y = 1.6;
-  pole.castShadow = true;
-  g.add(pole);
-  // Cage
-  const cage = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.14, 0.16, 0.35, 8),
-    mat(0x181008, { metalness: 0.5, roughness: 0.5 }),
-  );
-  cage.position.y = 3.25;
-  g.add(cage);
-  // Core
+
+  // Warm light + glow sprite up high so the village reads at night before
+  // the GLB resolves.
   const core = new THREE.Mesh(
     new THREE.SphereGeometry(0.08, 8, 6),
     emissive(0xffc06a, 0xff9030, 2.6),
   );
-  core.position.y = 3.25;
+  core.position.y = 3.0;
   g.add(core);
-  // Glow sprite
+
   const glow = new THREE.Sprite(
     new THREE.SpriteMaterial({
       map: getSoftCircleTexture(),
@@ -350,20 +135,22 @@ function makeLanternPost() {
       depthWrite: false,
     }),
   );
-  glow.position.y = 3.25;
+  glow.position.y = 3.0;
   glow.scale.set(1.4, 1.4, 1);
   g.add(glow);
-  // Cap
-  const cap = new THREE.Mesh(
-    new THREE.ConeGeometry(0.18, 0.22, 8),
-    mat(0x0c0904, { metalness: 0.4, roughness: 0.5 }),
-  );
-  cap.position.y = 3.55;
-  g.add(cap);
-  // Point light
+
   const light = new THREE.PointLight(0xffa040, 1.4, 18, 1.8);
-  light.position.y = 3.2;
+  light.position.y = 3.0;
   g.add(light);
+
+  ModelLoader.ensure('lanternTall')
+    .then(() => {
+      const inst = ModelLoader.instantiate('lanternTall');
+      if (!inst || !g.parent) return;
+      inst.root.scale.setScalar(LANTERN_SCALE);
+      g.add(inst.root);
+    })
+    .catch(() => {});
 
   g.userData.core = core;
   g.userData.glow = glow;
@@ -448,59 +235,6 @@ function makeDirtPath(length, width = 2.4) {
   return plane;
 }
 
-// -- NPC placeholder (scaled-down merchant body) --------------------------
-
-export function makeVillagerMesh({ robeColor = 0x4a2e18, skinColor = 0xc9a684 } = {}) {
-  const g = new THREE.Group();
-  const robeMat = mat(robeColor, { roughness: 0.9 });
-  const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.28, 0.36, 1.1, 10),
-    robeMat,
-  );
-  body.position.y = 0.55;
-  body.castShadow = true;
-  g.add(body);
-  const shoulders = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.36, 0.28, 0.12, 10),
-    robeMat,
-  );
-  shoulders.position.y = 1.15;
-  g.add(shoulders);
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.18, 12, 10),
-    mat(skinColor, { roughness: 0.95 }),
-  );
-  head.position.y = 1.36;
-  head.castShadow = true;
-  g.add(head);
-  // Hair cap
-  const hair = new THREE.Mesh(
-    new THREE.SphereGeometry(0.19, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
-    mat(0x1a0f08, { roughness: 1 }),
-  );
-  hair.position.y = 1.4;
-  g.add(hair);
-  // Arms (stubs)
-  const armMat = mat(robeColor, { roughness: 0.9 });
-  const leftArm = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.07, 0.06, 0.7, 6),
-    armMat,
-  );
-  leftArm.position.set(-0.32, 0.85, 0);
-  g.add(leftArm);
-  const rightArm = leftArm.clone();
-  rightArm.position.x = 0.32;
-  g.add(rightArm);
-  // Belt
-  const belt = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.3, 0.3, 0.06, 10),
-    mat(0x1f1208, { roughness: 0.7 }),
-  );
-  belt.position.y = 0.7;
-  g.add(belt);
-  return g;
-}
-
 // -- Westwind module ------------------------------------------------------
 
 export const Westwind = {
@@ -530,6 +264,34 @@ export const Westwind = {
     clearing.position.y = 0.01;
     clearing.receiveShadow = true;
     group.add(clearing);
+
+    // Hamlet shell (GLB) — large, lazy-loaded; sits behind the cabins as the
+    // village backdrop.
+    const hamletAnchor = new THREE.Group();
+    hamletAnchor.position.set(0, 0, 0);
+    group.add(hamletAnchor);
+    ModelLoader.ensure('hamlet')
+      .then(() => {
+        const inst = ModelLoader.instantiate('hamlet');
+        if (!inst) return;
+        inst.root.scale.setScalar(HAMLET_SCALE);
+        hamletAnchor.add(inst.root);
+      })
+      .catch(() => {});
+
+    // Amber-lantern cluster floating above the central path — wraps the
+    // village in a warm halo at night.
+    const amberAnchor = new THREE.Group();
+    amberAnchor.position.set(0, 0, 0);
+    group.add(amberAnchor);
+    ModelLoader.ensure('amberLanterns')
+      .then(() => {
+        const inst = ModelLoader.instantiate('amberLanterns');
+        if (!inst) return;
+        inst.root.scale.setScalar(AMBER_SCALE);
+        amberAnchor.add(inst.root);
+      })
+      .catch(() => {});
 
     // Central dirt path (N-S axis through the village)
     const path = makeDirtPath(30, 2.8);

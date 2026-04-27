@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ModelLoader } from './ModelLoader.js';
 
 // Simple wooden cabin interior. Built as a self-contained group placed far
 // from the main world so fog hides the outside. Exposes `origin` (where the
@@ -339,21 +340,16 @@ export const CabinInterior = {
     southTop.position.set(0, doorH + (H - doorH) / 2, D / 2);
     group.add(southTop);
 
-    // The door itself
+    // The door itself — single dark wooden door GLB.
     const doorGroup = new THREE.Group();
     doorGroup.position.set(0, 0, D / 2 - 0.02);
-    const door = new THREE.Mesh(
-      new THREE.BoxGeometry(doorW - 0.05, doorH - 0.05, 0.08),
-      mat(0x2a1608, { roughness: 0.9 }),
-    );
-    door.position.y = doorH / 2;
-    doorGroup.add(door);
-    const doorKnob = new THREE.Mesh(
-      new THREE.SphereGeometry(0.04, 8, 6),
-      mat(0x6a4626, { metalness: 0.6, roughness: 0.4 }),
-    );
-    doorKnob.position.set(doorW / 2 - 0.18, doorH / 2, 0.05);
-    doorGroup.add(doorKnob);
+    ModelLoader.ensure('woodenDoor')
+      .then(() => {
+        const inst = ModelLoader.instantiate('woodenDoor');
+        if (!inst) return;
+        doorGroup.add(inst.root);
+      })
+      .catch(() => {});
     group.add(doorGroup);
     this.door = doorGroup;
 
@@ -373,10 +369,35 @@ export const CabinInterior = {
     bed.rotation.y = Math.PI / 2;
     group.add(bed);
 
+    // Rolled bedroll on the bed (small detail prop).
+    const bedrollAnchor = new THREE.Group();
+    bedrollAnchor.position.set(-W / 2 + 1.6, 0.6, -D / 2 + 2.2);
+    bedrollAnchor.rotation.y = Math.PI / 2;
+    bedrollAnchor.scale.setScalar(0.8);
+    group.add(bedrollAnchor);
+    ModelLoader.ensure('bedroll')
+      .then(() => {
+        const inst = ModelLoader.instantiate('bedroll');
+        if (inst) bedrollAnchor.add(inst.root);
+      })
+      .catch(() => {});
+
     const table = makeTableWithCandle();
     table.position.set(W / 2 - 1.6, 0, -D / 2 + 2.5);
     group.add(table);
     this.candle = table.userData;
+
+    // Brass pocket watch resting on the table.
+    const watchAnchor = new THREE.Group();
+    watchAnchor.position.set(W / 2 - 1.6, 0.85, -D / 2 + 2.5);
+    watchAnchor.scale.setScalar(0.6);
+    group.add(watchAnchor);
+    ModelLoader.ensure('pocketWatch')
+      .then(() => {
+        const inst = ModelLoader.instantiate('pocketWatch');
+        if (inst) watchAnchor.add(inst.root);
+      })
+      .catch(() => {});
 
     const chest = makeChest();
     chest.position.set(W / 2 - 1.3, 0, D / 2 - 2.5);

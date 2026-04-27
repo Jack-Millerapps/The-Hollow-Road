@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { caves, CAVE_TRIGGER_RADIUS } from '../data/caves.js';
 import { Collision } from '../game/Collision.js';
+import { ModelLoader } from './ModelLoader.js';
 
 // Phase 3 — for each cave in caves.js we build a small overworld landmark:
 // two angled boulders forming an arch, a black "void" behind, two amber
@@ -88,36 +89,31 @@ function buildEntrance(cave) {
   // We just let them face +Z (player is usually approaching from road).
   // The facing axis is +Z for the whole build (torches to either side in X).
 
-  // Two angled boulders forming the arch.
-  const leftBoulder = new THREE.Mesh(
-    new THREE.BoxGeometry(2.2, 5.4, 2.0),
-    BOULDER_MAT,
-  );
-  leftBoulder.position.set(-1.9, 2.5, 0);
-  leftBoulder.rotation.z = 0.28;
-  leftBoulder.rotation.y = 0.1;
-  leftBoulder.castShadow = true;
-  leftBoulder.receiveShadow = true;
+  // Stone arch GLB sits at the centerline; flanked by boulder GLBs.
+  const archAnchor = new THREE.Group();
+  archAnchor.position.set(0, 0, 0);
+  group.add(archAnchor);
+  ModelLoader.ensure('caveArch')
+    .then(() => {
+      const inst = ModelLoader.instantiate('caveArch');
+      if (!inst) return;
+      archAnchor.add(inst.root);
+    })
+    .catch(() => {});
 
-  const rightBoulder = new THREE.Mesh(
-    new THREE.BoxGeometry(2.2, 5.4, 2.0),
-    BOULDER_MAT,
-  );
-  rightBoulder.position.set(1.9, 2.5, 0);
-  rightBoulder.rotation.z = -0.28;
-  rightBoulder.rotation.y = -0.1;
-  rightBoulder.castShadow = true;
-  rightBoulder.receiveShadow = true;
-
-  const capstone = new THREE.Mesh(
-    new THREE.BoxGeometry(5.2, 1.6, 2.2),
-    BOULDER_MAT,
-  );
-  capstone.position.set(0, 5.1, 0.05);
-  capstone.rotation.z = 0.05;
-  capstone.castShadow = true;
-
-  group.add(leftBoulder, rightBoulder, capstone);
+  for (const side of [-1, 1]) {
+    const bAnchor = new THREE.Group();
+    bAnchor.position.set(side * 2.4, 0, 0.2);
+    bAnchor.rotation.y = side * 0.1;
+    group.add(bAnchor);
+    ModelLoader.ensure('boulderLarge')
+      .then(() => {
+        const inst = ModelLoader.instantiate('boulderLarge');
+        if (!inst) return;
+        bAnchor.add(inst.root);
+      })
+      .catch(() => {});
+  }
 
   // Dark void "interior" — a black plane that fills the arch opening.
   const voidPlane = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 4.4), VOID_MAT);
@@ -316,14 +312,22 @@ export const CaveEntrance = {
 
     let nearest = null;
     let nearestDist = Infinity;
+    let preloadCave = false;
     for (const { cave } of this.entries) {
       const dx = playerPos.x - cave.position.x;
       const dz = playerPos.z - cave.position.z;
       const dist = Math.hypot(dx, dz);
+      // Preload the 'cave' model tier (floor, sleeping alcove, etc.) when any
+      // entrance is within 80 units so the interior is ready before entry.
+      if (dist < 80) preloadCave = true;
       if (dist < CAVE_TRIGGER_RADIUS && dist < nearestDist) {
         nearest = cave;
         nearestDist = dist;
       }
+    }
+    if (preloadCave && !this._caveTierKicked) {
+      this._caveTierKicked = true;
+      ModelLoader.preloadTier('cave').catch(() => {});
     }
 
     if (nearest) {

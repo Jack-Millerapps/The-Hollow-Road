@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ModelLoader } from './ModelLoader.js';
 
 // ---------------------------------------------------------------------------
 // Road — consolidation patch.
@@ -231,6 +232,45 @@ export const Road = {
     // future regression, or an accidental player.add()) reparented a segment
     // off the scene, detach it and re-add to the scene root.
     this._enforceSceneParent();
+
+    // Once the dirt path GLB loads, swap its baseColor texture into the
+    // existing road material so the cobble visual upgrades to the GLB's
+    // texture without rebuilding 100+ road segments.
+    ModelLoader.ensure('dirtPath')
+      .then(() => {
+        const entry = ModelLoader.get('dirtPath');
+        if (!entry) return;
+        let pathTex = null;
+        entry.scene.traverse((o) => {
+          if (pathTex) return;
+          if (!o.material) return;
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          for (const m of mats) {
+            if (m.map) {
+              pathTex = m.map;
+              return;
+            }
+          }
+        });
+        if (!pathTex) return;
+        // Keep the same wrap+repeat so the road tiles correctly.
+        pathTex.wrapS = THREE.RepeatWrapping;
+        pathTex.wrapT = THREE.RepeatWrapping;
+        pathTex.needsUpdate = true;
+        for (const seg of this.segments) {
+          if (!seg) continue;
+          seg.traverse((o) => {
+            if (o.isMesh && o.material && 'map' in o.material) {
+              // Only swap on the road plane (skip edge-stone boxes).
+              if (o.geometry?.type === 'PlaneGeometry') {
+                o.material.map = pathTex;
+                o.material.needsUpdate = true;
+              }
+            }
+          });
+        }
+      })
+      .catch(() => {});
   },
 
   _enforceSceneParent() {

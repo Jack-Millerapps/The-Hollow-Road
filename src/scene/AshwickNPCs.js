@@ -5,6 +5,9 @@ import { Travel } from '../game/Travel.js';
 import { QuestSystem } from '../game/QuestSystem.js';
 import { DialoguePanel } from '../ui/DialoguePanel.js';
 import { AshwickWorld, getQuestMeshes } from './AshwickTown.js';
+import { ModelLoader } from './ModelLoader.js';
+
+const NPC_SCALE = 1.55;
 
 const MZ = AshwickWorld.MILL_Z;
 const SPEED = 0.6;
@@ -43,77 +46,66 @@ function makeNameSprite(text) {
   return sp;
 }
 
+// Tint a SkinnedMesh's materials so the same biped reads as different villagers.
+function tintMaterials(root, color) {
+  const c = new THREE.Color(color);
+  root.traverse((o) => {
+    if (!o.material) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      if (!m.color) continue;
+      // Multiplicative tint: keeps texture detail but shifts hue.
+      m.color.multiply(c);
+    }
+  });
+}
+
 function humanoid(opts) {
   const g = new THREE.Group();
-  const cloak = new THREE.Color(opts.cloak);
-  const skin = new THREE.Color(opts.skin || 0xc8a888);
-  const torso = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.35, 0.4, 0.95, 10),
-    new THREE.MeshStandardMaterial({ color: cloak, roughness: 0.9 }),
-  );
-  torso.position.y = 1.0;
-  torso.castShadow = true;
-  g.add(torso);
+  g.userData.walking = false;
+  g.userData.mixer = null;
+  g.userData.actions = null;
+
+  const modelKey = opts.model || 'npcLantern';
+  const tintColor = opts.cloak || 0xffffff;
+
+  ModelLoader.ensure(modelKey)
+    .then(() => {
+      const inst = ModelLoader.instantiate(modelKey);
+      if (!inst) return;
+      inst.root.scale.setScalar(NPC_SCALE);
+      // Apply a per-NPC tint so each role reads visually distinct even when
+      // the underlying biped pool is small.
+      if (tintColor !== 0xffffff) tintMaterials(inst.root, tintColor);
+      g.add(inst.root);
+      g.userData.mixer = inst.mixer;
+      g.userData.actions = inst.actions;
+      if (inst.actions?.walk) {
+        inst.actions.walk.reset();
+        inst.actions.walk.setEffectiveWeight(0);
+        inst.actions.walk.play();
+      }
+    })
+    .catch((e) => console.warn(`[AshwickNPCs] ${modelKey} failed`, e));
+
+  // Small accessory hints stay procedural (tiny boxes, low cost).
   if (opts.apron) {
     const ap = new THREE.Mesh(
       new THREE.BoxGeometry(0.5, 0.7, 0.36),
       new THREE.MeshStandardMaterial({ color: 0x3a3028, roughness: 1 }),
     );
-    ap.position.set(0, 0.85, 0.22);
+    ap.position.set(0, 1.05, 0.22);
     ap.castShadow = true;
     g.add(ap);
-    for (let i = 0; i < 3; i++) {
-      const dust = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.12, 0.1),
-        new THREE.MeshStandardMaterial({
-          color: 0xddd0c0,
-          transparent: true,
-          opacity: 0.7,
-          side: THREE.DoubleSide,
-        }),
-      );
-      dust.position.set(-0.1 + i * 0.1, 0.9 + Math.random() * 0.15, 0.41);
-      g.add(dust);
-    }
   }
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.28, 12, 12),
-    new THREE.MeshStandardMaterial({ color: skin, roughness: 0.85 }),
-  );
-  head.position.y = 1.65;
-  head.castShadow = true;
-  g.add(head);
   if (opts.hat) {
     const hat = new THREE.Mesh(
       new THREE.CylinderGeometry(0.01, 0.32, 0.22, 8),
       new THREE.MeshStandardMaterial({ color: opts.hat, roughness: 0.9 }),
     );
-    hat.position.y = 1.88;
+    hat.position.y = 2.05;
     g.add(hat);
   }
-  const legGeo = new THREE.CylinderGeometry(0.1, 0.11, 0.55, 6);
-  const legMat = new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 1 });
-  const legL = new THREE.Mesh(legGeo, legMat);
-  legL.position.set(-0.14, 0.28, 0);
-  legL.castShadow = true;
-  g.add(legL);
-  const legR = legL.clone();
-  legR.position.x = 0.14;
-  g.add(legR);
-  const armL = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.07, 0.08, 0.55, 6),
-    new THREE.MeshStandardMaterial({ color: cloak, roughness: 0.9 }),
-  );
-  armL.position.set(-0.48, 1.05, 0);
-  armL.rotation.z = 0.25;
-  armL.castShadow = true;
-  g.add(armL);
-  const armR = armL.clone();
-  armR.position.x = 0.48;
-  armR.rotation.z = -0.25;
-  g.add(armR);
-  g.userData.torso = torso;
-  g.userData.armR = armR;
   return g;
 }
 
@@ -166,7 +158,7 @@ function buildNpcList() {
     name: 'Aldric',
     role: 'miller',
     homeCabin: 0,
-    group: humanoid({ cloak: 0x4a3018, skin: 0xc8a090, apron: true }),
+    group: humanoid({ model: 'npcOlderMan', cloak: 0xb89c70, apron: true }),
     dayWaypoints: [w(0, MZ), w(0, MZ - 12), w(-2, MZ)],
     nightPos: w(-8, MZ),
     millPos: w(1.2, MZ + 0.5),
@@ -178,7 +170,7 @@ function buildNpcList() {
     name: 'Maren',
     role: 'neighbor',
     homeCabin: 1,
-    group: humanoid({ cloak: 0x5a2a4a, hat: 0x2a1020 }),
+    group: humanoid({ model: 'npcLantern', cloak: 0xc89890, hat: 0x2a1020 }),
     dayWaypoints: [w(-10, MZ), w(-6, MZ + 2)],
     evePos: w(12, MZ - 10),
     nightPos: cabinWorld(1),
@@ -190,7 +182,7 @@ function buildNpcList() {
     name: 'Dov',
     role: 'smith',
     homeCabin: 2,
-    group: humanoid({ cloak: 0x2a2820, skin: 0xb89880 }),
+    group: humanoid({ model: 'npcBroad', cloak: 0x9c8870 }),
     dayWaypoints: [w(-12, MZ - 15), w(-10, MZ - 17)],
     nightPos: cabinWorld(2),
     hammer: true,
@@ -202,7 +194,7 @@ function buildNpcList() {
     name: 'Sera',
     role: 'tavern',
     homeCabin: 3,
-    group: humanoid({ cloak: 0x4a3a60, hat: 0x1a1028 }),
+    group: humanoid({ model: 'npcLantern', cloak: 0xb09cb8, hat: 0x1a1028 }),
     dayWaypoints: [w(10, MZ - 10), w(8, MZ - 8)],
     mornPos: w(10, MZ - 8),
     nightPos: cabinWorld(3),
@@ -214,7 +206,7 @@ function buildNpcList() {
     name: 'Old Pell',
     role: 'lore',
     homeCabin: 4,
-    group: humanoid({ cloak: 0x3a3a30, skin: 0xa89888 }),
+    group: humanoid({ model: 'npcOlderMan', cloak: 0xa8a89c }),
     dayWaypoints: [w(4, MZ - 5)],
     nightPos: cabinWorld(4),
     sway: true,
@@ -227,7 +219,7 @@ function buildNpcList() {
     name: 'Market vendor',
     role: 'vendor',
     homeCabin: 0,
-    group: humanoid({ cloak: 0x4a6020 }),
+    group: humanoid({ model: 'npcLantern', cloak: 0xb0c898 }),
     dayWaypoints: [w(stallXs[0], MZ + 10)],
     nightPos: cabinWorld(0),
   });
@@ -236,20 +228,21 @@ function buildNpcList() {
     name: 'Market vendor',
     role: 'vendor',
     homeCabin: 1,
-    group: humanoid({ cloak: 0x204a60 }),
+    group: humanoid({ model: 'npcLantern', cloak: 0x98b0c8 }),
     dayWaypoints: [w(stallXs[3], MZ + 10)],
     nightPos: cabinWorld(1),
   });
 
   // 7–10 roamers
-  const roamerColors = [0x5a4030, 0x403a28, 0x483828, 0x3a4530];
+  const roamerTints = [0xc8a890, 0xb0a890, 0xc0a890, 0xa8b0a0];
+  const roamerModels = ['npcLantern', 'npcOlderMan', 'npcLantern', 'npcBroad'];
   for (let i = 0; i < 4; i++) {
     list.push({
       id: `roam${i}`,
       name: 'Townsfolk',
       role: 'roamer',
       homeCabin: (i + 2) % 6,
-      group: humanoid({ cloak: roamerColors[i] }),
+      group: humanoid({ model: roamerModels[i], cloak: roamerTints[i] }),
       dayWaypoints: [
         w(-5 + i * 3, MZ - 4),
         w(8, MZ + 4),
@@ -267,7 +260,7 @@ function buildNpcList() {
     name: 'Night watch',
     role: 'watch',
     homeCabin: 5,
-    group: humanoid({ cloak: 0x1a2030, hat: 0x0a0a14 }),
+    group: humanoid({ model: 'npcLantern', cloak: 0x6c7890, hat: 0x0a0a14 }),
     patrol: true,
     dayWaypoints: [cabinWorld(5)],
     nightPos: cabinWorld(5),
@@ -282,6 +275,17 @@ function buildNpcList() {
     n._visible = true;
   }
   return list;
+}
+
+function _stepMixer(n, delta) {
+  const ud = n.group?.userData;
+  if (!ud?.mixer) return;
+  ud.mixer.update(delta);
+  if (ud.actions?.walk) {
+    const target = ud.walking ? 1 : 0;
+    const w = ud.actions.walk.getEffectiveWeight();
+    ud.actions.walk.setEffectiveWeight(w + (target - w) * Math.min(1, delta * 6));
+  }
 }
 
 function spawnWaypoint(n) {
@@ -328,11 +332,16 @@ export const AshwickNPCs = {
     if (aiTick) _aiAccum = 0;
 
     for (const n of _npcs) {
+      const prevX = n.group.position.x;
+      const prevZ = n.group.position.z;
+
       if (n.role === 'watch') {
         n.group.visible = phase === 'night' || (phase === 'sunset' && DayNight.getPhaseProgress?.() > 0.4);
         if (!n.group.visible) {
           const h = n.nightPos;
           n.group.position.set(h.x, 0, h.z);
+          n.group.userData.walking = false;
+          _stepMixer(n, delta);
           continue;
         }
         const t = time * 0.15;
@@ -340,6 +349,10 @@ export const AshwickNPCs = {
         const rz = MZ + Math.sin(t) * 28;
         n.group.position.set(rx, 0, rz);
         n.group.lookAt(px, n.group.position.y, pz);
+        // Watchman is always patrolling — drive walk anim.
+        const moved = Math.hypot(rx - prevX, rz - prevZ);
+        n.group.userData.walking = moved > 0.001;
+        _stepMixer(n, delta);
         const d2 = dist2(px, pz, rx, rz);
         if (d2 < nearestD2) {
           nearestD2 = d2;
@@ -408,12 +421,13 @@ export const AshwickNPCs = {
         n.group.position.lerp(new THREE.Vector3(mp.x, 0, mp.z), delta * 0.12);
       }
 
-      if (n.hammer && n.group.userData.armR) {
-        n.group.userData.armR.rotation.x = Math.sin(time * 8) * 0.65 - 0.3;
-      }
       if (n.sway) {
         n.group.rotation.z = Math.sin(time * 1.2) * 0.04;
       }
+
+      const movedDist = Math.hypot(n.group.position.x - prevX, n.group.position.z - prevZ);
+      n.group.userData.walking = movedDist > delta * 0.05;
+      _stepMixer(n, delta);
 
       const d2p = dist2(px, pz, n.group.position.x, n.group.position.z);
       n.label.visible = d2p < LABEL_R * LABEL_R;

@@ -5,6 +5,7 @@ import { DialoguePanel } from '../ui/DialoguePanel.js';
 import { ROAD_SEGMENTS_DATA } from '../scene/Road.js';
 import { ChunkManager } from './ChunkManager.js';
 import { SceneManager } from '../scene/SceneManager.js';
+import { ModelLoader } from '../scene/ModelLoader.js';
 
 // ---------------------------------------------------------------------------
 // RoadEvents — random encounters with visible props; dialogue on E only.
@@ -72,6 +73,7 @@ function pickSpawnXZ(px, pz, yaw) {
   };
 }
 
+// (Imports added at top of file in this same edit pass.)
 function makeSpiritMaterial(hex, {
   opacity = 0.55,
   transparent = true,
@@ -92,20 +94,38 @@ function makeSpiritMaterial(hex, {
 
 function spawnWanderingSpirit() {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.12, 0.15, 1.1, 8),
-    makeSpiritMaterial(0xd0e8f0),
-  );
-  body.position.y = 0.55;
-  body.castShadow = false;
-  g.add(body);
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.14, 8, 6),
-    body.material,
-  );
-  head.position.y = 1.2;
-  g.add(head);
-  g.userData.fadeMeshes = [body, head];
+  // Robed masked figure (GLB) with semi-transparent override for the ghostly
+  // veil-wanderer effect. Falls back to invisible until the GLB resolves.
+  const fadeMeshes = [];
+  ModelLoader.ensure('veilWanderer')
+    .then(() => {
+      const inst = ModelLoader.instantiate('veilWanderer');
+      if (!inst || !g.parent) return;
+      inst.root.scale.setScalar(1.55);
+      inst.root.traverse((o) => {
+        if (!o.material) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        for (const m of mats) {
+          m.transparent = true;
+          m.opacity = 0.55;
+          if ('emissive' in m) {
+            m.emissive = new THREE.Color(0xaaccdd);
+            m.emissiveIntensity = 0.4;
+          }
+        }
+        if (o.isMesh || o.isSkinnedMesh) fadeMeshes.push(o);
+      });
+      g.add(inst.root);
+      g.userData.mixer = inst.mixer;
+      g.userData.actions = inst.actions;
+      if (inst.actions?.walk) {
+        inst.actions.walk.reset();
+        inst.actions.walk.setEffectiveWeight(1);
+        inst.actions.walk.play();
+      }
+    })
+    .catch(() => {});
+  g.userData.fadeMeshes = fadeMeshes;
   g.userData.bobPhase = Math.random() * Math.PI * 2;
   return g;
 }
@@ -224,27 +244,13 @@ function spawnSignpost(event) {
 
 function spawnDiscardedLantern() {
   const g = new THREE.Group();
-  const poleMat = new THREE.MeshStandardMaterial({
-    color: 0x0c0904,
-    roughness: 0.85,
-    flatShading: true,
-  });
-  const coreMat = new THREE.MeshStandardMaterial({
-    color: 0xffc06a,
-    emissive: 0xff9030,
-    emissiveIntensity: 1.2,
-    roughness: 0.45,
-  });
-  const pole = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.05, 0.075, 0.45, 6),
-    poleMat,
-  );
-  pole.rotation.z = Math.PI / 2;
-  pole.position.set(0, 0.08, 0);
-  g.add(pole);
-  const core = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 5), coreMat);
-  core.position.set(0.22, 0.1, 0);
-  g.add(core);
+  ModelLoader.ensure('fallenLantern')
+    .then(() => {
+      const inst = ModelLoader.instantiate('fallenLantern');
+      if (!inst || !g.parent) return;
+      g.add(inst.root);
+    })
+    .catch(() => {});
   const lamp = new THREE.PointLight(0xffac5a, 0.5, 8, 2);
   lamp.position.set(0.15, 0.12, 0);
   g.add(lamp);

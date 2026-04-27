@@ -44,6 +44,7 @@ import { ChunkManager } from './game/ChunkManager.js';
 import { PauseManager } from './game/PauseManager.js';
 import { BackgroundMusic } from './game/BackgroundMusic.js';
 import { Tutorial } from './game/Tutorial.js';
+import { ModelLoader } from './scene/ModelLoader.js';
 
 // ---------------------------------------------------------------------------
 // Fade overlay helpers
@@ -397,6 +398,14 @@ function start() {
     /* ignore */
   }
 
+  // Begin loading core models in parallel with scene init.
+  // Models stream in as they complete; modules render placeholders until ready.
+  ModelLoader.preloadCore().catch((e) => {
+    console.warn('[main] preloadCore had failures', e);
+  });
+  // Westwind tier loads in the background while the cabin intro plays.
+  ModelLoader.preloadTier('westwind').catch(() => {});
+
   const { scene, camera, renderer } = SceneManager.init();
   // ChunkManager must know the camera before any scene module registers
   // objects (so frustum-test setup is valid from the first frame).
@@ -522,6 +531,9 @@ function start() {
       const px = state.playerPos?.x ?? 0;
       const pz = state.playerPos?.z ?? 0;
       ChunkManager.update(px, pz, state.cameraYaw);
+
+      // Tier streaming — throttled to 1 Hz inside ModelLoader.
+      ModelLoader.streamByPlayerPos(state.playerPos);
 
       SceneManager.updateShadowFollow(state.playerPos);
       SceneManager.render();

@@ -3,6 +3,7 @@ import { state, notify } from '../state.js';
 import { caves, CURRENCY_COLORS } from '../data/caves.js';
 import { SceneManager } from './SceneManager.js';
 import { Collision } from '../game/Collision.js';
+import { ModelLoader } from './ModelLoader.js';
 
 // ---------------------------------------------------------------------------
 // Phase 3 — Cave interiors.
@@ -312,20 +313,17 @@ function buildOreNode(group, cave, cx, cy, cz, nodeId, materials) {
 function buildAlcoveBed(group, room, materials) {
   const cx = room.cx;
   const cz = room.cz;
-  const base = new THREE.Mesh(
-    new THREE.BoxGeometry(2.4, 0.5, 1.3),
-    materials.bed,
-  );
-  base.position.set(cx, 0.25, cz - 2);
-  base.castShadow = true;
-  base.receiveShadow = true;
-  group.add(base);
-  const pad = new THREE.Mesh(
-    new THREE.BoxGeometry(2.2, 0.18, 1.1),
-    materials.bedding,
-  );
-  pad.position.set(cx, 0.6, cz - 2);
-  group.add(pad);
+  // Rough stone sleeping spot — GLB.
+  const anchor = new THREE.Group();
+  anchor.position.set(cx, 0, cz - 2);
+  group.add(anchor);
+  ModelLoader.ensure('caveSleeping')
+    .then(() => {
+      const inst = ModelLoader.instantiate('caveSleeping');
+      if (!inst) return;
+      anchor.add(inst.root);
+    })
+    .catch(() => {});
   // Warm rest lantern overhead.
   const lantern = new THREE.PointLight(0xffb070, 0.7, 6, 2.2);
   lantern.position.set(cx, 3.0, cz - 2);
@@ -339,89 +337,29 @@ function buildTroll(group, cave, room, materials) {
   const trollGroup = new THREE.Group();
   trollGroup.position.set(cx, 0, cz);
 
-  // Stone seat.
-  const seat = new THREE.Mesh(
-    new THREE.BoxGeometry(3.2, 0.6, 1.8),
-    materials.seat,
-  );
-  seat.position.set(0, 0.3, 0);
-  seat.castShadow = true;
-  seat.receiveShadow = true;
-  trollGroup.add(seat);
-  const back = new THREE.Mesh(
-    new THREE.BoxGeometry(3.2, 2.4, 0.4),
-    materials.seat,
-  );
-  back.position.set(0, 1.5, -0.8);
-  trollGroup.add(back);
+  // Stacked stone altar/seat (GLB).
+  const altarAnchor = new THREE.Group();
+  altarAnchor.position.set(0, 0, -0.4);
+  trollGroup.add(altarAnchor);
+  ModelLoader.ensure('caveAltar')
+    .then(() => {
+      const inst = ModelLoader.instantiate('caveAltar');
+      if (!inst) return;
+      altarAnchor.add(inst.root);
+    })
+    .catch(() => {});
 
-  // Body — hunched, 2.5x player scale.
-  const skinMat = new THREE.MeshStandardMaterial({
-    color: 0x4a5a38,
-    roughness: 0.95,
-    flatShading: true,
-  });
-  const torso = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.9, 1.1, 1.8, 10),
-    skinMat,
-  );
-  torso.position.y = 1.55;
-  torso.rotation.z = 0.08;
-  torso.castShadow = true;
-  trollGroup.add(torso);
-
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.7, 14, 12),
-    skinMat,
-  );
-  head.position.set(0.1, 2.7, 0.2);
-  head.castShadow = true;
-  trollGroup.add(head);
-
-  const jaw = new THREE.Mesh(
-    new THREE.BoxGeometry(0.9, 0.3, 0.6),
-    skinMat,
-  );
-  jaw.position.set(0.1, 2.4, 0.5);
-  trollGroup.add(jaw);
-
-  const eyeMat = new THREE.MeshStandardMaterial({
-    color: 0xffb040,
-    emissive: 0xffa030,
-    emissiveIntensity: 1.6,
-    roughness: 0.4,
-  });
-  const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), eyeMat);
-  leftEye.position.set(-0.2, 2.8, 0.72);
-  trollGroup.add(leftEye);
-  const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), eyeMat);
-  rightEye.position.set(0.2, 2.78, 0.72);
-  trollGroup.add(rightEye);
-
-  const armMat = skinMat;
-  const leftArm = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.22, 0.25, 1.5, 8),
-    armMat,
-  );
-  leftArm.position.set(-0.95, 1.75, 0.4);
-  leftArm.rotation.z = 0.55;
-  trollGroup.add(leftArm);
-  const rightArm = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.22, 0.25, 1.5, 8),
-    armMat,
-  );
-  rightArm.position.set(0.95, 1.75, 0.4);
-  rightArm.rotation.z = -0.55;
-  trollGroup.add(rightArm);
-
-  // Pouch.
-  const pouch = new THREE.Mesh(
-    new THREE.BoxGeometry(0.6, 0.6, 0.5),
-    new THREE.MeshStandardMaterial({ color: 0x241812, roughness: 0.95 }),
-  );
-  pouch.position.set(0.6, 1.1, 0.6);
-  pouch.rotation.y = -0.3;
-  trollGroup.add(pouch);
+  // Troll body (GLB) seated on the altar.
+  const trollAnchor = new THREE.Group();
+  trollAnchor.position.set(0, 0, 0);
+  trollGroup.add(trollAnchor);
+  ModelLoader.ensure('troll')
+    .then(() => {
+      const inst = ModelLoader.instantiate('troll');
+      if (!inst) return;
+      trollAnchor.add(inst.root);
+    })
+    .catch(() => {});
 
   // Warm glow from the troll.
   const glow = new THREE.PointLight(0xff9848, 0.7, 8, 2.0);

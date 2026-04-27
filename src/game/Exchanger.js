@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { state } from '../state.js';
 import { ExchangePanel, applyExchange } from '../ui/ExchangePanel.js';
 import { villages } from '../data/villages.js';
+import { ModelLoader } from '../scene/ModelLoader.js';
 
 // ---------------------------------------------------------------------------
 // Currency exchangers — one per destination.
@@ -67,15 +68,15 @@ export const Exchanger = {
       const cfg = CONFIG[v.name];
       if (!cfg) continue;
       const g = new THREE.Group();
-      // A simple, distinct pillar + sigil so you can find the exchanger.
-      const pillar = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.5, 0.6, 2.2, 10),
-        new THREE.MeshStandardMaterial({ color: 0x3a2a18, roughness: 1 }),
-      );
-      pillar.position.y = 1.1;
-      pillar.castShadow = true;
-      g.add(pillar);
+      // Stacked stone altar GLB acts as the exchange shrine.
+      ModelLoader.ensure('altarStone')
+        .then(() => {
+          const inst = ModelLoader.instantiate('altarStone');
+          if (inst) g.add(inst.root);
+        })
+        .catch(() => {});
 
+      // Glowing sigil hovers above the altar so it remains visible at distance.
       const sigil = new THREE.Mesh(
         new THREE.TorusGeometry(0.32, 0.07, 6, 14),
         new THREE.MeshStandardMaterial({

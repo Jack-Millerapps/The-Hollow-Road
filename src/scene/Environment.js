@@ -3,6 +3,46 @@ import { ROAD_SEGMENTS_DATA } from './Road.js';
 import { SceneManager } from './SceneManager.js';
 import { Collision } from '../game/Collision.js';
 import { ChunkManager } from '../game/ChunkManager.js';
+import { ModelLoader } from './ModelLoader.js';
+
+// Find the first usable Mesh in a GLB scene (skips lights, helpers, empties).
+function firstMeshOf(root) {
+  let found = null;
+  root.traverse((o) => {
+    if (!found && (o.isMesh || o.isSkinnedMesh) && o.geometry) found = o;
+  });
+  return found;
+}
+
+// Swap an InstancedMesh's geometry/material to the GLB's once it loads. The
+// existing instance transforms are preserved; only the per-vertex geometry
+// changes, so the forest visually upgrades in place.
+function swapInstancedFromGLB(inst, modelKey, opts = {}) {
+  ModelLoader.ensure(modelKey)
+    .then(() => {
+      const entry = ModelLoader.get(modelKey);
+      if (!entry || !inst) return;
+      // Clone the scene first so we don't mutate the cache.
+      const scene = entry.scene.clone(true);
+      if (opts.scale) scene.scale.setScalar(opts.scale);
+      scene.updateMatrixWorld(true);
+      const m = firstMeshOf(scene);
+      if (!m) return;
+      // Bake world transforms into geometry so the instances render at
+      // expected scale even when the GLB's hierarchy includes parent xforms.
+      const geom = m.geometry.clone();
+      geom.applyMatrix4(m.matrixWorld);
+      const oldGeom = inst.geometry;
+      inst.geometry = geom;
+      if (oldGeom?.dispose) oldGeom.dispose();
+      if (m.material) {
+        const oldMat = inst.material;
+        inst.material = m.material;
+        if (oldMat?.dispose) oldMat.dispose();
+      }
+    })
+    .catch(() => {});
+}
 
 // ---------------------------------------------------------------------------
 // Environment — consolidation patch.
@@ -213,6 +253,9 @@ export const Environment = {
     this.moonGroup = moonGroup;
 
     const moonTex = makeMoonTexture();
+
+    // Full-moon GLB takes the place of the sprite once it loads. Until then
+    // the sprite renders as a backup so night isn't moonless on slow loads.
     const moon = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: moonTex,
@@ -225,6 +268,27 @@ export const Environment = {
     moon.scale.set(90, 90, 1);
     moon.renderOrder = -1;
     moonGroup.add(moon);
+
+    const moonAnchor = new THREE.Group();
+    moonGroup.add(moonAnchor);
+    this._moonAnchor = moonAnchor;
+    ModelLoader.ensure('fullMoon')
+      .then(() => {
+        const inst = ModelLoader.instantiate('fullMoon');
+        if (!inst) return;
+        // Scale up to match the sprite's apparent size at this distance.
+        inst.root.scale.setScalar(40);
+        // Add gentle emissive so it reads against the night sky.
+        inst.root.traverse((o) => {
+          if (o.material && 'emissive' in o.material) {
+            o.material.emissive = new THREE.Color(0xc8d0e0);
+            o.material.emissiveIntensity = 0.6;
+          }
+        });
+        moonAnchor.add(inst.root);
+        moon.visible = false; // hand off to the GLB
+      })
+      .catch(() => {});
 
     const halo = new THREE.Sprite(
       new THREE.SpriteMaterial({
@@ -365,6 +429,14 @@ export const Environment = {
     group.add(trunkInst);
     group.add(canopyInst);
     this.treeInst = { trunk: trunkInst, canopy: canopyInst };
+
+    // Once the conifer GLB loads, swap the canopy's geometry/material to the
+    // GLB's (the trunk stays procedural — the GLB's mesh is a single piece).
+    // The trunk InstancedMesh becomes invisible to avoid double-rendering.
+    swapInstancedFromGLB(canopyInst, 'conifer');
+    ModelLoader.ensure('conifer').then(() => {
+      trunkInst.visible = false;
+    }).catch(() => {});
   },
 
   _buildGrass(group) {
@@ -435,6 +507,9 @@ export const Environment = {
     inst.frustumCulled = false;
     group.add(inst);
     this.rockInst = inst;
+
+    // Swap geometry/material to the boulder GLB once it loads.
+    swapInstancedFromGLB(inst, 'boulderSmall');
   },
 
   _buildLanterns(group) {
@@ -530,6 +605,9 @@ export const Environment = {
     group.add(coreInst);
     this.lanternPoles = poleInst;
     this.lanternCores = coreInst;
+
+    // Swap the lantern pole geometry/material to the iron lantern GLB.
+    swapInstancedFromGLB(poleInst, 'lanternTall');
   },
 
   update(time) {
@@ -538,6 +616,9 @@ export const Environment = {
     if (this.lanternCores) {
       const m = this.lanternCores.material;
       m.emissiveIntensity = 2.0 + Math.sin(time * 3.2) * 0.25;
+    }
+    if (this._moonAnchor) {
+      this._moonAnchor.rotation.y = time * 0.02;
     }
     // Stars opacity is owned by DayNight (Fix 3 — phase target lerp). We add
     // a small breathing modulation on top, but only when stars are at least
