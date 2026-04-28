@@ -100,9 +100,16 @@ export const BrotherScene = {
         this.mixer = inst.mixer;
         this.actions = inst.actions;
         if (this.actions?.walk) {
-          this.actions.walk.reset();
-          this.actions.walk.setEffectiveWeight(0);
-          this.actions.walk.play();
+          const wa = this.actions.walk;
+          wa.reset();
+          wa.enabled = true;
+          wa.setEffectiveWeight(1);
+          wa.setEffectiveTimeScale(1);
+          wa.play();
+          const dur = wa.getClip()?.duration || 0;
+          if (dur > 0) wa.time = Math.random() * dur;
+          this.mixer?.update(0);
+          wa.paused = true;
         }
       })
       .catch((e) => console.warn('[BrotherScene] brother GLB failed', e));
@@ -113,12 +120,15 @@ export const BrotherScene = {
     const base = this.mesh.userData.baseY ?? 0;
     this.mesh.position.y = base;
     if (this.mixer) {
-      this.mixer.update(delta);
-      if (this.actions?.walk) {
-        const target = this.mesh.userData.walking ? 1 : 0;
-        const w = this.actions.walk.getEffectiveWeight();
-        this.actions.walk.setEffectiveWeight(w + (target - w) * Math.min(1, delta * 6));
+      const wa = this.actions?.walk;
+      if (wa) {
+        wa.enabled = true;
+        wa.setEffectiveWeight(1);
+        const moving = !!this.mesh.userData.walking;
+        if (moving && wa.paused) wa.paused = false;
+        else if (!moving && !wa.paused) wa.paused = true;
       }
+      this.mixer.update(delta);
     }
   },
 

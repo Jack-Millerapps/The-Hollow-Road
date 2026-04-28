@@ -4,6 +4,7 @@ import { Collision } from '../game/Collision.js';
 import { SceneManager } from './SceneManager.js';
 import { DayNight } from './DayNight.js';
 import { ModelLoader } from './ModelLoader.js';
+import { TownShells } from './TownShells.js';
 
 /** World-space anchors for quest logic / NPCs (mill is town center). */
 export const AshwickWorld = {
@@ -33,39 +34,6 @@ function stdMat(color, opts = {}) {
     flatShading: opts.flatShading ?? true,
     ...opts,
   });
-}
-
-function emissivePlane(hex, intensity, w, h) {
-  const m = new THREE.MeshStandardMaterial({
-    color: hex,
-    emissive: hex,
-    emissiveIntensity: intensity,
-    roughness: 0.4,
-    side: THREE.DoubleSide,
-  });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
-  mesh.castShadow = false;
-  return mesh;
-}
-
-function makeSignTexture(text) {
-  const c = document.createElement('canvas');
-  c.width = 512;
-  c.height = 160;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#2a1a0a';
-  ctx.fillRect(0, 0, c.width, c.height);
-  ctx.strokeStyle = '#8a6a40';
-  ctx.lineWidth = 6;
-  ctx.strokeRect(10, 10, c.width - 20, c.height - 20);
-  ctx.fillStyle = '#e8c878';
-  ctx.font = 'bold 52px Georgia, serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, c.width / 2, c.height / 2);
-  const tex = new THREE.CanvasTexture(c);
-  tex.needsUpdate = true;
-  return tex;
 }
 
 function registerBox(cx, cz, hw, hd) {
@@ -115,106 +83,48 @@ export function build(scene, reg) {
 
   // Mill-town GLB shell — backdrop for the town. Streams in via the
   // 'town:ashwick' tier when the player approaches.
+  // Push the GLB ~40u east of the road (which runs through x=0) so the town
+  // sits beside the path instead of straddling it. Lift via bbox so its
+  // lowest point lands at y=0, "even with the road."
   const millAnchor = new THREE.Group();
-  millAnchor.position.set(0, 0, 0);
+  millAnchor.position.set(40, 0, 0);
   townRoot.add(millAnchor);
   ModelLoader.ensure('townMill')
     .then(() => {
       const inst = ModelLoader.instantiate('townMill');
       if (!inst) return;
       millAnchor.add(inst.root);
+      TownShells.register('ashwick', inst.root, 5); // scale first
+      const bbox = new THREE.Box3().setFromObject(inst.root);
+      if (isFinite(bbox.min.y)) inst.root.position.y = -bbox.min.y + 2;
     })
     .catch(() => {});
 
-  // Forge GLB next to the blacksmith (replaces the procedural box body but
-  // keeps the emissive forge core + flicker light below).
-  const forgeAnchor = new THREE.Group();
-  forgeAnchor.position.set(-12, 0, -16.5);
-  townRoot.add(forgeAnchor);
-  ModelLoader.ensure('forge')
-    .then(() => {
-      const inst = ModelLoader.instantiate('forge');
-      if (!inst) return;
-      forgeAnchor.add(inst.root);
-    })
-    .catch(() => {});
+  // Procedural forge structure — low stone base with dark iron chimney.
+  const forgeBase = new THREE.Mesh(
+    new THREE.BoxGeometry(3.2, 1.4, 2.8),
+    stdMat(0x2c2824, { roughness: 1 }),
+  );
+  forgeBase.position.set(-12, 0.7, -16.5);
+  townRoot.add(forgeBase);
+  const forgeChimney = new THREE.Mesh(
+    new THREE.BoxGeometry(0.7, 2.6, 0.7),
+    stdMat(0x1a1612, { roughness: 0.9 }),
+  );
+  forgeChimney.position.set(-12.3, 2.5, -16.5);
+  townRoot.add(forgeChimney);
 
-  const woodMill = stdMat(0x5c3a1e);
-  const woodTower = stdMat(0x6b4423);
-  const roofDark = stdMat(0x2c1a0a);
-  const woodHouse = stdMat(0x5a3818);
-  const woodTavern = stdMat(0x4a3010);
-  const woodSmith = stdMat(0x3a2810);
-  const woodGrain = stdMat(0x4a3818);
+  // The procedural mill / tower / windmill blades / miller's house / tavern /
+  // grain shed / six-cabin ring / fences / well / lantern posts that used to
+  // build Ashwick from boxes are gone — `townMill` GLB is the town now.
+  // Only the forge core flicker, atmospheric lights, and quest content remain.
 
-  // --- Mill (center of townRoot at origin) ---
-  const millBody = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 6), woodMill);
-  millBody.position.set(0, 2.5, 0);
-  millBody.castShadow = true;
-  millBody.receiveShadow = true;
-  townRoot.add(millBody);
+  // Mill compound collider (the GLB still has a mill body; player shouldn't
+  // walk through it).
   registerBox(0, AshwickWorld.MILL_Z, 3.2, 3.2);
 
-  const tower = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.4, 1.6, 8, 12),
-    woodTower,
-  );
-  tower.position.set(0, 6.5, 0);
-  tower.castShadow = true;
-  townRoot.add(tower);
-
-  const towerRoof = new THREE.Mesh(new THREE.ConeGeometry(2, 2, 12), roofDark);
-  towerRoof.position.set(0, 11.2, 0);
-  towerRoof.castShadow = true;
-  townRoot.add(towerRoof);
-
-  const pivot = new THREE.Object3D();
-  pivot.position.set(0, 9.5, 1.35);
-  townRoot.add(pivot);
-  reg.millPivot = pivot;
-
-  const bladeSparMat = stdMat(0x2a1a0d);
-  const sailMat = stdMat(0xcab48a, { roughness: 0.9, side: THREE.DoubleSide });
-  for (let i = 0; i < 4; i++) {
-    const wrap = new THREE.Object3D();
-    wrap.rotation.z = (i * Math.PI) / 2;
-    const spar = new THREE.Mesh(new THREE.BoxGeometry(0.14, 4.2, 0.14), bladeSparMat);
-    spar.position.y = 2.3;
-    spar.castShadow = true;
-    wrap.add(spar);
-    const sail = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 3.2), sailMat);
-    sail.position.set(-0.48, 2.4, 0.08);
-    sail.rotation.y = Math.PI / 2;
-    sail.castShadow = true;
-    wrap.add(sail);
-    for (let j = 0; j < 4; j++) {
-      const strut = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.05, 0.05), bladeSparMat);
-      strut.position.set(-0.4, 1.2 + j * 0.75, 0);
-      wrap.add(strut);
-    }
-    pivot.add(wrap);
-  }
-  const hub = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.32, 0.32, 0.4, 12),
-    stdMat(0x1a0f06, { metalness: 0.4, roughness: 0.4 }),
-  );
-  hub.rotation.x = Math.PI / 2;
-  pivot.add(hub);
-
-  // Tower glow + light (child of town — chunked)
-  const glowHex = 0xffaa66;
-  const win1 = emissivePlane(glowHex, 1.6, 0.5, 0.7);
-  win1.position.set(1.35, 5.5, 0.81);
-  win1.rotation.y = -Math.PI / 2;
-  townRoot.add(win1);
-  reg.windows.push({ material: win1.material, id: 0 });
-
-  const win2 = emissivePlane(glowHex, 1.4, 0.45, 0.65);
-  win2.position.set(-1.35, 4.2, 0.81);
-  win2.rotation.y = Math.PI / 2;
-  townRoot.add(win2);
-  reg.windows.push({ material: win2.material, id: 1 });
-
+  // Tower point-light — keeps the town glowing at night even before the GLB
+  // texture self-illuminates.
   const towerLight = new THREE.PointLight(0xffb060, 1.5, 22, 2);
   towerLight.position.set(0, 7, 0);
   towerLight.castShadow = false;
@@ -222,85 +132,15 @@ export function build(scene, reg) {
   SceneManager.registerPointLight(towerLight);
   reg.lanternLights.push(towerLight);
 
-  // Mill compound collider (tower + blades clearance)
-  registerBox(0, AshwickWorld.MILL_Z, 2.2, 2.2);
+  // Miller's house, tavern walls, blacksmith body, market stalls, grain shed,
+  // six-cabin ring, well, fences, and procedural lantern posts removed —
+  // `townMill` GLB now provides the buildings. We keep only:
+  //   • the forge core flicker (animated emissive pulse for the smithy)
+  //   • the forge point-light
+  //   • collision boxes where the GLB shows solid structure
+  //   • six warm point-lights spaced around the town for night atmosphere
 
-  // --- Miller's house (-8, 0, 0 local) ---
-  const mh = new THREE.Mesh(new THREE.BoxGeometry(5, 3.5, 5), woodHouse);
-  mh.position.set(-8, 1.75, 0);
-  mh.castShadow = true;
-  mh.receiveShadow = true;
-  townRoot.add(mh);
-  const mhRoofL = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.25, 3.8), roofDark);
-  mhRoofL.position.set(-8, 3.55, -0.35);
-  mhRoofL.rotation.z = 0.38;
-  mhRoofL.castShadow = true;
-  townRoot.add(mhRoofL);
-  const mhRoofR = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.25, 3.8), roofDark);
-  mhRoofR.position.set(-8, 3.55, 0.35);
-  mhRoofR.rotation.z = -0.38;
-  mhRoofR.castShadow = true;
-  townRoot.add(mhRoofR);
-  const mhDoor = new THREE.Mesh(
-    new THREE.BoxGeometry(0.9, 1.8, 0.08),
-    stdMat(0x2a1808),
-  );
-  mhDoor.position.set(-8, 0.95, 2.52);
-  townRoot.add(mhDoor);
-  const mhW = emissivePlane(glowHex, 1.2, 0.4, 0.55);
-  mhW.position.set(-6.55, 1.9, 2.52);
-  townRoot.add(mhW);
-  reg.windows.push({ material: mhW.material, id: 2 });
-  registerBox(-8, AshwickWorld.MILL_Z, 2.7, 2.7);
-
-  // --- Tavern (10, 0, -10 local) world (10, -510) ---
-  const tavern = new THREE.Mesh(new THREE.BoxGeometry(9, 4.5, 7), woodTavern);
-  tavern.position.set(10, 2.25, -10);
-  tavern.castShadow = true;
-  tavern.receiveShadow = true;
-  townRoot.add(tavern);
-  registerBox(10, AshwickWorld.MILL_Z - 10, 4.6, 3.6);
-
-  const signTex = makeSignTexture('The Amber Cup');
-  const sign = new THREE.Mesh(
-    new THREE.PlaneGeometry(3.2, 1),
-    new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.85, side: THREE.DoubleSide }),
-  );
-  sign.position.set(10, 3.6, -13.51);
-  sign.rotation.y = Math.PI;
-  townRoot.add(sign);
-
-  for (let i = 0; i < 3; i++) {
-    const tw = emissivePlane(0xffcc88, 0.35, 0.55, 0.75);
-    tw.position.set(7.2 + i * 1.4, 2.2, -13.51);
-    tw.rotation.y = Math.PI;
-    townRoot.add(tw);
-    reg.tavernWindowMeshes.push(tw);
-  }
-  const lanternMat = stdMat(0xffaa44, { emissive: 0xff6600, emissiveIntensity: 0.6 });
-  const lL = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), lanternMat);
-  lL.position.set(8.35, 1.15, -13.35);
-  townRoot.add(lL);
-  const lR = lL.clone();
-  lR.position.set(11.65, 1.15, -13.35);
-  townRoot.add(lR);
-  const lLg = new THREE.PointLight(0xff9944, 0.9, 10, 2);
-  lLg.position.set(8.35, 1.15, -13.35);
-  townRoot.add(lLg);
-  SceneManager.registerPointLight(lLg);
-  reg.lanternLights.push(lLg);
-  const lRg = new THREE.PointLight(0xff9944, 0.9, 10, 2);
-  lRg.position.set(11.65, 1.15, -13.35);
-  townRoot.add(lRg);
-  SceneManager.registerPointLight(lRg);
-  reg.lanternLights.push(lRg);
-
-  // --- Blacksmith (-12, 0, -15 local) ---
-  const smith = new THREE.Mesh(new THREE.BoxGeometry(6, 3.5, 5), woodSmith);
-  smith.position.set(-12, 1.75, -15);
-  smith.castShadow = true;
-  townRoot.add(smith);
-  // Open front: omit south face visually — use 3 walls as thin boxes
+  // Forge core (animated emissive — drives `reg.forge` flicker in update()).
   const forgeCore = new THREE.Mesh(
     new THREE.BoxGeometry(1.5, 1, 1.5),
     new THREE.MeshStandardMaterial({
@@ -320,186 +160,26 @@ export function build(scene, reg) {
   reg.forge = { light: forgeLight, core: forgeCore };
   reg.lanternLights.push(forgeLight);
 
-  const anvilPost = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.9, 8), stdMat(0x1a1008));
-  anvilPost.position.set(-10.5, 0.45, -16.5);
-  townRoot.add(anvilPost);
-  const anvil = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.2, 0.55), stdMat(0x1a1a1a, { metalness: 0.6, roughness: 0.35 }));
-  anvil.position.set(-10.5, 1.0, -16.5);
-  anvil.castShadow = true;
-  townRoot.add(anvil);
-
-  registerBox(-12, AshwickWorld.MILL_Z - 15, 3.1, 2.6);
-
-  // --- Market stalls (6) z local +10 -> world -490 ---
-  const clothColors = [0x4a1e3a, 0x1e3a4a, 0x3a3a1e, 0x2a3a1e, 0x3a1e1e, 0x1e2a3a];
-  const stallXs = [-12, -8, -4, 0, 4, 8];
+  // Collision footprints for the GLB's tavern, smithy, grain shed, and the
+  // six-cabin ring around the mill — preserved so the player can't sprint
+  // through walls now that the procedural meshes are gone.
+  registerBox(-8, AshwickWorld.MILL_Z, 2.7, 2.7);                 // miller's house
+  registerBox(10, AshwickWorld.MILL_Z - 10, 4.6, 3.6);             // tavern
+  registerBox(-12, AshwickWorld.MILL_Z - 15, 3.1, 2.6);            // blacksmith
+  registerBox(0, AshwickWorld.MILL_Z + 12, 3.6, 3.1);              // grain shed
+  const _cabinAngles = [0.2, 1.1, 2.0, 3.35, 4.5, 5.4];
+  const _cabinRs = [19, 22, 20, 24, 21, 23];
   for (let i = 0; i < 6; i++) {
-    const sx = stallXs[i];
-    const sz = 10;
-    const poleMat = stdMat(0x3a2810);
-    for (const [px, pz] of [
-      [-0.55, -0.45],
-      [0.55, -0.45],
-      [-0.55, 0.45],
-      [0.55, 0.45],
-    ]) {
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 1.6, 6), poleMat);
-      pole.position.set(sx + px, 0.8, sz + pz);
-      townRoot.add(pole);
-    }
-    const roof = new THREE.Mesh(
-      new THREE.BoxGeometry(1.4, 0.08, 1.1),
-      stdMat(0x3a3020),
-    );
-    roof.position.set(sx, 1.65, sz);
-    roof.castShadow = true;
-    townRoot.add(roof);
-    const drape = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.15, 0.9),
-      new THREE.MeshStandardMaterial({
-        color: clothColors[i],
-        side: THREE.DoubleSide,
-        roughness: 0.95,
-      }),
-    );
-    drape.position.set(sx, 1.05, sz + 0.56);
-    townRoot.add(drape);
-    registerBox(sx, AshwickWorld.MILL_Z + sz, 0.75, 0.65);
+    const cx = Math.cos(_cabinAngles[i]) * _cabinRs[i];
+    const cz = Math.sin(_cabinAngles[i]) * _cabinRs[i];
+    registerBox(cx, AshwickWorld.MILL_Z + cz, 2.1, 2.1);
   }
+  registerBox(4, AshwickWorld.MILL_Z - 5, 1.35, 1.35);             // well
 
-  // --- Grain storehouse (0, 12 local) -> -488 ---
-  const grain = new THREE.Mesh(new THREE.BoxGeometry(7, 4, 6), woodGrain);
-  grain.position.set(0, 2, 12);
-  grain.castShadow = true;
-  townRoot.add(grain);
-  const doorL = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.4, 0.1), stdMat(0x2a1a0a));
-  doorL.position.set(-0.65, 1.35, 15.01);
-  doorL.rotation.y = 0.25;
-  townRoot.add(doorL);
-  const doorR = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.4, 0.1), stdMat(0x2a1a0a));
-  doorR.position.set(0.65, 1.35, 15.01);
-  doorR.rotation.y = -0.25;
-  townRoot.add(doorR);
-  registerBox(0, AshwickWorld.MILL_Z + 12, 3.6, 3.1);
-
-  // --- Six cabins (ring) ---
-  const cabinAngles = [0.2, 1.1, 2.0, 3.35, 4.5, 5.4];
-  const cabinRs = [19, 22, 20, 24, 21, 23];
-  for (let i = 0; i < 6; i++) {
-    const r = cabinRs[i];
-    const a = cabinAngles[i];
-    const cx = Math.cos(a) * r;
-    const cz = Math.sin(a) * r;
-    const cabinWoods = [0x4a3218, 0x523218, 0x4a3818, 0x443018, 0x4e3418, 0x3a2818];
-    const cbody = new THREE.Mesh(
-      new THREE.BoxGeometry(4, 2.8, 4),
-      stdMat(cabinWoods[i]),
-    );
-    cbody.position.set(cx, 1.4, cz);
-    cbody.castShadow = true;
-    townRoot.add(cbody);
-    const croof = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.2, 3.2), roofDark);
-    croof.position.set(cx, 2.85, cz);
-    croof.rotation.y = a * 0.3;
-    croof.castShadow = true;
-    townRoot.add(croof);
-    const wz = cz + Math.sin(a) * 2.02;
-    const wx = cx + Math.cos(a) * 2.02;
-    const cw = emissivePlane(glowHex, 0.9, 0.35, 0.45);
-    cw.position.set(wx * 0.92 + cx * 0.08, 1.5, wz * 0.92 + cz * 0.08);
-    cw.lookAt(cx * 2, 1.5, cz * 2);
-    townRoot.add(cw);
-    reg.windows.push({ material: cw.material, id: 10 + i });
-    const wWorldX = cx;
-    const wWorldZ = AshwickWorld.MILL_Z + cz;
-    registerBox(wWorldX, wWorldZ, 2.1, 2.1);
-  }
-
-  // --- Well (4, -5 local) ---
-  const wellR = 1.1;
-  const wellMat = stdMat(0x4a4038);
-  wellMat.side = THREE.DoubleSide;
-  const wellWall = new THREE.Mesh(
-    new THREE.CylinderGeometry(wellR, wellR + 0.08, 0.85, 14, 1, true),
-    wellMat,
-  );
-  wellWall.position.set(4, 0.42, -5);
-  wellWall.castShadow = true;
-  townRoot.add(wellWall);
-  const beam = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.12, 0.12), stdMat(0x5a3a1a));
-  beam.position.set(4, 1.05, -5);
-  beam.castShadow = true;
-  townRoot.add(beam);
-  const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6), stdMat(0x2a2a2a, { metalness: 0.5 }));
-  chain.position.set(4.55, 0.55, -5);
-  townRoot.add(chain);
-  const bucket = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.18, 0.35, 8), stdMat(0x5a3a1a));
-  bucket.position.set(4.55, 0.1, -5);
-  townRoot.add(bucket);
-  registerBox(4, AshwickWorld.MILL_Z - 5, 1.35, 1.35);
-
-  // --- Fencing (low segments) + colliders ---
-  const fenceSegs = [
-    [-14, -8, -10, -2],
-    [6, -8, 12, -2],
-    [-6, 8, 6, 14],
-    [12, -18, 16, -12],
-  ];
-  const fenceY = 0.35;
-  const fenceH = 0.55;
-  for (const [x0, z0, x1, z1] of fenceSegs) {
-    const mx = (x0 + x1) / 2;
-    const mz = (z0 + z1) / 2;
-    const dx = x1 - x0;
-    const dz = z1 - z0;
-    const len = Math.hypot(dx, dz);
-    const ang = Math.atan2(dz, dx);
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(len, fenceH, 0.12), stdMat(0x3a2810));
-    rail.position.set(mx, fenceY, mz);
-    rail.rotation.y = -ang;
-    townRoot.add(rail);
-    const wcx = mx;
-    const wcz = AshwickWorld.MILL_Z + mz;
-    registerBox(wcx, wcz, len * 0.5 + 0.06, 0.2);
-  }
-
-  // --- Dirt paths (dark planes) ---
-  const pathMat = new THREE.MeshStandardMaterial({
-    color: 0x3a2a18,
-    roughness: 1,
-    metalness: 0,
-  });
-  const path1 = new THREE.Mesh(new THREE.PlaneGeometry(8, 40), pathMat);
-  path1.rotation.x = -Math.PI / 2;
-  path1.position.set(0, 0.02, 0);
-  townRoot.add(path1);
-  const path2 = new THREE.Mesh(new THREE.PlaneGeometry(26, 6), pathMat);
-  path2.rotation.x = -Math.PI / 2;
-  path2.position.set(-2, 0.021, -8);
-  townRoot.add(path2);
-
-  // --- Six lantern posts (square around center) — lights parented to scene for height ---
-  const lanternPosts = [
-    [-7, -7],
-    [7, -7],
-    [-7, 7],
-    [7, 7],
-    [0, -12],
-    [0, 12],
-  ];
-  const postGeo = new THREE.CylinderGeometry(0.1, 0.12, 3.2, 8);
-  const postMat = stdMat(0x2a1a0a);
-  for (const [lx, lz] of lanternPosts) {
-    const post = new THREE.Mesh(postGeo, postMat);
-    post.position.set(lx, 1.6, lz);
-    post.castShadow = true;
-    townRoot.add(post);
-    const bulb = new THREE.Mesh(
-      new THREE.SphereGeometry(0.2, 10, 10),
-      stdMat(0xffaa66, { emissive: 0xff8844, emissiveIntensity: 0.8 }),
-    );
-    bulb.position.set(lx, 3.1, lz);
-    townRoot.add(bulb);
+  // Six warm point-lights around the town centre for night atmosphere. The
+  // GLB carries the visible lantern geometry; these are just lights.
+  const lanternSpots = [[-7, -7], [7, -7], [-7, 7], [7, 7], [0, -12], [0, 12]];
+  for (const [lx, lz] of lanternSpots) {
     const pl = new THREE.PointLight(0xffaa66, 1.2, 16, 2);
     pl.position.set(lx, 3.1, lz);
     pl.castShadow = false;

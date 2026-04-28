@@ -4,13 +4,24 @@ import { ChunkManager } from '../game/ChunkManager.js';
 import { Collision } from '../game/Collision.js';
 import { SceneManager } from './SceneManager.js';
 import { ModelLoader } from './ModelLoader.js';
+import { TownShells } from './TownShells.js';
 
-function attachTownShell(parent, modelKey) {
+function attachTownShell(parent, modelKey, townId = null, baseScale = 1) {
   ModelLoader.ensure(modelKey)
     .then(() => {
       const inst = ModelLoader.instantiate(modelKey);
       if (!inst) return;
       parent.add(inst.root);
+      // Register first so TownShells applies (baseScale * userScale) before we
+      // measure. Otherwise AdminMode scale changes leave the model dipping
+      // below ground.
+      if (townId) TownShells.register(townId, inst.root, baseScale);
+      else inst.root.scale.setScalar(baseScale);
+      // Lift the GLB so its lowest point sits on y=0. At large scales the
+      // model's pivot can dip well below ground; measure post-scale bbox and
+      // shift up by -min.y so the town reads as "even with the road."
+      const bbox = new THREE.Box3().setFromObject(inst.root);
+      if (isFinite(bbox.min.y)) inst.root.position.y -= bbox.min.y;
     })
     .catch(() => {});
 }
@@ -364,7 +375,7 @@ export function buildVeilMarketTown(scene, reg) {
 
   scene.add(group);
   reg.group = group;
-  ChunkManager.register(group, group.position.x, group.position.z);
+  ChunkManager.register(group, group.position.x + 34, group.position.z, { radius: 200 });
 }
 
 // ============================================================
@@ -376,23 +387,16 @@ export function buildStonehushTown(scene, reg) {
 
   const ax = -800;
   const az = -5000;
-  const nx = 600;
-  const nz = -6000;
-  const dx = nx - ax;
-  const dz = nz - az;
-  const segLen = Math.hypot(dx, dz);
-  const ox = (-dz / segLen) * 44;
-  const oz = (dx / segLen) * 44;
 
   const group = new THREE.Group();
   group.position.set(ax, 0, az);
   group.rotation.y = 0;
 
   const core = new THREE.Group();
-  core.position.set(ox, 0, oz);
+  core.position.set(0, 0, 0);
   group.add(core);
 
-  attachTownShell(core, 'townStone');
+  attachTownShell(core, 'townStone', 'stonehush', 60);
 
   const stoneMat = stdMat(0x2c2a28, { roughness: 1 });
   const darkStoneMat = stdMat(0x1e1c1a, { roughness: 1 });
@@ -462,9 +466,7 @@ export function buildStonehushTown(scene, reg) {
     stone.rotation.x = (Math.random() - 0.5) * 0.1;
     stone.rotation.y = Math.random() * Math.PI;
     core.add(stone);
-    const stWx = ax + ox + x;
-    const stWz = az + oz + z;
-    Collision.registerBox(stWx, stWz, bottomR + 0.55, bottomR + 0.55);
+    Collision.registerBox(ax + x, az + z, bottomR + 0.55, bottomR + 0.55);
   }
 
   for (let i = 0; i < 8; i++) {
@@ -486,7 +488,7 @@ export function buildStonehushTown(scene, reg) {
     sg.position.set(x, 0, z);
     sg.rotation.y = Math.random() * Math.PI;
     core.add(sg);
-    Collision.registerBox(ax + ox + x, az + oz + z, bottomR + 0.45, bottomR + 0.45);
+    Collision.registerBox(ax + x, az + z, bottomR + 0.45, bottomR + 0.45);
   }
 
   // --- A fallen stone ----
@@ -667,7 +669,10 @@ export function buildStonehushTown(scene, reg) {
 
   scene.add(group);
   reg.group = group;
-  ChunkManager.register(group, group.position.x, group.position.z);
+  // Register at the core (visual body), with a wide radius covering the
+  // scaled town shell so frustum culling doesn't hide it as the player walks
+  // past the side-of-road bulk.
+  ChunkManager.register(group, ax, az, { radius: 350 });
 }
 
 /** Deeproot — root-bound settlement; bulk offset perpendicular to the road toward Mirror Town. */
@@ -685,20 +690,18 @@ export function buildDeeprootTown(scene, reg) {
   const dx = nx - ax;
   const dz = nz - az;
   const L = Math.hypot(dx, dz);
-  const ox = (-dz / L) * 46;
-  const oz = (dx / L) * 46;
+  const ox = (-dz / L) * 40;
+  const oz = (dx / L) * 40;
 
   const group = new THREE.Group();
-  group.position.set(ax, 0, az);
+  group.position.set(ax, -1.0, az);
   const core = new THREE.Group();
   core.position.set(ox, 0, oz);
   group.add(core);
 
-  attachTownShell(core, 'townForest');
+  attachTownShell(core, 'townForest', 'deeproot', 60);
 
   const barkMat = stdMat(0x1a1410, { roughness: 0.94 });
-  const hutWall = stdMat(0x3a2818, { roughness: 0.9 });
-  const roofMat = stdMat(0x0f2814, { roughness: 0.92 });
 
   const greatPad = new THREE.Mesh(
     new THREE.CircleGeometry(28, 40),
@@ -731,24 +734,13 @@ export function buildDeeprootTown(scene, reg) {
     reg.rootArcs.push(torus);
   }
 
+  // Hut ring removed — `townForest` GLB now provides the actual dwellings.
+  // Keep collision boxes around the perimeter so the player can't sprint
+  // through the GLB walls.
   for (let i = 0; i < 11; i++) {
     const a = (i / 11) * Math.PI * 2;
     const r = 15 + (i % 3) * 1.1;
-    const hx = Math.cos(a) * r;
-    const hz = Math.sin(a) * r;
-    const hut = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.35, 3.2), hutWall);
-    body.position.y = 1.18;
-    body.castShadow = true;
-    hut.add(body);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.7, 1.45, 4), roofMat);
-    roof.position.y = 2.85;
-    roof.rotation.y = 0.2;
-    hut.add(roof);
-    hut.position.set(hx, 0, hz);
-    hut.rotation.y = -a + Math.PI * 0.15;
-    core.add(hut);
-    Collision.registerBox(ax + ox + hx, az + oz + hz, 1.85, 1.85);
+    Collision.registerBox(ax + ox + Math.cos(a) * r, az + oz + Math.sin(a) * r, 1.85, 1.85);
   }
 
   for (let i = 0; i < 28; i++) {
@@ -793,7 +785,7 @@ export function buildDeeprootTown(scene, reg) {
 
   scene.add(group);
   reg.group = group;
-  ChunkManager.register(group, group.position.x, group.position.z);
+  ChunkManager.register(group, group.position.x + ox, group.position.z + oz, { radius: 350 });
 }
 
 /** Mirror Town — glassy ring; offset from the pilgrimage road leg. */
@@ -804,23 +796,15 @@ export function buildMirrorTown(scene, reg) {
 
   const ax = 200;
   const az = -7800;
-  const nx = 0;
-  const nz = -14500;
-  const dx = nx - ax;
-  const dz = nz - az;
-  const L = Math.hypot(dx, dz);
-  const ox = (-dz / L) * 50;
-  const oz = (dx / L) * 50;
 
   const group = new THREE.Group();
   group.position.set(ax, 0, az);
   const core = new THREE.Group();
-  core.position.set(ox, 0, oz);
+  core.position.set(0, 0, 0);
   group.add(core);
 
-  attachTownShell(core, 'townPristine');
+  attachTownShell(core, 'townPristine', 'mirrorTown', 40);
 
-  const frameMat = stdMat(0x101828, { metalness: 0.35, roughness: 0.55 });
   const glassMat = new THREE.MeshStandardMaterial({
     color: 0xb0d8f8,
     emissive: 0x305070,
@@ -851,17 +835,12 @@ export function buildMirrorTown(scene, reg) {
     reg.panels.push(panel);
   }
 
+  // Procedural shell ring removed — `townPristine` GLB now provides the
+  // mirrored buildings. Colliders preserved so the GLB reads as solid.
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
     const r = 17 + (i % 2) * 1.5;
-    const bx = Math.cos(a) * r;
-    const bz = Math.sin(a) * r;
-    const shell = new THREE.Mesh(new THREE.BoxGeometry(3.8, 4.6, 3.6), frameMat);
-    shell.position.set(bx, 2.3, bz);
-    shell.rotation.y = -a + Math.PI * 0.2;
-    shell.castShadow = true;
-    core.add(shell);
-    Collision.registerBox(ax + ox + bx, az + oz + bz, 2.1, 2);
+    Collision.registerBox(ax + Math.cos(a) * r, az + Math.sin(a) * r, 2.1, 2);
   }
 
   reg.spire = new THREE.Mesh(
@@ -887,13 +866,13 @@ export function buildMirrorTown(scene, reg) {
   core.add(reg.shardRing);
 
   const amb = new THREE.PointLight(0xa8c8e8, 0.55, 32, 2);
-  amb.position.set(ax + ox, 4.5, az + oz);
+  amb.position.set(0, 4.5, 0);
   group.add(amb);
   SceneManager.registerPointLight(amb);
 
   scene.add(group);
   reg.group = group;
-  ChunkManager.register(group, group.position.x, group.position.z);
+  ChunkManager.register(group, ax, az, { radius: 350 });
 }
 
 export function updateDeeprootTown(time, reg) {
@@ -918,4 +897,42 @@ export function updateMirrorTown(time, reg) {
   if (g) {
     g.emissiveIntensity = 0.42 + Math.sin(time * 1.35) * 0.12;
   }
+}
+
+// The Unnamed Village — final stop on the pilgrimage. Centered on the road.
+export function buildUnnamedTown(scene, reg) {
+  reg.group?.removeFromParent?.();
+
+  const WX = 0;
+  const WZ = -14500;
+
+  const group = new THREE.Group();
+  group.position.set(WX, 0, WZ);
+  scene.add(group);
+  reg.group = group;
+
+  const core = new THREE.Group();
+  core.position.set(0, 0, 0);
+  group.add(core);
+  attachTownShell(core, 'townBarely', 'unnamed', 40);
+
+  // Ambient warm light above the town center.
+  const amb = new THREE.PointLight(0xffb070, 0.9, 60, 2);
+  amb.position.set(0, 6, 0);
+  group.add(amb);
+  SceneManager.registerPointLight(amb);
+
+  // Collision perimeter — a loose ring so the player can walk into the village
+  // clearing but not through the GLB's outer building shells.
+  const perimeterR = 18;
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    Collision.registerBox(
+      WX + Math.cos(a) * perimeterR,
+      WZ + Math.sin(a) * perimeterR,
+      2.2, 2.2,
+    );
+  }
+
+  ChunkManager.register(group, WX, WZ, { radius: 400 });
 }

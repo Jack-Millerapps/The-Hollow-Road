@@ -244,13 +244,19 @@ function spawnSignpost(event) {
 
 function spawnDiscardedLantern() {
   const g = new THREE.Group();
-  ModelLoader.ensure('fallenLantern')
-    .then(() => {
-      const inst = ModelLoader.instantiate('fallenLantern');
-      if (!inst || !g.parent) return;
-      g.add(inst.root);
-    })
-    .catch(() => {});
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1a1008, roughness: 0.8, flatShading: true });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.32, 7), bodyMat);
+  body.rotation.z = Math.PI / 2;
+  body.position.set(0.1, 0.12, 0);
+  g.add(body);
+  const coreMat = new THREE.MeshStandardMaterial({
+    color: 0xffc06a,
+    emissive: new THREE.Color(0xff9030),
+    emissiveIntensity: 2.0,
+  });
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5), coreMat);
+  core.position.set(0.15, 0.12, 0);
+  g.add(core);
   const lamp = new THREE.PointLight(0xffac5a, 0.5, 8, 2);
   lamp.position.set(0.15, 0.12, 0);
   g.add(lamp);

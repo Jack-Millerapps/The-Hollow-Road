@@ -12,25 +12,33 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
 const POINT_LIGHT_BUDGET = 4;
 // Cap pixel ratio to keep fragment work bounded on retina/hi-dpi screens.
-// A dpr of 2 means 4x the pixels of dpr 1; 1.5 cuts that to ~2.25x.
-const MAX_PIXEL_RATIO = 1.5;
+// On retina the browser default dpr is 2 (4x the pixels of dpr 1). At 1.0
+// the canvas matches the CSS resolution — the cheapest mode that still
+// looks reasonable. Bump back up with ?dpr=1.5 for a sharper image.
+const MAX_PIXEL_RATIO = (() => {
+  try {
+    const v = parseFloat(new URLSearchParams(window.location.search).get('dpr'));
+    if (Number.isFinite(v) && v > 0) return v;
+  } catch {}
+  return 1.0;
+})();
 // Throttle point-light culling — sub-frame precision isn't needed.
-const CULL_INTERVAL_MS = 200;
+const CULL_INTERVAL_MS = 250;
 
-// Low-end detection — skip bloom/vignette on devices that can't spare the
-// fragment throughput. Override with ?lowend=1 or ?lowend=0 in the URL.
+// Bloom + vignette is the single most expensive thing per frame on retina
+// displays — UnrealBloomPass alone does 5 extra render-target draws at the
+// composer resolution. Default OFF; opt in with ?bloom=1.
 function detectLowEnd() {
   try {
     const params = new URLSearchParams(window.location.search);
+    const bloom = params.get('bloom');
+    if (bloom === '1') return false;
+    if (bloom === '0') return true;
     const forced = params.get('lowend');
     if (forced === '1') return true;
     if (forced === '0') return false;
   } catch {}
-  const cores = navigator.hardwareConcurrency || 4;
-  const mem = navigator.deviceMemory || 4;
-  // Touch devices with limited cores/memory almost always benefit.
-  const touch = typeof window !== 'undefined' && 'ontouchstart' in window;
-  return cores <= 4 || mem <= 4 || touch;
+  return true;
 }
 
 const VignetteShader = {
@@ -106,22 +114,41 @@ export const SceneManager = {
     camera.position.set(0, 2.5, 0);
     camera.lookAt(0, 2.5, -10);
 
-    // Disable antialiasing on high-density screens — the dpr cap gives us
-    // plenty of effective sampling and AA is a big fragment-shader cost.
+    // Disable antialiasing — dpr cap + tone mapping gives a clean enough
+    // image and AA is a big fragment-shader cost on retina screens.
     const dpr = window.devicePixelRatio || 1;
-    const useAA = dpr <= 1;
     const renderer = new THREE.WebGLRenderer({
-      antialias: useAA,
+      antialias: false,
       powerPreference: 'high-performance',
+      stencil: false,
+      depth: true,
     });
-    renderer.setPixelRatio(Math.min(dpr, MAX_PIXEL_RATIO));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    // PCFShadowMap is noticeably cheaper than PCFSoftShadowMap and still
-    // readable once the shadow.radius blurs the edges.
+    // Auto-scale DPR down on very large logical canvases (5K+ retina Macs).
+    // Total fragment work scales with (width × height × dpr²). If the canvas
+    // is already 1920+ logical px wide, dropping below 1.0 cuts pixel work
+    // dramatically with minimal visible impact since we're rendering at the
+    // physical screen anyway.
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    let autoDpr = MAX_PIXEL_RATIO;
+    if (w * h > 1920 * 1080) autoDpr = Math.min(autoDpr, 0.85);
+    if (w * h > 2560 * 1440) autoDpr = Math.min(autoDpr, 0.75);
+    if (w * h > 3200 * 1800) autoDpr = Math.min(autoDpr, 0.6);
+    renderer.setPixelRatio(Math.min(dpr, autoDpr));
+    renderer.setSize(w, h);
+    this._effectiveDpr = Math.min(dpr, autoDpr);
+    // Allow disabling shadows entirely with ?shadows=0 — biggest win when GPU
+    // bound on retina + integrated GPUs.
+    const shadowsOff = (() => {
+      try { return new URLSearchParams(window.location.search).get('shadows') === '0'; } catch { return false; }
+    })();
+    renderer.shadowMap.enabled = !shadowsOff;
+    // PCFShadowMap is cheaper than PCFSoftShadowMap; with a small map the
+    // moon shadow only acts as a soft AO directly under the player anyway.
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.shadowMap.autoUpdate = false;
     renderer.shadowMap.needsUpdate = true;
+    this._shadowsOff = shadowsOff;
     renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.1;
@@ -142,18 +169,20 @@ export const SceneManager = {
     moonLight.position.set(-35, 60, -10);
     moonLight.target.position.set(0, 0, -150);
     scene.add(moonLight.target);
-    moonLight.castShadow = true;
-    // Consolidation — reduced shadow map from 2048 → 512.
-    moonLight.shadow.mapSize.set(512, 512);
+    moonLight.castShadow = !shadowsOff;
+    // Smaller map — 256² is enough at the tight 50u radius the camera covers,
+    // and is 16× cheaper to render than the previous 1024² and 4× cheaper
+    // than 512². Sample radius blurs the steps.
+    moonLight.shadow.mapSize.set(256, 256);
     moonLight.shadow.camera.near = 1;
-    moonLight.shadow.camera.far = 240;
-    moonLight.shadow.camera.left = -80;
-    moonLight.shadow.camera.right = 80;
-    moonLight.shadow.camera.top = 80;
-    moonLight.shadow.camera.bottom = -80;
+    moonLight.shadow.camera.far = 140;
+    moonLight.shadow.camera.left = -50;
+    moonLight.shadow.camera.right = 50;
+    moonLight.shadow.camera.top = 50;
+    moonLight.shadow.camera.bottom = -50;
     moonLight.shadow.bias = -0.0008;
     moonLight.shadow.normalBias = 0.02;
-    moonLight.shadow.radius = 4;
+    moonLight.shadow.radius = 3;
     scene.add(moonLight);
 
     const moonFill = new THREE.DirectionalLight(0xffb070, 0.12);
@@ -172,7 +201,7 @@ export const SceneManager = {
     let bloomPass = null;
     if (!this.lowEnd) {
       composer = new EffectComposer(renderer);
-      composer.setPixelRatio(Math.min(dpr, MAX_PIXEL_RATIO));
+      composer.setPixelRatio(this._effectiveDpr);
       composer.setSize(window.innerWidth, window.innerHeight);
 
       const renderPass = new RenderPass(scene, camera);
@@ -298,10 +327,11 @@ export const SceneManager = {
 
   render() {
     this.cullPointLights();
-    // Refresh the shadow map every 3rd frame — the moon moves slowly and
+    // Refresh the shadow map every 6th frame — the moon moves slowly and
     // nothing else casts shadows, so sub-frame precision is wasted work.
-    if (this.renderer) {
-      this._shadowFrame = (this._shadowFrame + 1) % 3;
+    // (Was every 3rd; halving this cuts shadow draw cost in half.)
+    if (this.renderer && !this._shadowsOff) {
+      this._shadowFrame = (this._shadowFrame + 1) % 6;
       this.renderer.shadowMap.needsUpdate = this._shadowFrame === 0;
     }
     if (this.composer) {

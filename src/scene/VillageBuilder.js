@@ -4,6 +4,7 @@ import {
   buildStonehushTown,
   buildDeeprootTown,
   buildMirrorTown,
+  buildUnnamedTown,
   updateDeeprootTown,
   updateMirrorTown,
 } from './GreaterTowns.js';
@@ -48,6 +49,9 @@ const registry = {
     spire: null,
     shardRing: null,
   },
+  unnamed: {
+    group: null,
+  },
 };
 
 function buildAshwick(scene) {
@@ -56,7 +60,9 @@ function buildAshwick(scene) {
 
 // Anything farther than this from the player is too distant for its flicker
 // animations to be visible, so we skip the per-frame work entirely.
-const VILLAGE_UPDATE_RANGE_SQ = 220 * 220;
+// Tightened from 220 → 140 — flicker amplitude is ~0.1 across mat properties,
+// imperceptible past 100u even at full brightness.
+const VILLAGE_UPDATE_RANGE_SQ = 140 * 140;
 
 const VILLAGE_POSITIONS = {
   ashwick: { x: 0, z: -500 },
@@ -82,7 +88,10 @@ export const VillageBuilder = {
     else if (name === 'stonehush') buildStonehushTown(scene, registry.stonehush);
     else if (name === 'deeproot') buildDeeprootTown(scene, registry.deeproot);
     else if (name === 'mirrorTown') buildMirrorTown(scene, registry.mirrorTown);
+    else if (name === 'unnamed') buildUnnamedTown(scene, registry.unnamed);
   },
+
+  _flickerTick: 0,
 
   update(time, playerPos) {
     const updateAshwick = villageInRange('ashwick', playerPos);
@@ -99,6 +108,9 @@ export const VillageBuilder = {
     ) {
       return;
     }
+    // Throttle flicker work to ~30Hz — imperceptible at 60Hz anyway.
+    this._flickerTick = (this._flickerTick + 1) & 1;
+    if (this._flickerTick) return;
     if (updateAshwick) {
       updateAshwickTown(time, playerPos, registry.ashwick);
     }

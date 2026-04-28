@@ -4,11 +4,9 @@ import { Collision } from '../game/Collision.js';
 import { ChunkManager } from '../game/ChunkManager.js';
 import { getSoftCircleTexture } from './spriteTextures.js';
 import { ModelLoader } from './ModelLoader.js';
+import { TownShells } from './TownShells.js';
 
-const CABIN_SCALE = 1.0;
-const HAMLET_SCALE = 1.0;
-const LANTERN_SCALE = 1.0;
-const AMBER_SCALE = 1.0;
+const HAMLET_SCALE = 10.0;
 
 // Westwind — the player's hometown, perched just north of the existing
 // road network. Builds a small village and a dirt path running south to
@@ -38,88 +36,88 @@ function emissive(color, emitColor, intensity, opts = {}) {
   });
 }
 
-// -- Tree (GLB conifer) ---------------------------------------------------
+// -- Tree (procedural low-poly) -------------------------------------------
 
 function makeTree() {
   const tree = new THREE.Group();
-  ModelLoader.ensure('conifer')
-    .then(() => {
-      const inst = ModelLoader.instantiate('conifer');
-      if (!inst || !tree.parent) return;
-      tree.add(inst.root);
-    })
-    .catch(() => {});
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.22, 0.34, 2.6, 6),
+    mat(0x2a1a0f, { roughness: 0.95 }),
+  );
+  trunk.position.y = 1.3;
+  tree.add(trunk);
+  const canopy = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.4, 0),
+    mat(0x1c3120, { roughness: 0.95 }),
+  );
+  canopy.position.y = 3.4;
+  tree.add(canopy);
   tree.userData.swayOffset = Math.random() * Math.PI * 2;
   tree.userData.swayAmp = 0.01 + Math.random() * 0.015;
   return tree;
 }
 
-// -- Cabin (timber GLB) ---------------------------------------------------
-//
-// The user supplied a timber cabin GLB. We use it as the visible body of
-// every cabin and keep a small warm-glow point light + window-glow sprite
-// out of band so the town reads at night even before the GLB resolves.
-
-function makeCabin({ warmGlow = true } = {}) {
-  const g = new THREE.Group();
-
-  // Defer GLB attach.
-  ModelLoader.ensure('timberCabin')
-    .then(() => {
-      const inst = ModelLoader.instantiate('timberCabin');
-      if (!inst || !g.parent) return;
-      inst.root.scale.setScalar(CABIN_SCALE);
-      g.add(inst.root);
-    })
-    .catch((e) => console.warn('[Westwind] timberCabin failed', e));
-
-  if (warmGlow) {
-    const glow = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: getSoftCircleTexture(),
-        color: 0xffaa55,
-        transparent: true,
-        opacity: 0.45,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      }),
-    );
-    glow.position.set(0, 1.6, 0);
-    glow.scale.set(2.6, 2.0, 1);
-    g.add(glow);
-
-    const light = new THREE.PointLight(0xffa040, 0.9, 14, 2);
-    light.position.set(0, 1.6, 0);
-    g.add(light);
-    g.userData.windowLights = [{ pane: glow, light }];
-  }
-
-  return g;
-}
-
-// -- Well (GLB) -----------------------------------------------------------
+// -- Well (procedural) ----------------------------------------------------
 
 function makeWell() {
   const g = new THREE.Group();
-  ModelLoader.ensure('well')
-    .then(() => {
-      const inst = ModelLoader.instantiate('well');
-      if (!inst || !g.parent) return;
-      g.add(inst.root);
-    })
-    .catch(() => {});
+  const stoneMat = mat(0x3a3530, { roughness: 0.98 });
+  // Stone cylinder wall
+  const wall = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.78, 0.88, 0.75, 12, 1, true),
+    stoneMat,
+  );
+  wall.position.y = 0.37;
+  g.add(wall);
+  // Top rim
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(0.84, 0.09, 5, 14),
+    stoneMat,
+  );
+  rim.rotation.x = Math.PI / 2;
+  rim.position.y = 0.76;
+  g.add(rim);
+  // Dark water surface
+  const water = new THREE.Mesh(
+    new THREE.CircleGeometry(0.68, 12),
+    new THREE.MeshStandardMaterial({ color: 0x050e18, roughness: 0.1, metalness: 0.4 }),
+  );
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = 0.38;
+  g.add(water);
+  // Wooden crossbeam
+  const beam = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.1, 1.85),
+    mat(0x2a1a0e, { roughness: 0.9 }),
+  );
+  beam.position.y = 1.4;
+  g.add(beam);
+  // Support posts
+  for (const sx of [-0.8, 0.8]) {
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.06, 0.07, 1.15, 6),
+      mat(0x2a1a0e, { roughness: 0.9 }),
+    );
+    post.position.set(sx, 0.95, 0);
+    g.add(post);
+  }
   return g;
 }
 
-// -- Lantern post (GLB) ---------------------------------------------------
+// -- Lantern post (procedural) --------------------------------------------
 
 function makeLanternPost() {
   const g = new THREE.Group();
 
-  // Warm light + glow sprite up high so the village reads at night before
-  // the GLB resolves.
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.075, 3.6, 6),
+    mat(0x0c0904, { roughness: 0.8 }),
+  );
+  pole.position.y = 1.8;
+  g.add(pole);
+
   const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.08, 8, 6),
+    new THREE.SphereGeometry(0.1, 6, 5),
     emissive(0xffc06a, 0xff9030, 2.6),
   );
   core.position.y = 3.0;
@@ -142,15 +140,6 @@ function makeLanternPost() {
   const light = new THREE.PointLight(0xffa040, 1.4, 18, 1.8);
   light.position.y = 3.0;
   g.add(light);
-
-  ModelLoader.ensure('lanternTall')
-    .then(() => {
-      const inst = ModelLoader.instantiate('lanternTall');
-      if (!inst || !g.parent) return;
-      inst.root.scale.setScalar(LANTERN_SCALE);
-      g.add(inst.root);
-    })
-    .catch(() => {});
 
   g.userData.core = core;
   g.userData.glow = glow;
@@ -275,23 +264,47 @@ export const Westwind = {
         const inst = ModelLoader.instantiate('hamlet');
         if (!inst) return;
         inst.root.scale.setScalar(HAMLET_SCALE);
+        inst.root.rotation.y = Math.PI;
+        // Lift so the model's lowest point sits on y=0. At large scales the
+        // hamlet's pivot can dip far below ground; measure the post-scale
+        // bounding box and shift up by -min.y.
+        const bbox = new THREE.Box3().setFromObject(inst.root);
+        if (isFinite(bbox.min.y)) inst.root.position.y -= bbox.min.y;
         hamletAnchor.add(inst.root);
+        // Register AFTER the bbox-lift so the user-scale multiplier wraps the
+        // already-correct base scale. TownShells will overwrite scale.setScalar
+        // with `baseScale * userScale`.
+        TownShells.register('westwind', inst.root, HAMLET_SCALE);
       })
       .catch(() => {});
 
-    // Amber-lantern cluster floating above the central path — wraps the
-    // village in a warm halo at night.
+    // Amber glow cluster above the central path — warm halo at night.
     const amberAnchor = new THREE.Group();
     amberAnchor.position.set(0, 0, 0);
     group.add(amberAnchor);
-    ModelLoader.ensure('amberLanterns')
-      .then(() => {
-        const inst = ModelLoader.instantiate('amberLanterns');
-        if (!inst) return;
-        inst.root.scale.setScalar(AMBER_SCALE);
-        amberAnchor.add(inst.root);
-      })
-      .catch(() => {});
+    const amberSpots = [
+      [0, 2.8, 0], [-2.2, 3.1, 3], [2.0, 2.9, -4],
+      [-1.2, 2.6, -8], [1.5, 3.2, 6],
+    ];
+    for (const [ax, ay, az] of amberSpots) {
+      const orb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.09, 6, 5),
+        emissive(0xffc06a, 0xff9030, 2.8),
+      );
+      orb.position.set(ax, ay, az);
+      amberAnchor.add(orb);
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: getSoftCircleTexture(),
+        color: 0xffaa44,
+        transparent: true,
+        opacity: 0.45,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }));
+      halo.position.set(ax, ay, az);
+      halo.scale.set(1.1, 1.1, 1);
+      amberAnchor.add(halo);
+    }
 
     // Central dirt path (N-S axis through the village)
     const path = makeDirtPath(30, 2.8);
@@ -303,43 +316,10 @@ export const Westwind = {
     exitPath.position.set(0, 0.02, -70);
     group.add(exitPath);
 
-    // Player's cabin (home). Local (-6.5, 0, 4); world (CENTER + local).
-    const playerCabin = makeCabin({ warmGlow: true });
-    playerCabin.position.set(-6.5, 0, 4);
-    playerCabin.rotation.y = 0.2;
-    group.add(playerCabin);
-    if (playerCabin.userData.windowLights) {
-      this.windowLights.push(...playerCabin.userData.windowLights);
-    }
-    Collision.addBox(CENTER.x - 6.5, CENTER.z + 4, 2.5, 2.0);
-
-    // Three neighbor cabins.
-    const neighbor1 = makeCabin({ warmGlow: true });
-    neighbor1.position.set(7.5, 0, 4);
-    neighbor1.rotation.y = -0.25;
-    group.add(neighbor1);
-    if (neighbor1.userData.windowLights) {
-      this.windowLights.push(...neighbor1.userData.windowLights);
-    }
-    Collision.addBox(CENTER.x + 7.5, CENTER.z + 4, 2.5, 2.0);
-
-    const neighbor2 = makeCabin({ warmGlow: true });
-    neighbor2.position.set(-7.5, 0, -7);
-    neighbor2.rotation.y = 0.6;
-    group.add(neighbor2);
-    if (neighbor2.userData.windowLights) {
-      this.windowLights.push(...neighbor2.userData.windowLights);
-    }
-    Collision.addBox(CENTER.x - 7.5, CENTER.z - 7, 2.5, 2.0);
-
-    const neighbor3 = makeCabin({ warmGlow: true });
-    neighbor3.position.set(8.5, 0, -7);
-    neighbor3.rotation.y = -0.5;
-    group.add(neighbor3);
-    if (neighbor3.userData.windowLights) {
-      this.windowLights.push(...neighbor3.userData.windowLights);
-    }
-    Collision.addBox(CENTER.x + 8.5, CENTER.z - 7, 2.5, 2.0);
+    // Cabins are now provided by the hamlet GLB — no individual timberCabin
+    // instances. The friends in FriendNPCs.js still spawn at their cabin
+    // doorsteps (positions defined in data/friends.js) and read against the
+    // hamlet's geometry.
 
     // Well at the center.
     const well = makeWell();
@@ -380,8 +360,10 @@ export const Westwind = {
       Collision.addCircle(CENTER.x + x, CENTER.z + z, 0.35);
     }
 
-    // Surrounding low forest.
-    for (let i = 0; i < 60; i++) {
+    // Surrounding low forest. 30 instead of 60 — Westwind already has the
+    // hamlet GLB carrying the silhouette; 60 separate cloned GLBs were the
+    // hottest draw-call source on this scene.
+    for (let i = 0; i < 30; i++) {
       const angle = Math.random() * Math.PI * 2;
       const radius = 18 + Math.random() * 22;
       const tx = Math.cos(angle) * radius;
@@ -442,17 +424,20 @@ export const Westwind = {
       tree.rotation.z =
         Math.sin(time + tree.userData.swayOffset) * tree.userData.swayAmp;
     }
-    // Lantern flicker
-    for (const lp of this.lanterns) {
-      const off = lp.userData.flickerOffset;
-      const f =
-        0.88 +
-        Math.sin(time * 3.2 + off) * 0.07 +
-        Math.sin(time * 7.5 + off) * 0.04 +
-        (Math.random() - 0.5) * 0.04;
-      if (lp.userData.light) lp.userData.light.intensity = lp.userData.baseIntensity * f;
-      if (lp.userData.core) lp.userData.core.material.emissiveIntensity = 2.6 * f;
-      if (lp.userData.glow) lp.userData.glow.material.opacity = 0.5 + f * 0.15;
+    // Lantern flicker — throttled to ~30Hz; flicker is imperceptible at 60Hz.
+    this._flickerTick = (this._flickerTick || 0) + 1;
+    if ((this._flickerTick & 1) === 0) {
+      for (const lp of this.lanterns) {
+        const off = lp.userData.flickerOffset;
+        const f =
+          0.88 +
+          Math.sin(time * 3.2 + off) * 0.07 +
+          Math.sin(time * 7.5 + off) * 0.04 +
+          (Math.random() - 0.5) * 0.04;
+        if (lp.userData.light) lp.userData.light.intensity = lp.userData.baseIntensity * f;
+        if (lp.userData.core) lp.userData.core.material.emissiveIntensity = 2.6 * f;
+        if (lp.userData.glow) lp.userData.glow.material.opacity = 0.5 + f * 0.15;
+      }
     }
     // Window breathing glow
     for (const { pane } of this.windowLights) {

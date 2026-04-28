@@ -54,7 +54,7 @@ export const MODELS = {
     extraClips: [
       M + 'Meshy_AI_A_compact_woman_in_a__biped/Meshy_AI_A_compact_woman_in_a__biped_Animation_Running_withSkin.glb',
     ],
-    tier: 'westwind',
+    tier: 'core',
     scale: 1.0,
     yOffset: 0,
     anims: { walk: 'Walking', run: 'Running' },
@@ -64,7 +64,7 @@ export const MODELS = {
     extraClips: [
       M + 'Meshy_AI_A_plain_low_poly_huma_biped/Meshy_AI_A_plain_low_poly_huma_biped_Animation_Running_withSkin.glb',
     ],
-    tier: 'westwind',
+    tier: 'core',
     scale: 1.0,
     yOffset: 0,
     anims: { walk: 'Walking', run: 'Running' },
@@ -74,7 +74,7 @@ export const MODELS = {
     extraClips: [
       M + 'Meshy_AI_A_young_woman_in_a_da_biped/Meshy_AI_A_young_woman_in_a_da_biped_Animation_Running_withSkin.glb',
     ],
-    tier: 'westwind',
+    tier: 'core',
     scale: 1.0,
     yOffset: 0,
     anims: { walk: 'Walking', run: 'Running' },
@@ -114,7 +114,7 @@ export const MODELS = {
     extraClips: [
       M + 'Meshy_AI_A_symmetrical_figure__biped/Meshy_AI_A_symmetrical_figure__biped_Animation_Running_withSkin.glb',
     ],
-    tier: 'road',
+    tier: 'core',
     scale: 1.0,
     yOffset: 0,
     anims: { walk: 'Walking', run: 'Running' },
@@ -131,66 +131,6 @@ export const MODELS = {
   },
 
   // ----- Static props (core, small / always-loaded) -------------------------
-  conifer: {
-    path: M + 'Meshy_AI_A_large_low_poly_coni_0426204534_texture.glb',
-    tier: 'core',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  deadTree: {
-    path: M + 'Meshy_AI_A_lone_dead_tree_with_0426204551_generate.glb',
-    tier: 'core',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  boulderLarge: {
-    path: M + 'Meshy_AI_A_rough_stone_boulder_0426205623_texture.glb',
-    tier: 'core',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  boulderSmall: {
-    path: M + 'Meshy_AI_A_small_irregular_bou_0426204526_texture.glb',
-    tier: 'core',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  fence: {
-    path: M + 'Meshy_AI_A_low_dark_wooden_fen_0426205441_texture.glb',
-    tier: 'core',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  lanternTall: {
-    path: M + 'Meshy_AI_A_tall_slim_iron_lant_0426204544_texture.glb',
-    tier: 'core',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  lanternBracket: {
-    path: M + 'Meshy_AI_A_simple_iron_wall_br_0426204558_texture.glb',
-    tier: 'core',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  pickaxe: {
-    path: M + 'Meshy_AI_A_weathered_iron_pick_0426204612_texture.glb',
-    tier: 'core',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  shovel: {
-    path: M + 'Meshy_AI_A_worn_iron_shovel_wi_0426205312_texture.glb',
-    tier: 'core',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  leatherPack: {
-    path: M + 'Meshy_AI_A_worn_leather_travel_0426204604_texture.glb',
-    tier: 'core',
-    scale: 1.0,
-    yOffset: 0,
-  },
   pocketWatch: {
     path: M + 'Meshy_AI_A_small_brass_pocket__0426205320_texture.glb',
     tier: 'core',
@@ -203,28 +143,10 @@ export const MODELS = {
     scale: 1.0,
     yOffset: 0,
   },
-  dirtPath: {
-    path: M + 'Meshy_AI_A_narrow_dirt_path_d_0426204440_texture.glb',
-    tier: 'core',
-    scale: 1.0,
-    yOffset: 0,
-  },
 
   // ----- Westwind tier (loaded during cabin intro) --------------------------
-  timberCabin: {
-    path: M + 'Meshy_AI_A_small_timber_cabin__0426205400_texture.glb',
-    tier: 'westwind',
-    scale: 1.0,
-    yOffset: 0,
-  },
   hamlet: {
     path: M + 'Meshy_AI_Cozy_timber_hamlet_3_0427000431_texture.glb',
-    tier: 'westwind',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  amberLanterns: {
-    path: M + 'Meshy_AI_Amber_Lanterns_in_a_W_0426191634_texture.glb',
     tier: 'westwind',
     scale: 1.0,
     yOffset: 0,
@@ -275,84 +197,6 @@ export const MODELS = {
   },
 
   // ----- Road tier (lazy as player walks) -----------------------------------
-  well: {
-    path: M + 'Meshy_AI_A_circular_stone_well_0426205418_texture.glb',
-    tier: 'road',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  forge: {
-    path: M + 'Meshy_AI_A_low_dark_stone_forg_0426205434_texture.glb',
-    tier: 'road',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  marketStall: {
-    path: M + 'Meshy_AI_A_small_wooden_market_0426205426_texture.glb',
-    tier: 'road',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  altarStone: {
-    path: M + 'Meshy_AI_A_stacked_stone_altar_0426205455_texture.glb',
-    tier: 'road',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  bedroll: {
-    path: M + 'Meshy_AI_A_rolled_canvas_sleep_0426205339_texture.glb',
-    tier: 'road',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  fallenLantern: {
-    path: M + 'Meshy_AI_An_iron_lantern_lying_0426214759_texture.glb',
-    tier: 'road',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  cart: {
-    path: M + 'Meshy_AI_A_small_wooden_two_wh_0426214745_texture.glb',
-    tier: 'road',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  woodenDoor: {
-    path: M + 'Meshy_AI_A_single_dark_wooden__0426214752_texture.glb',
-    tier: 'road',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  carvedToken: {
-    path: M + 'Meshy_AI_A_small_hand_carved_w_0426205613_texture.glb',
-    tier: 'road',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  mapFragment: {
-    path: M + 'Meshy_AI_A_torn_fragment_of_a__0426205346_texture.glb',
-    tier: 'road',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  agedPaper: {
-    path: M + 'Meshy_AI_A_small_piece_of_aged_0426205556_texture.glb',
-    tier: 'road',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  flatGreyStone: {
-    path: M + 'Meshy_AI_A_flat_dark_grey_ston_0426205447_texture.glb',
-    tier: 'road',
-    scale: 1.0,
-    yOffset: 0,
-  },
-  fullMoon: {
-    path: M + 'Meshy_AI_A_full_moon_pale_col_0426214813_texture.glb',
-    tier: 'road',
-    scale: 1.0,
-    yOffset: 0,
-  },
 
   // ----- Town shells (per-town tiers, streamed at 400u radius) --------------
   townMill: {

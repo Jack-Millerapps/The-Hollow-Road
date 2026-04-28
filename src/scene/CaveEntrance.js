@@ -102,17 +102,18 @@ function buildEntrance(cave) {
     .catch(() => {});
 
   for (const side of [-1, 1]) {
-    const bAnchor = new THREE.Group();
-    bAnchor.position.set(side * 2.4, 0, 0.2);
-    bAnchor.rotation.y = side * 0.1;
-    group.add(bAnchor);
-    ModelLoader.ensure('boulderLarge')
-      .then(() => {
-        const inst = ModelLoader.instantiate('boulderLarge');
-        if (!inst) return;
-        bAnchor.add(inst.root);
-      })
-      .catch(() => {});
+    const boulder = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(1.1, 0),
+      BOULDER_MAT,
+    );
+    boulder.position.set(side * 2.4, 0.8, 0.2);
+    boulder.rotation.set(
+      Math.random() * 0.4,
+      Math.random() * Math.PI,
+      Math.random() * 0.3,
+    );
+    boulder.scale.set(1.0, 0.85, 1.0);
+    group.add(boulder);
   }
 
   // Dark void "interior" — a black plane that fills the arch opening.

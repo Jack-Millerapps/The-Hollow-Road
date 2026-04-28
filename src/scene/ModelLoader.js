@@ -135,20 +135,38 @@ export const ModelLoader = {
     const actions = {};
     if (entry.animations.length && !opts.noMixer) {
       mixer = new THREE.AnimationMixer(root);
-      const wantedNames = (opts.animations) || Object.values(def.anims || {});
+      // First pass: register every clip under its raw name and its declared
+      // alias (exact match).
       for (const clip of entry.animations) {
         const action = mixer.clipAction(clip);
         actions[clip.name] = action;
-        // Friendly aliases: walk/run/jump/idle from def.anims.
         if (def.anims) {
           for (const [alias, name] of Object.entries(def.anims)) {
             if (clip.name === name) actions[alias] = action;
           }
         }
-        // If the consumer passed a list of wanted clip names, only enable those.
-        if (wantedNames.length && !wantedNames.includes(clip.name)) {
-          // still cached, but not auto-played
+      }
+      // Second pass: fuzzy alias resolution. Meshy GLBs name their clips
+      // `Armature|walking_man|baselayer`, `Armature|running|baselayer`, etc.,
+      // which never match the literal "Walking"/"Running" strings declared in
+      // Models.js. Fall back to case-insensitive substring matching on the
+      // alias keyword so `walk`/`run`/`jump`/`idle` resolve regardless of the
+      // exporter's naming scheme.
+      const fuzzyMap = { walk: /walk/i, run: /run/i, jump: /jump/i, idle: /idle/i };
+      for (const [alias, re] of Object.entries(fuzzyMap)) {
+        if (actions[alias]) continue;
+        for (const clip of entry.animations) {
+          if (re.test(clip.name)) {
+            actions[alias] = mixer.clipAction(clip);
+            break;
+          }
         }
+      }
+      // Final fallback: if `walk` is still unset and there is exactly one
+      // clip, treat that clip as the walk animation. Most NPCs only ship with
+      // a walk cycle, so this keeps them animating even if naming drifts.
+      if (!actions.walk && entry.animations.length === 1) {
+        actions.walk = mixer.clipAction(entry.animations[0]);
       }
     }
     return { root, mixer, actions, animations: entry.animations };

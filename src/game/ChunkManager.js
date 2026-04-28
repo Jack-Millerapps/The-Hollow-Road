@@ -196,7 +196,9 @@ export const ChunkManager = {
       camera.updateMatrixWorld(true);
     }
 
-    const newActive = new Set();
+    // Reuse the active-keys Set so we don't allocate a new one each frame.
+    _activeKeys.clear();
+    const newActive = _activeKeys;
 
     // Pass 1 — chunk visibility: dual load anchors + asymmetric unload.
     for (const chunk of chunks.values()) {
@@ -228,8 +230,6 @@ export const ChunkManager = {
       }
     }
 
-    _activeKeys = newActive;
-
     // Pass 2 — frustum culling per object in active chunks.
     if (camera) {
       _projScreenMatrix.multiplyMatrices(
@@ -238,7 +238,7 @@ export const ChunkManager = {
       );
       _frustum.setFromProjectionMatrix(_projScreenMatrix);
 
-      for (const key of _activeKeys) {
+      for (const key of newActive) {
         const chunk = chunks.get(key);
         if (!chunk) continue;
         for (const entry of chunk.objects) {
@@ -276,6 +276,15 @@ export const ChunkManager = {
 
   getActiveChunks() {
     return Array.from(_activeKeys);
+  },
+
+  // Frustum probe — lets dynamic entities (NPCs, mobs) early-out their
+  // per-frame work (mixer.update, lookAt, walk math) when offscreen. Uses
+  // the frustum captured during the last update().
+  isPointInFrustum(x, y, z, radius = 1.5) {
+    _objSphere.center.set(x, y, z);
+    _objSphere.radius = radius;
+    return _frustum.intersectsSphere(_objSphere);
   },
 
   // Diagnostics — total chunk count for the registered world span.

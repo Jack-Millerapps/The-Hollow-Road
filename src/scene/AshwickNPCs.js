@@ -6,6 +6,7 @@ import { QuestSystem } from '../game/QuestSystem.js';
 import { DialoguePanel } from '../ui/DialoguePanel.js';
 import { AshwickWorld, getQuestMeshes } from './AshwickTown.js';
 import { ModelLoader } from './ModelLoader.js';
+import { ChunkManager } from '../game/ChunkManager.js';
 
 const NPC_SCALE = 1.55;
 
@@ -66,7 +67,9 @@ function humanoid(opts) {
   g.userData.mixer = null;
   g.userData.actions = null;
 
-  const modelKey = opts.model || 'npcLantern';
+  // Default biped — npcSymmetrical reads as a generic townsperson and is
+  // visually distinct from the player's lantern bearer.
+  const modelKey = opts.model || 'npcSymmetrical';
   const tintColor = opts.cloak || 0xffffff;
 
   ModelLoader.ensure(modelKey)
@@ -81,9 +84,19 @@ function humanoid(opts) {
       g.userData.mixer = inst.mixer;
       g.userData.actions = inst.actions;
       if (inst.actions?.walk) {
-        inst.actions.walk.reset();
-        inst.actions.walk.setEffectiveWeight(0);
-        inst.actions.walk.play();
+        const wa = inst.actions.walk;
+        wa.reset();
+        wa.enabled = true;
+        wa.setEffectiveWeight(1);
+        wa.setEffectiveTimeScale(1);
+        wa.play();
+        // Random mid-stride seed so each villager freezes at a different
+        // pose rather than every NPC sharing the start frame.
+        const dur = wa.getClip()?.duration || 0;
+        if (dur > 0) wa.time = Math.random() * dur;
+        // Sample the pose first, then freeze.
+        inst.mixer?.update(0);
+        wa.paused = true;
       }
     })
     .catch((e) => console.warn(`[AshwickNPCs] ${modelKey} failed`, e));
@@ -170,7 +183,7 @@ function buildNpcList() {
     name: 'Maren',
     role: 'neighbor',
     homeCabin: 1,
-    group: humanoid({ model: 'npcLantern', cloak: 0xc89890, hat: 0x2a1020 }),
+    group: humanoid({ model: 'friendMira', cloak: 0xc89890, hat: 0x2a1020 }),
     dayWaypoints: [w(-10, MZ), w(-6, MZ + 2)],
     evePos: w(12, MZ - 10),
     nightPos: cabinWorld(1),
@@ -194,7 +207,7 @@ function buildNpcList() {
     name: 'Sera',
     role: 'tavern',
     homeCabin: 3,
-    group: humanoid({ model: 'npcLantern', cloak: 0xb09cb8, hat: 0x1a1028 }),
+    group: humanoid({ model: 'friendElen', cloak: 0xb09cb8, hat: 0x1a1028 }),
     dayWaypoints: [w(10, MZ - 10), w(8, MZ - 8)],
     mornPos: w(10, MZ - 8),
     nightPos: cabinWorld(3),
@@ -219,7 +232,7 @@ function buildNpcList() {
     name: 'Market vendor',
     role: 'vendor',
     homeCabin: 0,
-    group: humanoid({ model: 'npcLantern', cloak: 0xb0c898 }),
+    group: humanoid({ model: 'friendTomas', cloak: 0xb0c898 }),
     dayWaypoints: [w(stallXs[0], MZ + 10)],
     nightPos: cabinWorld(0),
   });
@@ -228,14 +241,14 @@ function buildNpcList() {
     name: 'Market vendor',
     role: 'vendor',
     homeCabin: 1,
-    group: humanoid({ model: 'npcLantern', cloak: 0x98b0c8 }),
+    group: humanoid({ model: 'npcSymmetrical', cloak: 0x98b0c8 }),
     dayWaypoints: [w(stallXs[3], MZ + 10)],
     nightPos: cabinWorld(1),
   });
 
   // 7–10 roamers
   const roamerTints = [0xc8a890, 0xb0a890, 0xc0a890, 0xa8b0a0];
-  const roamerModels = ['npcLantern', 'npcOlderMan', 'npcLantern', 'npcBroad'];
+  const roamerModels = ['npcSymmetrical', 'npcOlderMan', 'friendMira', 'npcBroad'];
   for (let i = 0; i < 4; i++) {
     list.push({
       id: `roam${i}`,
@@ -260,7 +273,7 @@ function buildNpcList() {
     name: 'Night watch',
     role: 'watch',
     homeCabin: 5,
-    group: humanoid({ model: 'npcLantern', cloak: 0x6c7890, hat: 0x0a0a14 }),
+    group: humanoid({ model: 'npcSymmetrical', cloak: 0x6c7890, hat: 0x0a0a14 }),
     patrol: true,
     dayWaypoints: [cabinWorld(5)],
     nightPos: cabinWorld(5),
@@ -277,15 +290,19 @@ function buildNpcList() {
   return list;
 }
 
+const _lerpV = new THREE.Vector3();
+
 function _stepMixer(n, delta) {
   const ud = n.group?.userData;
   if (!ud?.mixer) return;
-  ud.mixer.update(delta);
-  if (ud.actions?.walk) {
-    const target = ud.walking ? 1 : 0;
-    const w = ud.actions.walk.getEffectiveWeight();
-    ud.actions.walk.setEffectiveWeight(w + (target - w) * Math.min(1, delta * 6));
+  const wa = ud.actions?.walk;
+  if (wa) {
+    wa.enabled = true;
+    wa.setEffectiveWeight(1);
+    if (ud.walking && wa.paused) wa.paused = false;
+    else if (!ud.walking && !wa.paused) wa.paused = true;
   }
+  ud.mixer.update(delta);
 }
 
 function spawnWaypoint(n) {
@@ -294,25 +311,11 @@ function spawnWaypoint(n) {
 }
 
 export const AshwickNPCs = {
-  init(scene) {
-    if (!scene?.add) return;
-    _scene = scene;
-    if (_root) _root.removeFromParent();
-    _root = new THREE.Group();
-    _root.name = 'AshwickNPCs';
-    scene.add(_root);
-    _npcs = buildNpcList();
-    for (const n of _npcs) {
-      if (!n?.group) continue;
-      const wp0 = spawnWaypoint(n);
-      n.group.position.set(wp0.x, 0, wp0.z);
-      _root.add(n.group);
-    }
-    _aiAccum = 0;
-    _prevE = false;
-  },
+  init(_scene) { /* NPCs disabled */ },
 
   update(delta, time, playerPos) {
+    return; // all NPCs removed
+    /* eslint-disable no-unreachable */
     if (!_root || state.currentScene !== 'world' || !playerPos) return;
     const dx = playerPos.x - AshwickWorld.MILL_X;
     const dz = playerPos.z - MZ;
@@ -341,18 +344,17 @@ export const AshwickNPCs = {
           const h = n.nightPos;
           n.group.position.set(h.x, 0, h.z);
           n.group.userData.walking = false;
-          _stepMixer(n, delta);
           continue;
         }
         const t = time * 0.15;
         const rx = AshwickWorld.MILL_X + Math.cos(t) * 34;
         const rz = MZ + Math.sin(t) * 28;
         n.group.position.set(rx, 0, rz);
-        n.group.lookAt(px, n.group.position.y, pz);
-        // Watchman is always patrolling — drive walk anim.
+        n.group.rotation.y = Math.atan2(px - rx, pz - rz);
+        // Watchman is always patrolling — drive walk anim only if onscreen.
         const moved = Math.hypot(rx - prevX, rz - prevZ);
         n.group.userData.walking = moved > 0.001;
-        _stepMixer(n, delta);
+        if (ChunkManager.isPointInFrustum(rx, 1, rz, 2.5)) _stepMixer(n, delta);
         const d2 = dist2(px, pz, rx, rz);
         if (d2 < nearestD2) {
           nearestD2 = d2;
@@ -375,16 +377,24 @@ export const AshwickNPCs = {
         n._hidHome = false;
       }
 
-      // Evening: Maren toward tavern
-      if (n.id === 'maren' && phase === 'sunset' && n.evePos) {
-        const ep = n.evePos;
-        n.group.position.lerp(new THREE.Vector3(ep.x, 0, ep.z), delta * 0.35);
-      }
+      // Frustum cull: skip mixer + waypoint walk math for offscreen NPCs.
+      // Interact/label checks below still run so [E] prompt stays correct.
+      const onScreen = ChunkManager.isPointInFrustum(
+        n.group.position.x, 1, n.group.position.z, 2.5,
+      );
 
-      // Sunrise: Sera outside tavern briefly
-      if (n.id === 'sera' && phase === 'sunrise' && n.mornPos) {
-        const mp = n.mornPos;
-        n.group.position.lerp(new THREE.Vector3(mp.x, 0, mp.z), delta * 0.4);
+      if (onScreen) {
+        // Evening: Maren toward tavern
+        if (n.id === 'maren' && phase === 'sunset' && n.evePos) {
+          const ep = n.evePos;
+          n.group.position.lerp(_lerpV.set(ep.x, 0, ep.z), delta * 0.35);
+        }
+
+        // Sunrise: Sera outside tavern briefly
+        if (n.id === 'sera' && phase === 'sunrise' && n.mornPos) {
+          const mp = n.mornPos;
+          n.group.position.lerp(_lerpV.set(mp.x, 0, mp.z), delta * 0.4);
+        }
       }
 
       const wps = n.dayWaypoints;
@@ -402,32 +412,35 @@ export const AshwickNPCs = {
         }
       }
 
-      const cur = wps[n.wpIndex % wps.length];
-      if (!cur) continue;
-      if (time >= n.pauseUntil) {
-        const gx = n.group.position.x;
-        const gz = n.group.position.z;
-        const step = SPEED * delta;
-        const vx = cur.x - gx;
-        const vz = cur.z - gz;
-        const len = Math.hypot(vx, vz) || 1;
-        n.group.position.x += (vx / len) * Math.min(step, len);
-        n.group.position.z += (vz / len) * Math.min(step, len);
-        n.group.lookAt(px, n.group.position.y, pz);
-      }
+      if (onScreen) {
+        const cur = wps[n.wpIndex % wps.length];
+        if (cur && time >= n.pauseUntil) {
+          const gx = n.group.position.x;
+          const gz = n.group.position.z;
+          const step = SPEED * delta;
+          const vx = cur.x - gx;
+          const vz = cur.z - gz;
+          const len = Math.hypot(vx, vz) || 1;
+          n.group.position.x += (vx / len) * Math.min(step, len);
+          n.group.position.z += (vz / len) * Math.min(step, len);
+          n.group.rotation.y = Math.atan2(px - n.group.position.x, pz - n.group.position.z);
+        }
 
-      if (n.id === 'aldric' && dayish && phase === 'day') {
-        const mp = n.millPos;
-        n.group.position.lerp(new THREE.Vector3(mp.x, 0, mp.z), delta * 0.12);
-      }
+        if (n.id === 'aldric' && dayish && phase === 'day') {
+          const mp = n.millPos;
+          n.group.position.lerp(_lerpV.set(mp.x, 0, mp.z), delta * 0.12);
+        }
 
-      if (n.sway) {
-        n.group.rotation.z = Math.sin(time * 1.2) * 0.04;
-      }
+        if (n.sway) {
+          n.group.rotation.z = Math.sin(time * 1.2) * 0.04;
+        }
 
-      const movedDist = Math.hypot(n.group.position.x - prevX, n.group.position.z - prevZ);
-      n.group.userData.walking = movedDist > delta * 0.05;
-      _stepMixer(n, delta);
+        const movedDist = Math.hypot(n.group.position.x - prevX, n.group.position.z - prevZ);
+        n.group.userData.walking = movedDist > delta * 0.05;
+        _stepMixer(n, delta);
+      } else {
+        n.group.userData.walking = false;
+      }
 
       const d2p = dist2(px, pz, n.group.position.x, n.group.position.z);
       n.label.visible = d2p < LABEL_R * LABEL_R;

@@ -340,16 +340,15 @@ export const CabinInterior = {
     southTop.position.set(0, doorH + (H - doorH) / 2, D / 2);
     group.add(southTop);
 
-    // The door itself — single dark wooden door GLB.
+    // The door itself — procedural dark wooden plank door.
     const doorGroup = new THREE.Group();
     doorGroup.position.set(0, 0, D / 2 - 0.02);
-    ModelLoader.ensure('woodenDoor')
-      .then(() => {
-        const inst = ModelLoader.instantiate('woodenDoor');
-        if (!inst) return;
-        doorGroup.add(inst.root);
-      })
-      .catch(() => {});
+    const doorMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9, 2.1, 0.07),
+      new THREE.MeshStandardMaterial({ color: 0x2a1508, roughness: 0.95, flatShading: true }),
+    );
+    doorMesh.position.y = 1.05;
+    doorGroup.add(doorMesh);
     group.add(doorGroup);
     this.door = doorGroup;
 
@@ -369,18 +368,19 @@ export const CabinInterior = {
     bed.rotation.y = Math.PI / 2;
     group.add(bed);
 
-    // Rolled bedroll on the bed (small detail prop).
+    // Rolled bedroll on the bed (procedural cylinder).
     const bedrollAnchor = new THREE.Group();
     bedrollAnchor.position.set(-W / 2 + 1.6, 0.6, -D / 2 + 2.2);
     bedrollAnchor.rotation.y = Math.PI / 2;
     bedrollAnchor.scale.setScalar(0.8);
     group.add(bedrollAnchor);
-    ModelLoader.ensure('bedroll')
-      .then(() => {
-        const inst = ModelLoader.instantiate('bedroll');
-        if (inst) bedrollAnchor.add(inst.root);
-      })
-      .catch(() => {});
+    const bedrollMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.24, 0.26, 0.85, 8),
+      new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 0.95, flatShading: true }),
+    );
+    bedrollMesh.rotation.z = Math.PI / 2;
+    bedrollMesh.position.y = 0.26;
+    bedrollAnchor.add(bedrollMesh);
 
     const table = makeTableWithCandle();
     table.position.set(W / 2 - 1.6, 0, -D / 2 + 2.5);

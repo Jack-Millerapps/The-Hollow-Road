@@ -39,6 +39,7 @@ import { ControlsIntro } from './ui/ControlsIntro.js';
 import { ObjectiveTracker } from './ui/ObjectiveTracker.js';
 import { HUDTutorial } from './ui/HUDTutorial.js';
 import { DebugOverlay } from './ui/DebugOverlay.js';
+import { AdminMode } from './ui/AdminMode.js';
 // Engine fixes (this prompt)
 import { ChunkManager } from './game/ChunkManager.js';
 import { PauseManager } from './game/PauseManager.js';
@@ -420,6 +421,7 @@ function start() {
   HUD.mount();
   Tutorial.mount();
   Travel.init(camera, scene, { canvas: renderer.domElement });
+  AdminMode.init();
   AshwickNPCs.init(scene);
   RoadEvents.init(scene, {
     pause: () => Travel.pause(),
@@ -501,14 +503,18 @@ function start() {
 
       Travel.update(delta);
       DayNight.update(delta);
-      Environment.update(t);
-      Environment.updateCulling(camera);
-      VillageBuilder.update(t, state.playerPos);
-      Road.update(delta, state.isWalking);
-      CabinInterior.update(t);
-      Westwind.update(t, state.playerPos);
 
-      if (state.currentScene === 'world') {
+      const sc = state.currentScene;
+      const isWorld = sc === 'world';
+      const isCave = sc === 'cave';
+      const isCabin = sc === 'cabin';
+
+      // World-only modules — skip entirely in cave/cabin/cutscene.
+      if (isWorld) {
+        Environment.update(t);
+        VillageBuilder.update(t, state.playerPos);
+        Road.update(delta, state.isWalking);
+        Westwind.update(t, state.playerPos);
         FriendNPCs.update(state.playerPos, t);
         CaveEntrance.update(state.playerPos, t);
         Goblins.update(delta, state.playerPos);
@@ -516,14 +522,15 @@ function start() {
         Exchanger.update(state.playerPos);
         RoadEvents.update(delta, state.playerPos, Travel);
         AshwickNPCs.update(delta, t, state.playerPos);
-      } else {
-        Goblins.update(delta, state.playerPos);
-      }
-      if (state.currentScene === 'cave' && Travel.player) {
+      } else if (isCabin) {
+        CabinInterior.update(t);
+      } else if (isCave && Travel.player) {
         CaveInterior.update(delta, state.playerPos, Travel.player.rotation.y);
         Mining.update(delta, state.playerPos);
         TrollTrade.update(delta, state.playerPos);
+        Goblins.update(delta, state.playerPos);
       }
+
       if (BrotherScene.mesh) BrotherScene.update(delta, t);
 
       // ChunkManager — runs every frame BEFORE renderer.render() to set

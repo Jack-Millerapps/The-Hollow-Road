@@ -1,4 +1,4 @@
-// Simple FPS counter. Visible only if the URL has ?debug=1.
+// Simple FPS counter. Default ON. Disable with ?fps=0.
 // Mounted top-left below the menu button.
 
 export const FPSCounter = {
@@ -10,9 +10,9 @@ export const FPSCounter = {
 
   mount() {
     try {
-      this._enabled = new URLSearchParams(window.location.search).get('debug') === '1';
+      this._enabled = new URLSearchParams(window.location.search).get('fps') !== '0';
     } catch {
-      this._enabled = false;
+      this._enabled = true;
     }
     if (!this._enabled) return;
     const el = document.createElement('div');

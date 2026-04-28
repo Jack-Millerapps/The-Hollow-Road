@@ -2,8 +2,6 @@ import * as THREE from 'three';
 import { state } from '../state.js';
 import { ExchangePanel, applyExchange } from '../ui/ExchangePanel.js';
 import { villages } from '../data/villages.js';
-import { ModelLoader } from '../scene/ModelLoader.js';
-
 // ---------------------------------------------------------------------------
 // Currency exchangers — one per destination.
 //
@@ -68,13 +66,18 @@ export const Exchanger = {
       const cfg = CONFIG[v.name];
       if (!cfg) continue;
       const g = new THREE.Group();
-      // Stacked stone altar GLB acts as the exchange shrine.
-      ModelLoader.ensure('altarStone')
-        .then(() => {
-          const inst = ModelLoader.instantiate('altarStone');
-          if (inst) g.add(inst.root);
-        })
-        .catch(() => {});
+      // Procedural stacked-stone altar.
+      const altMat = new THREE.MeshStandardMaterial({ color: 0x3a3530, roughness: 0.98, flatShading: true });
+      const altBase = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.78, 0.38, 8), altMat);
+      altBase.position.y = 0.19;
+      g.add(altBase);
+      const altMid = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.22, 0.78), altMat);
+      altMid.position.y = 0.49;
+      g.add(altMid);
+      const altTop = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.16, 0.64),
+        new THREE.MeshStandardMaterial({ color: 0x4a4540, roughness: 0.95, flatShading: true }));
+      altTop.position.y = 0.66;
+      g.add(altTop);
 
       // Glowing sigil hovers above the altar so it remains visible at distance.
       const sigil = new THREE.Mesh(

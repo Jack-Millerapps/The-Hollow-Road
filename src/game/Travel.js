@@ -15,9 +15,10 @@ import { PauseManager } from './PauseManager.js';
 
 const PLAYER_RADIUS = 0.5;
 
-const WALK_SPEED = 4.0;
-const SPRINT_SPEED = 9.0;
-const CAVE_SPEED = 2.2;
+// Mutable so AdminMode can tune them at runtime via Travel.setSpeeds().
+let WALK_SPEED = 4.0;
+let SPRINT_SPEED = 9.0;
+let CAVE_SPEED = 2.2;
 const SPRINT_DRAIN = 0.25;
 const SPRINT_REGEN = 0.15;
 const SPRINT_GRACE = 0.2;
@@ -248,6 +249,42 @@ export const Travel = {
 
   resume() { this.paused = false; },
 
+  // Admin-mode hooks.
+  _flying: false,
+  setFlying(enabled) {
+    this._flying = !!enabled;
+    if (this._flying) {
+      // Stop gravity from yanking the player back down between updates.
+      state.velocityY = 0;
+      state.isGrounded = false;
+    }
+  },
+  isFlying() { return this._flying; },
+  setSpeeds({ walk, sprint, cave } = {}) {
+    if (typeof walk === 'number' && walk >= 0) WALK_SPEED = walk;
+    if (typeof sprint === 'number' && sprint >= 0) SPRINT_SPEED = sprint;
+    if (typeof cave === 'number' && cave >= 0) CAVE_SPEED = cave;
+  },
+  getSpeeds() {
+    return { walk: WALK_SPEED, sprint: SPRINT_SPEED, cave: CAVE_SPEED };
+  },
+  teleport(x, z, opts = {}) {
+    if (!this.player) return;
+    this.player.position.x = x;
+    this.player.position.z = z;
+    this.player.position.y = this._groundY;
+    state.velocityY = 0;
+    state.isGrounded = true;
+    if (!state.playerPos) state.playerPos = { x: 0, z: 0 };
+    state.playerPos.x = x;
+    state.playerPos.z = z;
+    if (opts.unlockExit) state.flags.hasLeftWestwind = true;
+    this.triggered = new Set();
+    this.distanceSinceEvent = 0;
+    this._setCameraFromPlayer();
+    notify();
+  },
+
   _setCameraFromPlayer() {
     if (!this.player || !this.camera) return;
     this.player.rotation.y = this._yaw;
@@ -389,6 +426,13 @@ export const Travel = {
   // state (so the player can't hover by opening a panel mid-air).
   _updatePhysics(dt) {
     if (!this.player) return;
+    // Flying: gravity off, vertical input handled in update(). Don't snap to
+    // ground; just keep velocityY zeroed so re-grounding is clean on toggle.
+    if (this._flying) {
+      state.velocityY = 0;
+      state.isGrounded = false;
+      return;
+    }
     // Apply gravity if not grounded.
     if (!state.isGrounded) {
       state.velocityY += GRAVITY * dt;
@@ -533,7 +577,22 @@ export const Travel = {
     };
 
     // --- Jump input + gravity ---------------------------------------------
-    this._consumeJumpInput();
+    if (this._flying) {
+      // Space = up, Ctrl/X = down. Vertical speed scales with sprint key.
+      const upPressed = this.keys.has(' ') || this.keys.has('spacebar');
+      const downPressed = this.keys.has('control') || this.keys.has('x');
+      const vSpeed = (shiftHeld ? SPRINT_SPEED : WALK_SPEED) * 1.5;
+      let dy = 0;
+      if (upPressed) dy += vSpeed * clampedDelta;
+      if (downPressed) dy -= vSpeed * clampedDelta;
+      this.player.position.y += dy;
+      // Floor: don't sink below ground while flying.
+      if (this.player.position.y < this._groundY) {
+        this.player.position.y = this._groundY;
+      }
+    } else {
+      this._consumeJumpInput();
+    }
     this._updatePhysics(clampedDelta);
 
     this._updateStamina(clampedDelta, canSprint);

@@ -187,7 +187,27 @@ export const villages = [
     radius: 40,
     displayName: 'The Unnamed Village',
     flavor: 'No one here will tell you what this place is called.',
-    placeholder: true,
+    npc: 'A Silent Figure',
+    options: [
+      {
+        label: 'Offer a Memory',
+        cost: { memories: 1 },
+        isTrue: true,
+        outcome: 'They receive it without speaking. The road behind you feels longer now.',
+      },
+      {
+        label: 'Make a Promise',
+        cost: { promises: 1 },
+        isTrue: false,
+        outcome: 'No response. Your words dissolve into the settling dust.',
+      },
+      {
+        label: 'Give a Year',
+        cost: { years: 1 },
+        isTrue: false,
+        outcome: 'They tilt their head. You are not sure they understood.',
+      },
+    ],
   },
 ];
 

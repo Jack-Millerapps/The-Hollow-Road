@@ -43,17 +43,35 @@ export class Character {
     }
     const { root, mixer, actions } = inst;
     root.scale.setScalar(PLAYER_SCALE);
+    // The Lantern Bearer biped is authored facing +Z, but the camera and
+    // movement frame treat the player's forward as -Z. Spin 180° so the
+    // character looks down the road instead of into the camera.
+    root.rotation.y = Math.PI;
     this.modelGroup.add(root);
     this.mixer = mixer;
     this.actions = actions;
     this._loaded = true;
 
-    // Default to idle (no animation); fall back to walk if no idle clip.
+    // No idle clip in these assets — play the walk clip and freeze it (paused)
+    // while the character is stationary. That way the rig poses as a walker
+    // instead of collapsing to the bind T-pose.
     const init = actions?.walk || actions?.Walking || null;
     if (init) {
       init.reset();
-      init.setEffectiveWeight(0);
+      init.enabled = true;
+      init.setEffectiveWeight(1);
+      init.setEffectiveTimeScale(1);
       init.play();
+      // Seed at a random frame in the walk cycle so the rig holds a natural
+      // mid-stride pose when paused, instead of the start frame which sits
+      // close to bind.
+      const dur = init.getClip()?.duration || 0;
+      if (dur > 0) init.time = Math.random() * dur;
+      // Sample the pose AT the seed time while still unpaused — three.js
+      // skips writing transforms for a paused action with deltaTime 0 in some
+      // cases, so apply first, then freeze.
+      this.mixer?.update(0);
+      init.paused = true;
       this._currentAction = init;
     }
   }
@@ -72,8 +90,10 @@ export class Character {
 
   _crossFade(target, fade) {
     if (!target || target === this._currentAction) return;
-    target.reset();
+    target.enabled = true;
     target.setEffectiveWeight(1);
+    target.setEffectiveTimeScale(1);
+    target.paused = false;
     target.play();
     if (this._currentAction) {
       this._currentAction.crossFadeTo(target, fade, false);
@@ -88,18 +108,23 @@ export class Character {
     }
 
     if (this.mixer) {
-      // When stopped we still play the walk clip but at zero weight, so the
-      // rig settles in pose 0 (no idle clip in this asset). Toggle weight.
-      if (this._currentAction) {
-        const targetW = isMoving ? 1 : 0;
-        const w = this._currentAction.getEffectiveWeight();
-        const next = w + (targetW - w) * Math.min(1, delta * 6);
-        this._currentAction.setEffectiveWeight(next);
-      }
+      // Keep walk/run at full weight; pause when stationary so the rig holds
+      // a walking-pose frame instead of falling back to the bind T-pose.
       const desired = this._pickAction(isMoving, speedHint);
       const fade = (desired === this.actions?.run) ? RUN_FADE_TIME : WALK_FADE_TIME;
       if (desired && desired !== this._currentAction) {
         this._crossFade(desired, fade);
+      }
+      if (this._currentAction) {
+        this._currentAction.enabled = true;
+        this._currentAction.setEffectiveWeight(1);
+        // Unpause whenever moving — three.js needs the explicit toggle each
+        // frame because other crossfade paths can re-pause the action.
+        if (isMoving && this._currentAction.paused) {
+          this._currentAction.paused = false;
+        } else if (!isMoving && !this._currentAction.paused) {
+          this._currentAction.paused = true;
+        }
       }
       // Drive mixer faster when sprinting so the run clip looks correct.
       const timeScale = (desired === this.actions?.run) ? 1.15 : 1.0;

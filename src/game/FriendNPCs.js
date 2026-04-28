@@ -4,6 +4,7 @@ import { DialogueManager } from '../ui/DialogueManager.js';
 import { FRIENDS } from '../data/friends.js';
 import { ModelLoader } from '../scene/ModelLoader.js';
 import { Save } from './Save.js';
+import { ChunkManager } from './ChunkManager.js';
 
 const FRIEND_SCALE = 1.55;
 const FRIEND_MODEL_KEYS = {
@@ -143,9 +144,16 @@ export const FriendNPCs = {
             entry.mixer = inst.mixer;
             entry.actions = inst.actions;
             if (entry.actions?.walk) {
-              entry.actions.walk.reset();
-              entry.actions.walk.setEffectiveWeight(0);
-              entry.actions.walk.play();
+              const wa = entry.actions.walk;
+              wa.reset();
+              wa.enabled = true;
+              wa.setEffectiveWeight(1);
+              wa.setEffectiveTimeScale(1);
+              wa.play();
+              const dur = wa.getClip()?.duration || 0;
+              if (dur > 0) wa.time = Math.random() * dur;
+              entry.mixer?.update(0);
+              wa.paused = true;
             }
           })
           .catch((e) => console.warn(`[FriendNPCs] ${modelKey} failed`, e));
@@ -176,13 +184,21 @@ export const FriendNPCs = {
     this._lastUpdateT = _now;
 
     // Drive each friend's animation mixer + walk-weight cross-fade.
+    // Skip mixer.update for friends that aren't on screen — skinned-mesh
+    // mixer updates are the largest cost here.
     for (const entry of this.entries) {
       if (!entry.mixer) continue;
-      entry.mixer.update(dt);
-      if (entry.actions?.walk) {
-        const target = entry.mesh.userData.walking ? 1 : 0;
-        const w = entry.actions.walk.getEffectiveWeight();
-        entry.actions.walk.setEffectiveWeight(w + (target - w) * Math.min(1, dt * 6));
+      const wa = entry.actions?.walk;
+      if (wa) {
+        wa.enabled = true;
+        wa.setEffectiveWeight(1);
+        const moving = !!entry.mesh.userData.walking;
+        if (moving && wa.paused) wa.paused = false;
+        else if (!moving && !wa.paused) wa.paused = true;
+      }
+      const mp = entry.mesh.position;
+      if (ChunkManager.isPointInFrustum(mp.x, mp.y + 1, mp.z, 2.5)) {
+        entry.mixer.update(dt);
       }
     }
 
