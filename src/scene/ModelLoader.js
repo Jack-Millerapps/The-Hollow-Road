@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { MODELS, TOWN_ANCHORS, modelsByTier } from './Models.js';
+import { buildFallback } from './ProceduralModels.js';
 
 const skeletonClone = SkeletonUtils.clone.bind(SkeletonUtils);
 
@@ -61,10 +62,11 @@ function loadOne(key) {
       },
       undefined,
       (err) => {
-        _failed.add(key);
+        console.warn(`[ModelLoader] GLB unavailable for "${key}", using procedural fallback`, err);
         _pending.delete(key);
-        console.error(`[ModelLoader] failed to load "${key}" @ ${def.path}`, err);
-        reject(err);
+        const entry = buildFallback(key);
+        _cache.set(key, entry);
+        resolve(entry);
       },
     );
   });
