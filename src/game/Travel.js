@@ -80,6 +80,9 @@ export const Travel = {
   _lastYawForRoll: 0,
   _cameraRoll: 0,
   _walkCycle: 0,
+  // Admin controls
+  adminFlying: false,
+  adminSpeedMult: 1,
 
   init(camera, scene, opts = {}) {
     this.scene = scene;
@@ -389,6 +392,11 @@ export const Travel = {
   // state (so the player can't hover by opening a panel mid-air).
   _updatePhysics(dt) {
     if (!this.player) return;
+    if (this.adminFlying) {
+      state.velocityY = 0;
+      state.isGrounded = false;
+      return;
+    }
     // Apply gravity if not grounded.
     if (!state.isGrounded) {
       state.velocityY += GRAVITY * dt;
@@ -486,7 +494,8 @@ export const Travel = {
     const canSprint =
       !inCave && shiftHeld && movingInput && !this._sprintLocked &&
       (state.stamina ?? 0) > 0;
-    const speed = inCave ? CAVE_SPEED : (canSprint ? SPRINT_SPEED : WALK_SPEED);
+    const baseSpeed = inCave ? CAVE_SPEED : (canSprint ? SPRINT_SPEED : WALK_SPEED);
+    const speed = baseSpeed * (this.adminSpeedMult ?? 1);
     state.isSprinting = canSprint;
 
     let moved = false;
@@ -535,6 +544,14 @@ export const Travel = {
     // --- Jump input + gravity ---------------------------------------------
     this._consumeJumpInput();
     this._updatePhysics(clampedDelta);
+
+    // --- Admin fly vertical (Q = down, E = up) ----------------------------
+    if (this.adminFlying && this.player) {
+      const flySpeed = WALK_SPEED * (this.adminSpeedMult ?? 1);
+      if (this.keys.has('e')) this.player.position.y += flySpeed * clampedDelta;
+      if (this.keys.has('q')) this.player.position.y -= flySpeed * clampedDelta;
+      if (this.player.position.y < this._groundY) this.player.position.y = this._groundY;
+    }
 
     this._updateStamina(clampedDelta, canSprint);
     if (state.isWalking !== moved) state.isWalking = moved;

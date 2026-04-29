@@ -90,6 +90,11 @@ export const VillageBuilder = {
     else if (name === 'unnamedTown') buildUnnamedTown(scene, registry.unnamedTown);
   },
 
+  setScale(name, scale) {
+    const entry = registry[name];
+    if (entry?.group) entry.group.scale.setScalar(scale);
+  },
+
   update(time, playerPos) {
     const updateAshwick = villageInRange('ashwick', playerPos);
     const updateVeil = villageInRange('veilMarket', playerPos);

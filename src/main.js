@@ -44,6 +44,7 @@ import { ChunkManager } from './game/ChunkManager.js';
 import { PauseManager } from './game/PauseManager.js';
 import { BackgroundMusic } from './game/BackgroundMusic.js';
 import { Tutorial } from './game/Tutorial.js';
+import { AdminPanel } from './ui/AdminPanel.js';
 
 // ---------------------------------------------------------------------------
 // Fade overlay helpers
@@ -458,6 +459,7 @@ function start() {
   ObjectiveTracker.mount();
 
   void Epilogue;
+  AdminPanel.mount({ teleport: teleportPlayer });
 
   // Day/night — starts at "night" on first exit from Westwind (Travel.js
   // calls DayNight.setStartPhase('night') then). Until then, gameTime = 0
