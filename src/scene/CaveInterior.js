@@ -337,19 +337,7 @@ function buildTroll(group, cave, room, materials) {
   const trollGroup = new THREE.Group();
   trollGroup.position.set(cx, 0, cz);
 
-  // Stacked stone altar/seat (GLB).
-  const altarAnchor = new THREE.Group();
-  altarAnchor.position.set(0, 0, -0.4);
-  trollGroup.add(altarAnchor);
-  ModelLoader.ensure('caveAltar')
-    .then(() => {
-      const inst = ModelLoader.instantiate('caveAltar');
-      if (!inst) return;
-      altarAnchor.add(inst.root);
-    })
-    .catch(() => {});
-
-  // Troll body (GLB) seated on the altar.
+  // Troll body (GLB) seated on a stone platform.
   const trollAnchor = new THREE.Group();
   trollAnchor.position.set(0, 0, 0);
   trollGroup.add(trollAnchor);

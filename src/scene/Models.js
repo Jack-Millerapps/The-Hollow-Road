@@ -171,12 +171,6 @@ export const MODELS = {
     scale: 1.0,
     yOffset: 0,
   },
-  caveAltar: {
-    path: M + 'Meshy_AI_A_stacked_stone_altar_0426205455_texture.glb',
-    tier: 'cave',
-    scale: 1.0,
-    yOffset: 0,
-  },
   caveMassiveStone: {
     path: M + 'Meshy_AI_A_massive_rough_cut_s_0426205710_texture.glb',
     tier: 'cave',

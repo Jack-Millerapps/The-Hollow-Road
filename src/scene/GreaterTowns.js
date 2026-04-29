@@ -6,6 +6,44 @@ import { SceneManager } from './SceneManager.js';
 import { ModelLoader } from './ModelLoader.js';
 import { TownShells } from './TownShells.js';
 
+const NPC_SCALE = 1.55;
+
+function spawnIdleNpc(parent, modelKey, x, z, rotY = 0, cloak = 0xffffff) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  g.rotation.y = rotY;
+  ModelLoader.ensure(modelKey)
+    .then(() => {
+      const inst = ModelLoader.instantiate(modelKey);
+      if (!inst) return;
+      inst.root.scale.setScalar(NPC_SCALE);
+      if (cloak !== 0xffffff) {
+        const c = new THREE.Color(cloak);
+        inst.root.traverse((o) => {
+          if (!o.material) return;
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          for (const m of mats) { if (m.color) m.color.multiply(c); }
+        });
+      }
+      g.add(inst.root);
+      if (inst.actions?.walk) {
+        const wa = inst.actions.walk;
+        wa.reset();
+        wa.enabled = true;
+        wa.setEffectiveWeight(1);
+        wa.setEffectiveTimeScale(1);
+        wa.play();
+        const dur = wa.getClip()?.duration || 0;
+        if (dur > 0) wa.time = Math.random() * dur;
+        inst.mixer?.update(0);
+        wa.paused = true;
+      }
+    })
+    .catch(() => {});
+  parent.add(g);
+  return g;
+}
+
 function attachTownShell(parent, modelKey, townId = null, baseScale = 1) {
   ModelLoader.ensure(modelKey)
     .then(() => {
@@ -373,6 +411,13 @@ export function buildVeilMarketTown(scene, reg) {
     Collision.registerBox(34 + cx, -2500 + cz, 1.85, 1.85);
   }
 
+  // Townsfolk — dark-robed traders and wanderers around the plaza.
+  spawnIdleNpc(core, 'npcSymmetrical', 8, 0, Math.PI, 0x3a2a5a);
+  spawnIdleNpc(core, 'npcBroad', -8, 0, 0, 0x2a1a3a);
+  spawnIdleNpc(core, 'npcOlderMan', 0, 8, Math.PI * 0.5, 0x4a3a6a);
+  spawnIdleNpc(core, 'npcSymmetrical', 3, -7, Math.PI * 1.5, 0x1a1a3a);
+  spawnIdleNpc(core, 'npcLantern', -3, 5, Math.PI * 0.25, 0x2a2a4a);
+
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x + 34, group.position.z, { radius: 200 });
@@ -667,6 +712,12 @@ export function buildStonehushTown(scene, reg) {
   moonSuggestionLight.position.set(4.5, 4, -3.5);
   core.add(moonSuggestionLight);
 
+  // Silent townsfolk — grey-tinted robed figures around the stone circle.
+  spawnIdleNpc(core, 'npcOlderMan', 0, 0, Math.PI * 0.1, 0xa0a0a0);
+  spawnIdleNpc(core, 'npcSymmetrical', 7, 5, Math.PI * 1.3, 0x8a8888);
+  spawnIdleNpc(core, 'npcSymmetrical', -6, 4, Math.PI * 0.7, 0x909090);
+  spawnIdleNpc(core, 'friendMira', 4.5, -3.5, Math.PI, 0x707890);
+
   scene.add(group);
   reg.group = group;
   // Register at the core (visual body), with a wide radius covering the
@@ -783,6 +834,12 @@ export function buildDeeprootTown(scene, reg) {
   group.add(midGlow);
   SceneManager.registerPointLight(midGlow);
 
+  // Forest dwellers — earthy-toned figures near the great tree and clearing.
+  spawnIdleNpc(core, 'npcBroad', -4, 3, Math.PI * 0.9, 0x2a1810);
+  spawnIdleNpc(core, 'friendMira', 6, 0, Math.PI * 1.2, 0x1a2810);
+  spawnIdleNpc(core, 'friendElen', -6, -5, Math.PI * 0.3, 0x1a2a14);
+  spawnIdleNpc(core, 'npcOlderMan', 3, -8, Math.PI * 0.8, 0x2a1a0a);
+
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x + ox, group.position.z + oz, { radius: 350 });
@@ -870,6 +927,12 @@ export function buildMirrorTown(scene, reg) {
   group.add(amb);
   SceneManager.registerPointLight(amb);
 
+  // Pale mirrored figures — placed symmetrically around the spire.
+  spawnIdleNpc(core, 'npcSymmetrical', 6, 0, Math.PI, 0xd0e8ff);
+  spawnIdleNpc(core, 'npcSymmetrical', -6, 0, 0, 0xc8d8f0);
+  spawnIdleNpc(core, 'npcSymmetrical', 0, 6, Math.PI * 1.5, 0xd8e0ff);
+  spawnIdleNpc(core, 'npcOlderMan', 0, -8, Math.PI * 0.5, 0xb0c0e8);
+
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, ax, az, { radius: 350 });
@@ -933,6 +996,10 @@ export function buildUnnamedTown(scene, reg) {
       2.2, 2.2,
     );
   }
+
+  // Two sparse, solitary figures — the village is nearly empty.
+  spawnIdleNpc(core, 'npcOlderMan', 0, 0, 0, 0xb0a898);
+  spawnIdleNpc(core, 'npcSymmetrical', 5, -5, Math.PI * 0.3, 0xa09890);
 
   ChunkManager.register(group, WX, WZ, { radius: 400 });
 }

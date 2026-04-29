@@ -311,11 +311,25 @@ function spawnWaypoint(n) {
 }
 
 export const AshwickNPCs = {
-  init(_scene) { /* NPCs disabled */ },
+  init(scene) {
+    if (!scene?.add) return;
+    _scene = scene;
+    if (_root) _root.removeFromParent();
+    _root = new THREE.Group();
+    _root.name = 'AshwickNPCs';
+    scene.add(_root);
+    _npcs = buildNpcList();
+    for (const n of _npcs) {
+      if (!n?.group) continue;
+      const wp0 = spawnWaypoint(n);
+      n.group.position.set(wp0.x, 0, wp0.z);
+      _root.add(n.group);
+    }
+    _aiAccum = 0;
+    _prevE = false;
+  },
 
   update(delta, time, playerPos) {
-    return; // all NPCs removed
-    /* eslint-disable no-unreachable */
     if (!_root || state.currentScene !== 'world' || !playerPos) return;
     const dx = playerPos.x - AshwickWorld.MILL_X;
     const dz = playerPos.z - MZ;
