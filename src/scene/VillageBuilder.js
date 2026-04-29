@@ -68,7 +68,7 @@ const VILLAGE_POSITIONS = {
   stonehush: { x: -800, z: -5000 },
   deeproot: { x: 600, z: -6000 },
   mirrorTown: { x: 200, z: -7800 },
-  unnamedTown: { x: 0, z: -11000 },
+  unnamedTown: { x: 0, z: -14500 },
 };
 
 function villageInRange(name, playerPos) {
@@ -87,7 +87,7 @@ export const VillageBuilder = {
     else if (name === 'stonehush') buildStonehushTown(scene, registry.stonehush);
     else if (name === 'deeproot') buildDeeprootTown(scene, registry.deeproot);
     else if (name === 'mirrorTown') buildMirrorTown(scene, registry.mirrorTown);
-    else if (name === 'unnamedTown') buildUnnamedTown(scene, registry.unnamedTown);
+    else if (name === 'unnamed' || name === 'unnamedTown') buildUnnamedTown(scene, registry.unnamedTown);
   },
 
   setScale(name, scale) {

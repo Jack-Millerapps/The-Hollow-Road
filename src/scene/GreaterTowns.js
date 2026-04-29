@@ -360,17 +360,24 @@ export function buildVeilMarketTown(scene, reg) {
 // =============================================================
 
 function loadTownGLB(path, group) {
-  new GLTFLoader().load(path, (gltf) => {
-    const model = gltf.scene;
-    model.scale.setScalar(20);
-    model.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-    group.add(model);
-  });
+  new GLTFLoader().load(
+    path,
+    (gltf) => {
+      const model = gltf.scene;
+      model.scale.setScalar(20);
+      model.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      group.add(model);
+      const box = new THREE.Box3().setFromObject(model);
+      console.log(`[GLB] Loaded ${path} — bounds: y ${box.min.y.toFixed(1)} → ${box.max.y.toFixed(1)}, group world pos:`, group.position);
+    },
+    undefined,
+    (err) => console.error(`[GLB] Failed to load ${path}:`, err),
+  );
 }
 
 export function buildStonehushTown(scene, reg) {
@@ -384,7 +391,7 @@ export function buildStonehushTown(scene, reg) {
   loadTownGLB('/Models/Stonehush.glb', group);
   scene.add(group);
   reg.group = group;
-  ChunkManager.register(group, group.position.x, group.position.z);
+  ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
 }
 
 export function buildDeeprootTown(scene, reg) {
@@ -397,7 +404,7 @@ export function buildDeeprootTown(scene, reg) {
   loadTownGLB('/Models/Deeproot.glb', group);
   scene.add(group);
   reg.group = group;
-  ChunkManager.register(group, group.position.x, group.position.z);
+  ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
 }
 
 export function buildMirrorTown(scene, reg) {
@@ -411,18 +418,18 @@ export function buildMirrorTown(scene, reg) {
   loadTownGLB('/Models/Mirror_town.glb', group);
   scene.add(group);
   reg.group = group;
-  ChunkManager.register(group, group.position.x, group.position.z);
+  ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
 }
 
 export function buildUnnamedTown(scene, reg) {
   reg.group?.removeFromParent?.();
 
   const group = new THREE.Group();
-  group.position.set(0, 0, -11000);
+  group.position.set(0, 0, -14500);
   loadTownGLB('/Models/The_unamed.glb', group);
   scene.add(group);
   reg.group = group;
-  ChunkManager.register(group, group.position.x, group.position.z);
+  ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
 }
 
 export function updateDeeprootTown() {}
