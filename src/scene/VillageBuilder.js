@@ -4,6 +4,7 @@ import {
   buildStonehushTown,
   buildDeeprootTown,
   buildMirrorTown,
+  buildUnnamedTown,
   updateDeeprootTown,
   updateMirrorTown,
 } from './GreaterTowns.js';
@@ -48,6 +49,9 @@ const registry = {
     spire: null,
     shardRing: null,
   },
+  unnamedTown: {
+    group: null,
+  },
 };
 
 function buildAshwick(scene) {
@@ -64,6 +68,7 @@ const VILLAGE_POSITIONS = {
   stonehush: { x: -800, z: -5000 },
   deeproot: { x: 600, z: -6000 },
   mirrorTown: { x: 200, z: -7800 },
+  unnamedTown: { x: 0, z: -11000 },
 };
 
 function villageInRange(name, playerPos) {
@@ -82,6 +87,7 @@ export const VillageBuilder = {
     else if (name === 'stonehush') buildStonehushTown(scene, registry.stonehush);
     else if (name === 'deeproot') buildDeeprootTown(scene, registry.deeproot);
     else if (name === 'mirrorTown') buildMirrorTown(scene, registry.mirrorTown);
+    else if (name === 'unnamedTown') buildUnnamedTown(scene, registry.unnamedTown);
   },
 
   update(time, playerPos) {

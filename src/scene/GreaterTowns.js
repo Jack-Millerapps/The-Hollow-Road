@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { getSoftCircleTexture } from './spriteTextures.js';
 import { ChunkManager } from '../game/ChunkManager.js';
 import { Collision } from '../game/Collision.js';
@@ -356,549 +357,74 @@ export function buildVeilMarketTown(scene, reg) {
   ChunkManager.register(group, group.position.x, group.position.z);
 }
 
-// ============================================================
+// =============================================================
+
+function loadTownGLB(path, group) {
+  new GLTFLoader().load(path, (gltf) => {
+    const model = gltf.scene;
+    model.scale.setScalar(20);
+    model.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    group.add(model);
+  });
+}
+
 export function buildStonehushTown(scene, reg) {
-  reg.threads.length = 0;
-  reg.candles.length = 0;
+  reg.threads = [];
+  reg.candles = [];
   reg.pool = null;
   reg.group?.removeFromParent?.();
 
-  const ax = -800;
-  const az = -5000;
-  const nx = 600;
-  const nz = -6000;
-  const dx = nx - ax;
-  const dz = nz - az;
-  const segLen = Math.hypot(dx, dz);
-  const ox = (-dz / segLen) * 44;
-  const oz = (dx / segLen) * 44;
-
   const group = new THREE.Group();
-  group.position.set(ax, 0, az);
-  group.rotation.y = 0;
-
-  const core = new THREE.Group();
-  core.position.set(ox, 0, oz);
-  group.add(core);
-
-  const stoneMat = stdMat(0x2c2a28, { roughness: 1 });
-  const darkStoneMat = stdMat(0x1e1c1a, { roughness: 1 });
-  const mossMat = stdMat(0x1a3012, { roughness: 1 });
-  const beamMat = stdMat(0x151008, { roughness: 0.95 });
-
-  // --- Circular mossy clearing floor ----
-  const clearing = new THREE.Mesh(
-    new THREE.CircleGeometry(13, 32),
-    stdMat(0x0a1608, { roughness: 1 }),
-  );
-  clearing.rotation.x = -Math.PI / 2;
-  clearing.position.y = 0.01;
-  clearing.receiveShadow = true;
-  core.add(clearing);
-
-  // Inner darker ring
-  const innerRing = new THREE.Mesh(
-    new THREE.CircleGeometry(6, 32),
-    stdMat(0x060c06, { roughness: 1 }),
-  );
-  innerRing.rotation.x = -Math.PI / 2;
-  innerRing.position.y = 0.02;
-  core.add(innerRing);
-
-  // --- Monoliths (9, varied heights and lean) ----
-  const stoneCircle = 9;
-  for (let i = 0; i < stoneCircle; i++) {
-    const a = (i / stoneCircle) * Math.PI * 2 + (Math.random() - 0.5) * 0.15;
-    const r = 9 + (Math.random() - 0.5) * 1.2;
-    const x = Math.cos(a) * r;
-    const z = Math.sin(a) * r;
-    const h = 4 + Math.random() * 3.5;
-    const bottomR = 0.5 + Math.random() * 0.25;
-    const topR = bottomR * (0.55 + Math.random() * 0.25);
-
-    const stone = new THREE.Group();
-    const shaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(topR, bottomR, h, 9),
-      stoneMat,
-    );
-    shaft.position.y = h / 2;
-    shaft.castShadow = true;
-    shaft.receiveShadow = true;
-    // slight imperfection in shape via scale
-    shaft.scale.set(1 + (Math.random() - 0.5) * 0.1, 1, 1 + (Math.random() - 0.5) * 0.1);
-    stone.add(shaft);
-
-    // Moss base
-    const moss = new THREE.Mesh(
-      new THREE.CylinderGeometry(bottomR + 0.08, bottomR + 0.12, 0.4, 10),
-      mossMat,
-    );
-    moss.position.y = 0.2;
-    stone.add(moss);
-
-    // Top cap (darker, weathered)
-    const cap = new THREE.Mesh(
-      new THREE.CylinderGeometry(topR * 0.9, topR * 1.05, 0.22, 9),
-      darkStoneMat,
-    );
-    cap.position.y = h + 0.1;
-    stone.add(cap);
-
-    stone.position.set(x, 0, z);
-    stone.rotation.z = (Math.random() - 0.5) * 0.15;
-    stone.rotation.x = (Math.random() - 0.5) * 0.1;
-    stone.rotation.y = Math.random() * Math.PI;
-    core.add(stone);
-    const stWx = ax + ox + x;
-    const stWz = az + oz + z;
-    Collision.registerBox(stWx, stWz, bottomR + 0.55, bottomR + 0.55);
-  }
-
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2 + 0.2;
-    const r = 12.5 + (i % 3) * 0.6;
-    const x = Math.cos(a) * r;
-    const z = Math.sin(a) * r;
-    const h = 2.8 + Math.random() * 2;
-    const bottomR = 0.35 + Math.random() * 0.12;
-    const topR = bottomR * 0.62;
-    const sg = new THREE.Group();
-    const shaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(topR, bottomR, h, 8),
-      stoneMat,
-    );
-    shaft.position.y = h / 2;
-    shaft.castShadow = true;
-    sg.add(shaft);
-    sg.position.set(x, 0, z);
-    sg.rotation.y = Math.random() * Math.PI;
-    core.add(sg);
-    Collision.registerBox(ax + ox + x, az + oz + z, bottomR + 0.45, bottomR + 0.45);
-  }
-
-  // --- A fallen stone ----
-  const fallen = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.4, 0.55, 5, 9),
-    stoneMat,
-  );
-  fallen.rotation.z = Math.PI / 2 + 0.2;
-  fallen.rotation.y = 0.3;
-  fallen.position.set(-3.5, 0.55, 3);
-  fallen.castShadow = true;
-  core.add(fallen);
-
-  const fallenMoss = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.45, 0.58, 1.5, 10),
-    mossMat,
-  );
-  fallenMoss.rotation.z = Math.PI / 2 + 0.2;
-  fallenMoss.rotation.y = 0.3;
-  fallenMoss.position.set(-4.8, 0.55, 3.2);
-  core.add(fallenMoss);
-
-  // --- Small candle circle around the loom ----
-  for (let i = 0; i < 7; i++) {
-    const a = (i / 7) * Math.PI * 2;
-    const r = 3.5;
-    const cx = Math.cos(a) * r;
-    const cz = Math.sin(a) * r;
-
-    const candleBase = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.1, 0.18, 6),
-      stdMat(0xaaa48c, { roughness: 0.95 }),
-    );
-    candleBase.position.set(cx, 0.09, cz);
-    core.add(candleBase);
-
-    const flame = new THREE.Mesh(
-      new THREE.ConeGeometry(0.04, 0.12, 6),
-      emissiveMat(0xb8d8ff, 0x7090d8, 2.8, { roughness: 0.3 }),
-    );
-    flame.position.set(cx, 0.26, cz);
-    core.add(flame);
-
-    const flameGlow = glowSprite(0x80a0d8, 0.5, 0.45);
-    flameGlow.position.set(cx, 0.28, cz);
-    core.add(flameGlow);
-
-    const candleLight = new THREE.PointLight(0x9bb6e8, 0.35, 4, 1.5);
-    candleLight.position.set(cx, 0.3, cz);
-    core.add(candleLight);
-
-    reg.candles.push({
-      flame,
-      glow: flameGlow,
-      light: candleLight,
-      phase: Math.random() * Math.PI * 2,
-    });
-  }
-
-  // --- Loom in the center (taller, dramatic) ----
-  const loomGroup = new THREE.Group();
-  loomGroup.position.set(0, 0, 0);
-  core.add(loomGroup);
-
-  const vert1 = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.4, 0.22), beamMat);
-  vert1.position.set(-1.6, 2.2, 0);
-  vert1.castShadow = true;
-  loomGroup.add(vert1);
-  const vert2 = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.4, 0.22), beamMat);
-  vert2.position.set(1.6, 2.2, 0);
-  vert2.castShadow = true;
-  loomGroup.add(vert2);
-
-  const horizTop = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.22, 0.22), beamMat);
-  horizTop.position.set(0, 4.2, 0);
-  loomGroup.add(horizTop);
-  const horizBot = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.22, 0.22), beamMat);
-  horizBot.position.set(0, 0.4, 0);
-  loomGroup.add(horizBot);
-
-  // Crossbar that holds threads at various heights
-  const crossbar = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.14, 0.14), beamMat);
-  crossbar.position.set(0, 3.4, -0.1);
-  loomGroup.add(crossbar);
-
-  // Diagonal brace
-  const brace = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.12, 0.12), beamMat);
-  brace.position.set(0, 2.6, -0.18);
-  brace.rotation.z = -0.45;
-  loomGroup.add(brace);
-
-  // Vertical threads — tinted different grays / pale warm, animated swaying
-  for (let i = 0; i < 18; i++) {
-    const tint = i % 3 === 0 ? 0xa89a86 : i % 3 === 1 ? 0x888076 : 0xb0a692;
-    const thread = new THREE.Mesh(
-      new THREE.BoxGeometry(0.02, 3.5, 0.02),
-      new THREE.MeshBasicMaterial({
-        color: tint,
-        transparent: true,
-        opacity: 0.75,
-      }),
-    );
-    thread.position.set(-1.55 + i * 0.18, 2.2, 0);
-    thread.userData.phase = Math.random() * Math.PI * 2;
-    thread.userData.baseX = thread.position.x;
-    loomGroup.add(thread);
-    reg.threads.push(thread);
-  }
-
-  // Partial woven fabric hanging from top
-  const fabric = new THREE.Mesh(
-    new THREE.PlaneGeometry(3.2, 1.2),
-    new THREE.MeshStandardMaterial({
-      color: 0x6a5a48,
-      roughness: 0.95,
-      side: THREE.DoubleSide,
-    }),
-  );
-  fabric.position.set(0, 3.6, 0.05);
-  loomGroup.add(fabric);
-
-  // --- Small reflective pool of water ----
-  const pool = new THREE.Mesh(
-    new THREE.CircleGeometry(1.6, 24),
-    new THREE.MeshStandardMaterial({
-      color: 0x0a1020,
-      emissive: 0x3050a0,
-      emissiveIntensity: 0.2,
-      roughness: 0.15,
-      metalness: 0.6,
-    }),
-  );
-  pool.rotation.x = -Math.PI / 2;
-  pool.position.set(4.5, 0.04, -3.5);
-  core.add(pool);
-  reg.pool = pool;
-
-  // Stone edging around the pool
-  const edgingCount = 10;
-  for (let i = 0; i < edgingCount; i++) {
-    const a = (i / edgingCount) * Math.PI * 2;
-    const stone = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(0.25 + Math.random() * 0.08, 0),
-      darkStoneMat,
-    );
-    stone.position.set(
-      4.5 + Math.cos(a) * 1.75,
-      0.1,
-      -3.5 + Math.sin(a) * 1.75,
-    );
-    stone.rotation.y = Math.random() * Math.PI;
-    core.add(stone);
-  }
-
-  // --- Small stone cairn off to the side ----
-  const cairnPieces = [
-    { r: 0.4, y: 0.4 },
-    { r: 0.33, y: 1.05 },
-    { r: 0.27, y: 1.55 },
-    { r: 0.22, y: 1.95 },
-    { r: 0.17, y: 2.25 },
-  ];
-  for (const p of cairnPieces) {
-    const s = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(p.r, 0),
-      stoneMat,
-    );
-    s.position.set(-5.5, p.y, -5);
-    s.rotation.y = Math.random() * Math.PI;
-    s.castShadow = true;
-    core.add(s);
-  }
-
-  // A faint, distant blue light for the pool to pick up moon reflection
-  const moonSuggestionLight = new THREE.PointLight(0x5a78c8, 0.25, 14, 2.2);
-  moonSuggestionLight.position.set(4.5, 4, -3.5);
-  core.add(moonSuggestionLight);
-
+  group.position.set(-800, 0, -5000);
+  loadTownGLB('/Models/Stonehush.glb', group);
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z);
 }
 
-/** Deeproot — root-bound settlement; bulk offset perpendicular to the road toward Mirror Town. */
 export function buildDeeprootTown(scene, reg) {
-  reg.lanterns ??= [];
-  reg.rootArcs ??= [];
-  reg.lanterns.length = 0;
-  reg.rootArcs.length = 0;
+  reg.lanterns = [];
+  reg.rootArcs = [];
   reg.group?.removeFromParent?.();
 
-  const ax = 600;
-  const az = -6000;
-  const nx = 200;
-  const nz = -7800;
-  const dx = nx - ax;
-  const dz = nz - az;
-  const L = Math.hypot(dx, dz);
-  const ox = (-dz / L) * 46;
-  const oz = (dx / L) * 46;
-
   const group = new THREE.Group();
-  group.position.set(ax, 0, az);
-  const core = new THREE.Group();
-  core.position.set(ox, 0, oz);
-  group.add(core);
-
-  const barkMat = stdMat(0x1a1410, { roughness: 0.94 });
-  const hutWall = stdMat(0x3a2818, { roughness: 0.9 });
-  const roofMat = stdMat(0x0f2814, { roughness: 0.92 });
-
-  const greatPad = new THREE.Mesh(
-    new THREE.CircleGeometry(28, 40),
-    stdMat(0x081408, { roughness: 1 }),
-  );
-  greatPad.rotation.x = -Math.PI / 2;
-  greatPad.position.y = 0.015;
-  greatPad.receiveShadow = true;
-  core.add(greatPad);
-
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.1, 3.4, 16, 16),
-    stdMat(0x241810, { roughness: 0.9 }),
-  );
-  trunk.position.set(-4, 8, 3);
-  trunk.castShadow = true;
-  core.add(trunk);
-  Collision.registerBox(ax + ox - 4, az + oz + 3, 3.2, 3.2);
-
-  for (let i = 0; i < 6; i++) {
-    const u = (i / 6) * Math.PI * 2;
-    const torus = new THREE.Mesh(
-      new THREE.TorusGeometry(2.8 + (i % 2) * 0.6, 0.32, 8, 22),
-      barkMat,
-    );
-    torus.rotation.x = Math.PI / 2 + (Math.random() - 0.5) * 0.2;
-    torus.position.set(Math.cos(u) * 7, 2.4 + i * 0.6, Math.sin(u) * 7 + 2);
-    torus.castShadow = true;
-    core.add(torus);
-    reg.rootArcs.push(torus);
-  }
-
-  for (let i = 0; i < 11; i++) {
-    const a = (i / 11) * Math.PI * 2;
-    const r = 15 + (i % 3) * 1.1;
-    const hx = Math.cos(a) * r;
-    const hz = Math.sin(a) * r;
-    const hut = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.35, 3.2), hutWall);
-    body.position.y = 1.18;
-    body.castShadow = true;
-    hut.add(body);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.7, 1.45, 4), roofMat);
-    roof.position.y = 2.85;
-    roof.rotation.y = 0.2;
-    hut.add(roof);
-    hut.position.set(hx, 0, hz);
-    hut.rotation.y = -a + Math.PI * 0.15;
-    core.add(hut);
-    Collision.registerBox(ax + ox + hx, az + oz + hz, 1.85, 1.85);
-  }
-
-  for (let i = 0; i < 28; i++) {
-    const rx = (Math.random() - 0.5) * 34;
-    const rz = (Math.random() - 0.5) * 34;
-    const ln = 1.5 + Math.random() * 2.8;
-    const root = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.22, ln, 6), barkMat);
-    root.position.set(rx, ln * 0.25, rz);
-    root.rotation.z = (Math.random() - 0.5) * 0.75;
-    root.rotation.x = (Math.random() - 0.5) * 0.45;
-    core.add(root);
-  }
-
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2;
-    const r = 8.5 + (i % 2) * 1.4;
-    const lx = Math.cos(a) * r;
-    const lz = Math.sin(a) * r;
-    const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.05, 0.07, 2.35, 6),
-      stdMat(0x1a1008),
-    );
-    pole.position.set(lx, 1.18, lz);
-    core.add(pole);
-    const lan = new THREE.Mesh(
-      new THREE.SphereGeometry(0.16, 8, 8),
-      emissiveMat(0x9ad870, 0x3a6020, 2.0, { roughness: 0.35 }),
-    );
-    lan.position.set(lx, 2.38, lz);
-    core.add(lan);
-    reg.lanterns.push(lan);
-    const pl = new THREE.PointLight(0xa0e888, 0.42, 10, 2);
-    pl.position.set(ax + ox + lx, 2.35, az + oz + lz);
-    group.add(pl);
-    SceneManager.registerPointLight(pl);
-  }
-
-  const midGlow = new THREE.PointLight(0x4a6838, 0.55, 38, 2.1);
-  midGlow.position.set(ax + ox - 4, 6, az + oz + 3);
-  group.add(midGlow);
-  SceneManager.registerPointLight(midGlow);
-
+  group.position.set(600, 0, -6000);
+  loadTownGLB('/Models/Deeproot.glb', group);
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z);
 }
 
-/** Mirror Town — glassy ring; offset from the pilgrimage road leg. */
 export function buildMirrorTown(scene, reg) {
-  reg.panels ??= [];
-  reg.panels.length = 0;
+  reg.panels = [];
+  reg.spire = null;
+  reg.shardRing = null;
   reg.group?.removeFromParent?.();
 
-  const ax = 200;
-  const az = -7800;
-  const nx = 0;
-  const nz = -14500;
-  const dx = nx - ax;
-  const dz = nz - az;
-  const L = Math.hypot(dx, dz);
-  const ox = (-dz / L) * 50;
-  const oz = (dx / L) * 50;
-
   const group = new THREE.Group();
-  group.position.set(ax, 0, az);
-  const core = new THREE.Group();
-  core.position.set(ox, 0, oz);
-  group.add(core);
-
-  const frameMat = stdMat(0x101828, { metalness: 0.35, roughness: 0.55 });
-  const glassMat = new THREE.MeshStandardMaterial({
-    color: 0xb0d8f8,
-    emissive: 0x305070,
-    emissiveIntensity: 0.45,
-    metalness: 0.75,
-    roughness: 0.14,
-    transparent: true,
-    opacity: 0.42,
-    side: THREE.DoubleSide,
-  });
-
-  const floor = new THREE.Mesh(
-    new THREE.CircleGeometry(24, 36),
-    stdMat(0x0c1018, { metalness: 0.25, roughness: 0.5 }),
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.receiveShadow = true;
-  core.add(floor);
-
-  for (let k = 0; k < 7; k++) {
-    const ang = (k / 7) * Math.PI * 2;
-    const panel = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 5), glassMat);
-    const px = Math.cos(ang) * 6.5;
-    const pz = Math.sin(ang) * 6.5;
-    panel.position.set(px, 2.6, pz);
-    panel.rotation.y = ang + Math.PI;
-    core.add(panel);
-    reg.panels.push(panel);
-  }
-
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    const r = 17 + (i % 2) * 1.5;
-    const bx = Math.cos(a) * r;
-    const bz = Math.sin(a) * r;
-    const shell = new THREE.Mesh(new THREE.BoxGeometry(3.8, 4.6, 3.6), frameMat);
-    shell.position.set(bx, 2.3, bz);
-    shell.rotation.y = -a + Math.PI * 0.2;
-    shell.castShadow = true;
-    core.add(shell);
-    Collision.registerBox(ax + ox + bx, az + oz + bz, 2.1, 2);
-  }
-
-  reg.spire = new THREE.Mesh(
-    new THREE.ConeGeometry(0.75, 10, 6),
-    emissiveMat(0xf0fcff, 0x5890c0, 2.2, { roughness: 0.22 }),
-  );
-  reg.spire.position.set(0, 5, 0);
-  reg.spire.castShadow = true;
-  core.add(reg.spire);
-
-  reg.shardRing = new THREE.Group();
-  for (let i = 0; i < 16; i++) {
-    const ang = (i / 16) * Math.PI * 2;
-    const s = new THREE.Mesh(
-      new THREE.BoxGeometry(0.12, 1.8 + (i % 3) * 0.4, 0.28),
-      emissiveMat(0xd0e8ff, 0x7090b0, 1.5, { roughness: 0.25 }),
-    );
-    s.position.set(Math.cos(ang) * 1.9, 1.2, Math.sin(ang) * 1.9);
-    s.rotation.y = ang;
-    s.rotation.z = (Math.random() - 0.5) * 0.25;
-    reg.shardRing.add(s);
-  }
-  core.add(reg.shardRing);
-
-  const amb = new THREE.PointLight(0xa8c8e8, 0.55, 32, 2);
-  amb.position.set(ax + ox, 4.5, az + oz);
-  group.add(amb);
-  SceneManager.registerPointLight(amb);
-
+  group.position.set(200, 0, -7800);
+  loadTownGLB('/Models/Mirror_town.glb', group);
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z);
 }
 
-export function updateDeeprootTown(time, reg) {
-  if (reg.rootArcs?.length) {
-    for (let i = 0; i < reg.rootArcs.length; i++) {
-      reg.rootArcs[i].rotation.y = time * 0.05 + i * 0.28;
-    }
-  }
-  if (!reg.lanterns?.length) return;
-  for (const m of reg.lanterns) {
-    const mat = m.material;
-    mat.emissiveIntensity = 1.65 + Math.sin(time * 2.2 + m.position.x * 2) * 0.42;
-  }
+export function buildUnnamedTown(scene, reg) {
+  reg.group?.removeFromParent?.();
+
+  const group = new THREE.Group();
+  group.position.set(0, 0, -11000);
+  loadTownGLB('/Models/The_unamed.glb', group);
+  scene.add(group);
+  reg.group = group;
+  ChunkManager.register(group, group.position.x, group.position.z);
 }
 
-export function updateMirrorTown(time, reg) {
-  if (reg.shardRing) reg.shardRing.rotation.y = time * 0.11;
-  if (reg.spire?.material) {
-    reg.spire.material.emissiveIntensity = 2.0 + Math.sin(time * 1.9) * 0.38;
-  }
-  const g = reg.panels[0]?.material;
-  if (g) {
-    g.emissiveIntensity = 0.42 + Math.sin(time * 1.35) * 0.12;
-  }
-}
+export function updateDeeprootTown() {}
+
+export function updateMirrorTown() {}
