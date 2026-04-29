@@ -14,7 +14,6 @@ const TELEPORT_LOCATIONS = [
   { label: 'Deeproot',         x: 600,   z: -6000,  rot: Math.PI },
   { label: 'Mirror Town',      x: 200,   z: -7800,  rot: Math.PI },
   { label: 'Unnamed Village',  x: 0,     z: -14500, rot: Math.PI },
-  { label: 'Road\'s End',      x: 0,     z: -14795, rot: Math.PI },
 ];
 
 const TOWN_KEYS = [
