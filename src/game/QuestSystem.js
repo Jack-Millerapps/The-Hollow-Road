@@ -398,7 +398,7 @@ export const QuestSystem = {
 function questIntroBody(name) {
   switch (name) {
     case 'ashwick':
-      return "The wheel has not stopped in eleven years. My son left a carving. I cannot find it. Search the road east. There is a cave. Bring what you find to me.";
+      return "The wheel has not stopped in eleven years. My son left a carving somewhere on the road east. First — speak to the townsfolk. They knew him. Then find the cave east of here. Bring what you find back to me.";
     case 'stonehush':
       return "Learn why we went deaf. Speak with four. The answer comes at night, in a bell none of us can silence.";
     case 'deeproot':

@@ -90,6 +90,25 @@ function fadeMesh(mesh, from, to, durationMs) {
   });
 }
 
+// Walk AND fade the friend simultaneously — from startPos to endPos while
+// opacity goes from 0→1.  Creates the illusion of walking through a door.
+function fadeAndWalkMesh(mesh, startPos, endPos, durationMs) {
+  return new Promise((resolve) => {
+    const start = performance.now();
+    setMeshOpacity(mesh, 0);
+    mesh.position.set(startPos.x, 0, startPos.z);
+    function tick(now) {
+      const t = Math.min(1, (now - start) / durationMs);
+      setMeshOpacity(mesh, t);
+      mesh.position.x = startPos.x + (endPos.x - startPos.x) * t;
+      mesh.position.z = startPos.z + (endPos.z - startPos.z) * t;
+      if (t < 1) requestAnimationFrame(tick);
+      else resolve();
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
 function showDirectionPopup(text) {
   const el = document.createElement('div');
   el.textContent = text;
@@ -271,29 +290,36 @@ export const FriendNPCs = {
 
     for (const entry of this.entries) {
       const door = entry.friend.doorPos || entry.friend.position;
-      // Place the friend at the doorway, facing out toward the courtyard.
-      entry.mesh.position.set(door.x, 0, door.z);
       const playerPos0 = state.playerPos || { x: 0, z: 496 };
-      entry.mesh.rotation.y = Math.atan2(
-        playerPos0.x - door.x,
-        playerPos0.z - door.z,
-      );
-      entry.mesh.visible = true;
-      // Fade in over ~600ms (door opens), then a brief beat before walking
-      // so the eye registers the friend appearing at the door.
-      await fadeMesh(entry.mesh, 0, 1, 600);
-      await delay(250);
 
-      // Step a short distance forward from the door so the walk to the
-      // player starts in the open courtyard, not from a wall.
       const dx0 = playerPos0.x - door.x;
       const dz0 = playerPos0.z - door.z;
       const len0 = Math.hypot(dx0, dz0) || 1;
-      const stepOut = {
-        x: door.x + (dx0 / len0) * 1.6,
-        z: door.z + (dz0 / len0) * 1.6,
+
+      // Start the friend 1.8 units INSIDE the cabin (away from player), then
+      // walk them to the door while fading in — looks like the door opening.
+      const insidePos = {
+        x: door.x - (dx0 / len0) * 1.8,
+        z: door.z - (dz0 / len0) * 1.8,
       };
-      entry.worldPos.set(door.x, 0, door.z);
+      const doorOut = {
+        x: door.x + (dx0 / len0) * 0.4,
+        z: door.z + (dz0 / len0) * 0.4,
+      };
+
+      entry.mesh.rotation.y = Math.atan2(dx0, dz0); // face toward player
+      entry.mesh.visible = true;
+
+      // Walk through the door while fading in (~700ms).
+      await fadeAndWalkMesh(entry.mesh, insidePos, doorOut, 700);
+      await delay(300);
+
+      // Step further out so the walk to the player starts in open courtyard.
+      const stepOut = {
+        x: door.x + (dx0 / len0) * 2.0,
+        z: door.z + (dz0 / len0) * 2.0,
+      };
+      entry.worldPos.set(doorOut.x, 0, doorOut.z);
       await this._approach(entry, stepOut);
 
       const playerPos = state.playerPos || playerPos0;

@@ -167,7 +167,7 @@ function buildRoom(group, room, materials, rng, walls) {
   buildFloor(group, cx, cz, w, d, materials.floor);
   buildCeiling(group, cx, cz, w, d, materials.ceiling);
 
-  const gap = TUNNEL_WIDTH + 0.6;
+  const gap = TUNNEL_WIDTH;
   // North wall (z = cz - d/2)
   buildWallPanel(
     group,
@@ -335,9 +335,11 @@ function buildAlcoveBed(group, room, materials) {
 
 function buildTroll(group, cave, room, materials) {
   const cx = room.cx;
-  const cz = room.cz - 2.5;
+  // Push troll against the north wall and face him south toward the player.
+  const cz = room.cz + room.d / 2 - 3.5;
   const trollGroup = new THREE.Group();
   trollGroup.position.set(cx, 0, cz);
+  trollGroup.rotation.y = Math.PI;
 
   // Stone seat.
   const seat = new THREE.Mesh(

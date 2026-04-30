@@ -17,7 +17,7 @@ const PLAYER_RADIUS = 0.5;
 
 const WALK_SPEED = 6.0;
 const SPRINT_SPEED = 13.5;
-const CAVE_SPEED = 2.2;
+const CAVE_SPEED = 4.0;
 const SPRINT_DRAIN = 0.25;
 const SPRINT_REGEN = 0.15;
 const SPRINT_GRACE = 0.2;
@@ -316,6 +316,32 @@ export const Travel = {
     // and ground transitions tightly.
     this._cameraPos.y += (_scratchTargetPos.y - this._cameraPos.y) * 0.2;
     this._cameraLook.lerp(_scratchTargetLook, 0.18);
+
+    // Camera occlusion — prevent camera from passing through GLB collision geometry.
+    // Ray-march from player eye to ideal camera position; stop at first hit.
+    const CAMERA_PROBE = 0.35;
+    const eyeX = this.player.position.x;
+    const eyeZ = this.player.position.z;
+    if (!inCave && Collision.hits(this._cameraPos.x, this._cameraPos.z, CAMERA_PROBE)) {
+      const camDX = this._cameraPos.x - eyeX;
+      const camDZ = this._cameraPos.z - eyeZ;
+      let lo = 0;
+      let hi = 1;
+      for (let i = 0; i < 8; i++) {
+        const mid = (lo + hi) * 0.5;
+        const tx = eyeX + camDX * mid;
+        const tz = eyeZ + camDZ * mid;
+        if (Collision.hits(tx, tz, CAMERA_PROBE)) hi = mid;
+        else lo = mid;
+      }
+      const t = Math.max(0, lo - 0.02);
+      this._cameraPos.x = eyeX + camDX * t;
+      this._cameraPos.z = eyeZ + camDZ * t;
+      // Interpolate y along the same ratio so the camera doesn't float.
+      const fullLen = Math.hypot(camDX, camDZ);
+      const clampLen = fullLen > 0.001 ? Math.hypot(this._cameraPos.x - eyeX, this._cameraPos.z - eyeZ) / fullLen : 1;
+      this._cameraPos.y = this.player.position.y + (_scratchTargetPos.y - this.player.position.y) * clampLen;
+    }
 
     this.camera.position.copy(this._cameraPos);
     this.camera.lookAt(this._cameraLook);
@@ -661,7 +687,10 @@ export const Travel = {
       const dx = this.player.position.x - village.position.x;
       const dz = this.player.position.z - village.position.z;
       const dist = Math.hypot(dx, dz);
-      if (dist < village.radius) {
+      // Ashwick: don't trigger trade until player reaches the town's z-level
+      // (prevents the quest from firing while still approaching from the north).
+      const pastTownZ = village.name !== 'ashwick' || this.player.position.z <= village.position.z + 2;
+      if (dist < village.radius && pastTownZ) {
         this.triggered.add(village.name);
         if (village.name === 'ashwick' && !state.flags.leg1Complete) {
           RoadEvents.markLeg1Complete();

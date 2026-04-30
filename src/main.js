@@ -48,6 +48,7 @@ import { BackgroundMusic } from './game/BackgroundMusic.js';
 import { Tutorial } from './game/Tutorial.js';
 import { AdminPanel } from './ui/AdminPanel.js';
 import { TitleScreen } from './ui/TitleScreen.js';
+import { Compass } from './ui/Compass.js';
 
 // ---------------------------------------------------------------------------
 // Fade overlay helpers
@@ -442,6 +443,7 @@ function start() {
 
   StaminaBar.mount();
   Watch.mount();
+  Compass.mount();
   PhaseWarning.mount();
 
   GoblinPopup.mount();
