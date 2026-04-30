@@ -1,11 +1,20 @@
 // ---------------------------------------------------------------------------
-// Background music director — picks one looping track based on scene and
-// player position, fading between tracks when the selection changes. All
-// tracks share a master volume of 0.5 (half).
+// Background music director.
+//
+// Selection rules:
+//   - Cutscene scene             → intro.mp3
+//   - World, inside a town zone  → that town's dedicated track (loops)
+//   - World, outside any zone    → random rotation across ALL tracks with a
+//                                  random gap (20s..5min) between picks
+//
+// All tracks share a master volume of 0.5 (half) and crossfade over 2 seconds
+// when the selection changes.
 // ---------------------------------------------------------------------------
 
 const MASTER_VOLUME = 0.5;
 const FADE_DURATION = 2.0;
+const RANDOM_GAP_MIN_SEC = 20;
+const RANDOM_GAP_MAX_SEC = 5 * 60;
 
 const TRACKS = {
   hollowPath: 'Hollow Path.mp3',
@@ -16,6 +25,7 @@ const TRACKS = {
   deeproot: 'deeproot.mp3',
   waysEnd: "Way's End.mp3",
 };
+const TRACK_IDS = Object.keys(TRACKS);
 
 // Town music zones — entering the radius around the listed coords cross-fades
 // to that town's track. Centers match the GLB building positions used in
@@ -31,7 +41,10 @@ const TOWN_ZONES = [
 const _audios = {};
 let _initialized = false;
 let _lastTickMs = 0;
-let _desiredId = null;
+let _activeId = null;
+let _currentZoneId = null;
+let _randomTrackId = null;
+let _randomGapTimer = null;
 
 function srcFor(file) {
   const base = import.meta.env.BASE_URL || './';
@@ -44,35 +57,69 @@ function tryPlay(audio) {
   if (p && typeof p.catch === 'function') p.catch(() => {});
 }
 
+function pickRandomTrack() {
+  return TRACK_IDS[Math.floor(Math.random() * TRACK_IDS.length)];
+}
+
+function scheduleNextRandom() {
+  if (_randomGapTimer) clearTimeout(_randomGapTimer);
+  _randomTrackId = null;
+  const gapMs =
+    (RANDOM_GAP_MIN_SEC + Math.random() * (RANDOM_GAP_MAX_SEC - RANDOM_GAP_MIN_SEC)) *
+    1000;
+  _randomGapTimer = setTimeout(() => {
+    _randomGapTimer = null;
+    _randomTrackId = pickRandomTrack();
+    const a = _audios[_randomTrackId];
+    if (a) a.currentTime = 0;
+  }, gapMs);
+}
+
+function townZoneId(scene, playerPos) {
+  if (scene !== 'world' || !playerPos) return null;
+  for (const zone of TOWN_ZONES) {
+    const dx = playerPos.x - zone.x;
+    const dz = playerPos.z - zone.z;
+    if (dx * dx + dz * dz < zone.r * zone.r) return zone.id;
+  }
+  return null;
+}
+
 function pickFor(scene, playerPos) {
   if (scene === 'cutscene') return 'intro';
-  if (scene === 'world' && playerPos) {
-    for (const zone of TOWN_ZONES) {
-      const dx = playerPos.x - zone.x;
-      const dz = playerPos.z - zone.z;
-      if (dx * dx + dz * dz < zone.r * zone.r) return zone.id;
-    }
-  }
-  return 'hollowPath';
+  const zone = townZoneId(scene, playerPos);
+  if (zone) return zone;
+  return _randomTrackId;
 }
 
 export const BackgroundMusic = {
   init() {
     if (typeof Audio === 'undefined' || _initialized) return;
     _initialized = true;
-    for (const id of Object.keys(TRACKS)) {
+    for (const id of TRACK_IDS) {
       const a = new Audio(srcFor(TRACKS[id]));
-      a.loop = true;
+      a.loop = false;
       a.preload = 'auto';
       a.volume = 0;
+      a.addEventListener('ended', () => {
+        // While inside a matching town zone, loop the track immediately.
+        if (id === _currentZoneId) {
+          a.currentTime = 0;
+          tryPlay(a);
+        } else if (id === _randomTrackId) {
+          // Random rotation: gap, then pick a new track.
+          scheduleNextRandom();
+        }
+      });
       _audios[id] = a;
     }
+    _randomTrackId = pickRandomTrack();
     _lastTickMs = performance.now();
 
     // Browsers block autoplay until the first user gesture. Retry whatever
     // track is currently desired on the first interaction.
     const resume = () => {
-      if (_desiredId && _audios[_desiredId]?.paused) tryPlay(_audios[_desiredId]);
+      if (_activeId && _audios[_activeId]?.paused) tryPlay(_audios[_activeId]);
     };
     window.addEventListener('pointerdown', resume, { once: true });
     window.addEventListener('keydown', resume, { once: true });
@@ -84,20 +131,18 @@ export const BackgroundMusic = {
     const dt = Math.min(0.1, (now - _lastTickMs) / 1000);
     _lastTickMs = now;
 
-    _desiredId = pickFor(scene, playerPos);
+    _currentZoneId = townZoneId(scene, playerPos);
+    _activeId = pickFor(scene, playerPos);
     const step = (MASTER_VOLUME / FADE_DURATION) * dt;
 
-    for (const id of Object.keys(_audios)) {
+    for (const id of TRACK_IDS) {
       const a = _audios[id];
-      const target = id === _desiredId ? MASTER_VOLUME : 0;
+      const target = id === _activeId ? MASTER_VOLUME : 0;
       if (a.volume < target) a.volume = Math.min(target, a.volume + step);
       else if (a.volume > target) a.volume = Math.max(target, a.volume - step);
 
       if (a.volume > 0.001 && a.paused) tryPlay(a);
-      else if (a.volume <= 0.001 && !a.paused) {
-        a.pause();
-        a.currentTime = 0;
-      }
+      else if (a.volume <= 0.001 && !a.paused) a.pause();
     }
   },
 };
