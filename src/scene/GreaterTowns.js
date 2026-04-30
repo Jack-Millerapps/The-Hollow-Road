@@ -360,12 +360,14 @@ export function buildVeilMarketTown(scene, reg) {
 
 // =============================================================
 
-function loadTownGLB(path, group) {
+function loadTownGLB(path, group, opts = {}) {
+  const { dx = 0, dy = 0, dz = 0, rotateY = 0, walkable = false } = opts;
   new GLTFLoader().load(
     path,
     (gltf) => {
       const model = gltf.scene;
       model.scale.setScalar(20);
+      model.rotation.y = rotateY;
       model.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -377,12 +379,34 @@ function loadTownGLB(path, group) {
       if (isFinite(box.min.y)) {
         model.position.y = -box.min.y;
       }
+      model.position.x += dx;
+      model.position.y += dy;
+      model.position.z += dz;
       group.add(model);
-      console.log(`[GLB] Loaded ${path} — bounds y ${box.min.y.toFixed(1)} → ${box.max.y.toFixed(1)}, lifted by ${model.position.y.toFixed(1)}, group:`, group.position);
+      if (walkable) {
+        group.updateMatrixWorld(true);
+        registerMeshCollisionBoxes(model);
+      }
+      console.log(`[GLB] Loaded ${path} — bounds y ${box.min.y.toFixed(1)} → ${box.max.y.toFixed(1)}, pos (${model.position.x.toFixed(1)}, ${model.position.y.toFixed(1)}, ${model.position.z.toFixed(1)}), group:`, group.position);
     },
     undefined,
     (err) => console.error(`[GLB] Failed to load ${path}:`, err),
   );
+}
+
+function registerMeshCollisionBoxes(model) {
+  const meshBox = new THREE.Box3();
+  model.traverse((child) => {
+    if (!child.isMesh || !child.geometry) return;
+    meshBox.setFromObject(child);
+    if (!isFinite(meshBox.min.x)) return;
+    const cx = (meshBox.min.x + meshBox.max.x) / 2;
+    const cz = (meshBox.min.z + meshBox.max.z) / 2;
+    const halfW = (meshBox.max.x - meshBox.min.x) / 2;
+    const halfD = (meshBox.max.z - meshBox.min.z) / 2;
+    if (halfW < 0.5 || halfD < 0.5) return;
+    Collision.registerBox(cx, cz, halfW, halfD);
+  });
 }
 
 export function buildStonehushTown(scene, reg) {
@@ -393,7 +417,7 @@ export function buildStonehushTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(-800, 0, -5000);
-  loadTownGLB(MODEL_URLS.Stonehush, group);
+  loadTownGLB(MODEL_URLS.Stonehush, group, { dy: 1, dx: -30, rotateY: Math.PI / 6 });
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
@@ -406,7 +430,7 @@ export function buildDeeprootTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(600, 0, -6000);
-  loadTownGLB(MODEL_URLS.Deeproot, group);
+  loadTownGLB(MODEL_URLS.Deeproot, group, { dy: -1, dx: -30, rotateY: -Math.PI / 6 });
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
@@ -420,7 +444,7 @@ export function buildMirrorTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(200, 0, -7800);
-  loadTownGLB(MODEL_URLS.Mirror_town, group);
+  loadTownGLB(MODEL_URLS.Mirror_town, group, { rotateY: Math.PI / 6 });
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
@@ -431,7 +455,7 @@ export function buildUnnamedTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(0, 0, -14500);
-  loadTownGLB(MODEL_URLS.The_unamed, group);
+  loadTownGLB(MODEL_URLS.The_unamed, group, { dy: -1, rotateY: -Math.PI / 6, walkable: true });
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });

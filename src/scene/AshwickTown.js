@@ -60,6 +60,7 @@ export function build(scene, reg) {
   new GLTFLoader().load(MODEL_URLS.Ashwick, (gltf) => {
     const model = gltf.scene;
     model.scale.setScalar(20);
+    model.rotation.y = Math.PI / 6;
     model.traverse((child) => {
       if (child.isMesh) {
         child.castShadow = true;
@@ -69,6 +70,8 @@ export function build(scene, reg) {
     model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(model);
     if (isFinite(box.min.y)) model.position.y = -box.min.y;
+    model.position.y += 1;
+    model.position.x -= 30;
     townRoot.add(model);
   });
 
