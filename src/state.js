@@ -83,8 +83,8 @@ function freshDefaults() {
     currentScene: 'cutscene',
     gameTime: 0,
     // -- Phase 2 --------------------------------------------------------------
-    stamina: 1.0,
-    maxStamina: 1.0,
+    stamina: 2.0,
+    maxStamina: 2.0,
     isSprinting: false,
     timePaused: false,
     dialogueActive: false,

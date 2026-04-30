@@ -15,8 +15,8 @@ import { PauseManager } from './PauseManager.js';
 
 const PLAYER_RADIUS = 0.5;
 
-const WALK_SPEED = 4.0;
-const SPRINT_SPEED = 9.0;
+const WALK_SPEED = 6.0;
+const SPRINT_SPEED = 13.5;
 const CAVE_SPEED = 2.2;
 const SPRINT_DRAIN = 0.25;
 const SPRINT_REGEN = 0.15;
