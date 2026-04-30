@@ -5,7 +5,7 @@ const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 const _c = new THREE.Vector3();
 
-export function voxelizeMeshCollision(model, { cellSize = 2, minY = 0.5 } = {}) {
+export function voxelizeMeshCollision(model, { cellSize = 1, minY = 0.5 } = {}) {
   const cells = new Set();
 
   model.traverse((child) => {

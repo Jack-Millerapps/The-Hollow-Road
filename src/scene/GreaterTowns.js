@@ -431,7 +431,7 @@ export function buildMirrorTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(200, 0, -7800);
-  loadTownGLB(MODEL_URLS.Mirror_town, group, { rotateY: Math.PI / 3, walkable: true });
+  loadTownGLB(MODEL_URLS.Mirror_town, group, { rotateY: -Math.PI / 2, walkable: true });
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
@@ -442,7 +442,7 @@ export function buildUnnamedTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(0, 0, -14500);
-  loadTownGLB(MODEL_URLS.The_unamed, group, { dy: -1, rotateY: Math.PI / 12, walkable: true });
+  loadTownGLB(MODEL_URLS.The_unamed, group, { dy: -1, rotateY: -Math.PI / 12, walkable: true });
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });

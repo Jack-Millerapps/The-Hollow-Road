@@ -71,7 +71,7 @@ export function build(scene, reg) {
     model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(model);
     if (isFinite(box.min.y)) model.position.y = -box.min.y;
-    model.position.y -= 1;
+    model.position.y += 0.5;
     model.position.x -= 30;
     townRoot.add(model);
     townRoot.updateMatrixWorld(true);
