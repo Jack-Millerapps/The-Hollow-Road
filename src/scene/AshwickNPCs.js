@@ -5,6 +5,7 @@ import { Travel } from '../game/Travel.js';
 import { QuestSystem } from '../game/QuestSystem.js';
 import { DialoguePanel } from '../ui/DialoguePanel.js';
 import { AshwickWorld, getQuestMeshes } from './AshwickTown.js';
+import { Collision } from '../game/Collision.js';
 
 // Ashwick town-model center: the GLB is loaded with dx=-30 offset, so the
 // building cluster is centered around (-30, MILL_Z). NPCs anchor here, not at
@@ -15,6 +16,34 @@ const SPEED = 0.6;
 const AI_INTERVAL = 0.5;
 const INTERACT_R = 2;
 const LABEL_R = 3;
+const NPC_RADIUS = 0.55;
+const SAFETY_SEARCH_MAX_R = 18;
+const SAFETY_RING_STEP = 0.85;
+
+function isBlocked(x, z, r = NPC_RADIUS) {
+  // If collision hasn't been registered yet (GLB still loading), treat as free.
+  if (!Collision?.count || Collision.count() === 0) return false;
+  return Collision.hits(x, z, r);
+}
+
+function snapToSafeXZ(pos, { r = NPC_RADIUS, maxR = SAFETY_SEARCH_MAX_R } = {}) {
+  const x0 = pos.x;
+  const z0 = pos.z;
+  if (!isBlocked(x0, z0, r)) return { x: x0, z: z0 };
+
+  // Concentric rings; enough samples per ring to escape voxelized geometry.
+  for (let ring = 1; ring * SAFETY_RING_STEP <= maxR; ring++) {
+    const rr = ring * SAFETY_RING_STEP;
+    const samples = Math.max(10, Math.floor((2 * Math.PI * rr) / 1.1));
+    for (let i = 0; i < samples; i++) {
+      const a = (i / samples) * Math.PI * 2;
+      const x = x0 + Math.cos(a) * rr;
+      const z = z0 + Math.sin(a) * rr;
+      if (!isBlocked(x, z, r)) return { x, z };
+    }
+  }
+  return { x: x0, z: z0 };
+}
 
 const cabinAngles = [0.2, 1.1, 2.0, 3.35, 4.5, 5.4];
 const cabinRs = [14, 16, 15, 17, 15, 16];
@@ -128,6 +157,7 @@ let _root = null;
 let _npcs = [];
 let _aiAccum = 0;
 let _prevE = false;
+let _lastCollisionCount = -1;
 
 function phaseName() {
   return DayNight.getCurrentPhase?.() || 'day';
@@ -269,7 +299,8 @@ function buildNpcList() {
 
 function spawnWaypoint(n) {
   const p = n.dayWaypoints?.[0] ?? n.nightPos ?? { x: AshwickWorld.MILL_X, z: MZ };
-  return { x: Number(p.x) || 0, z: Number(p.z) || MZ };
+  const raw = { x: Number(p.x) || 0, z: Number(p.z) || MZ };
+  return snapToSafeXZ(raw);
 }
 
 export const AshwickNPCs = {
@@ -285,10 +316,12 @@ export const AshwickNPCs = {
       if (!n?.group) continue;
       const wp0 = spawnWaypoint(n);
       n.group.position.set(wp0.x, 0, wp0.z);
+      n._spawnSafeChecked = false;
       _root.add(n.group);
     }
     _aiAccum = 0;
     _prevE = false;
+    _lastCollisionCount = -1;
   },
 
   update(delta, time, playerPos) {
@@ -303,6 +336,12 @@ export const AshwickNPCs = {
     const home = atHomePhase();
     const dayish = morningPhase();
 
+    // GLB collision registers asynchronously (voxelization runs after load).
+    // Once colliders appear, make sure nobody is sitting inside a model.
+    const colCount = Collision?.count?.() ?? 0;
+    const collisionJustLoaded = colCount > 0 && colCount !== _lastCollisionCount;
+    _lastCollisionCount = colCount;
+
     let nearestInteract = null;
     let nearestD2 = INTERACT_R * INTERACT_R;
 
@@ -311,6 +350,16 @@ export const AshwickNPCs = {
     if (aiTick) _aiAccum = 0;
 
     for (const n of _npcs) {
+      if (collisionJustLoaded || !n._spawnSafeChecked) {
+        const gx0 = n.group.position.x;
+        const gz0 = n.group.position.z;
+        if (isBlocked(gx0, gz0, NPC_RADIUS)) {
+          const safe0 = snapToSafeXZ({ x: gx0, z: gz0 });
+          n.group.position.set(safe0.x, 0, safe0.z);
+        }
+        n._spawnSafeChecked = true;
+      }
+
       if (n.role === 'watch') {
         n.group.visible = phase === 'night' || (phase === 'sunset' && DayNight.getPhaseProgress?.() > 0.4);
         if (!n.group.visible) {
@@ -321,7 +370,8 @@ export const AshwickNPCs = {
         const t = time * 0.15;
         const rx = MX + Math.cos(t) * 18;
         const rz = MZ + Math.sin(t) * 14;
-        n.group.position.set(rx, 0, rz);
+        const safe = snapToSafeXZ({ x: rx, z: rz });
+        n.group.position.set(safe.x, 0, safe.z);
         const tx = MX + Math.cos(t + 0.3) * 18;
         const tz = MZ + Math.sin(t + 0.3) * 14;
         n.group.lookAt(tx, n.group.position.y, tz);
@@ -386,6 +436,12 @@ export const AshwickNPCs = {
         const len = Math.hypot(vx, vz) || 1;
         n.group.position.x += (vx / len) * Math.min(step, len);
         n.group.position.z += (vz / len) * Math.min(step, len);
+
+        if (isBlocked(n.group.position.x, n.group.position.z, NPC_RADIUS)) {
+          const safe = snapToSafeXZ({ x: n.group.position.x, z: n.group.position.z });
+          n.group.position.set(safe.x, 0, safe.z);
+          n.pauseUntil = Math.min(n.pauseUntil, time + 0.25);
+        }
         // Face walk direction; only turn to the player if they are close.
         if (d2player < LABEL_R * LABEL_R) {
           n.group.lookAt(px, n.group.position.y, pz);
