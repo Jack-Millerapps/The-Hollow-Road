@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ChunkManager } from '../game/ChunkManager.js';
 import { getSoftCircleTexture } from './spriteTextures.js';
 import { MODEL_URLS } from './modelUrls.js';
+import { voxelizeMeshCollision } from './glbCollision.js';
 
 // Westwind — the player's hometown, perched just north of the existing
 // road network. Builds a small village and a dirt path running south to
@@ -533,8 +534,10 @@ export const Westwind = {
       model.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(model);
       if (isFinite(box.min.y)) model.position.y = -box.min.y;
-      model.position.y -= 0.1;
+      model.position.y -= 0.5;
       group.add(model);
+      group.updateMatrixWorld(true);
+      voxelizeMeshCollision(model);
     });
 
     scene.add(group);

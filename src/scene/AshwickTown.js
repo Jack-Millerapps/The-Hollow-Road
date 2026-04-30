@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ChunkManager } from '../game/ChunkManager.js';
 import { SceneManager } from './SceneManager.js';
 import { MODEL_URLS } from './modelUrls.js';
+import { voxelizeMeshCollision } from './glbCollision.js';
 
 export const AshwickWorld = {
   MILL_X: 0,
@@ -70,9 +71,11 @@ export function build(scene, reg) {
     model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(model);
     if (isFinite(box.min.y)) model.position.y = -box.min.y;
-    model.position.y += 1;
+    model.position.y -= 1;
     model.position.x -= 30;
     townRoot.add(model);
+    townRoot.updateMatrixWorld(true);
+    voxelizeMeshCollision(model);
   });
 
   ChunkManager.register(townRoot, 0, AshwickWorld.MILL_Z);
