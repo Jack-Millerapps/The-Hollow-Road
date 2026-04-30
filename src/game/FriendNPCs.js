@@ -55,6 +55,41 @@ function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// Walk every material on the mesh to a target opacity. Used to fade friends
+// in as they "open the door" during the arrival cutscene so they don't pop
+// in mid-air.
+function setMeshOpacity(mesh, opacity) {
+  mesh.traverse((child) => {
+    const m = child.material;
+    if (!m) return;
+    if (Array.isArray(m)) {
+      for (const mm of m) {
+        mm.transparent = true;
+        mm.opacity = opacity;
+        mm.depthWrite = opacity >= 0.99;
+      }
+    } else {
+      m.transparent = true;
+      m.opacity = opacity;
+      m.depthWrite = opacity >= 0.99;
+    }
+  });
+}
+
+function fadeMesh(mesh, from, to, durationMs) {
+  return new Promise((resolve) => {
+    const start = performance.now();
+    setMeshOpacity(mesh, from);
+    function tick(now) {
+      const t = Math.min(1, (now - start) / durationMs);
+      setMeshOpacity(mesh, from + (to - from) * t);
+      if (t < 1) requestAnimationFrame(tick);
+      else resolve();
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
 function showDirectionPopup(text) {
   const el = document.createElement('div');
   el.textContent = text;
@@ -105,6 +140,7 @@ export const FriendNPCs = {
     this.travelRef = travel;
     this.sceneRef = scene;
 
+    const arrivalDone = !!state.flags.friendsArrived;
     for (const friend of FRIENDS) {
       const mesh = makeVillagerMesh({
         robeColor: friend.robeColor,
@@ -117,6 +153,13 @@ export const FriendNPCs = {
       mesh.userData.phase = Math.random() * Math.PI * 2;
       mesh.userData.homeX = friend.position.x;
       mesh.userData.homeZ = friend.position.z;
+      // First-time arrival: keep each friend hidden inside their cabin until
+      // it is their turn to walk out. On any subsequent visit they are just
+      // standing at home.
+      if (!arrivalDone) {
+        mesh.visible = false;
+        setMeshOpacity(mesh, 0);
+      }
       scene.add(mesh);
       this.entries.push({
         friend,
@@ -218,13 +261,42 @@ export const FriendNPCs = {
     // Disable movement while the scene plays.
     travel.pause?.();
 
-    // Park each friend at its cabin door to start.
-    for (const { mesh, friend } of this.entries) {
-      mesh.position.set(friend.position.x, 0, friend.position.z);
+    // Each friend starts hidden inside their cabin. They will pop into view
+    // at their door, walk a short way into the courtyard, and only then
+    // approach the player — so they never appear to phase through walls.
+    for (const { mesh } of this.entries) {
+      mesh.visible = false;
+      setMeshOpacity(mesh, 0);
     }
 
     for (const entry of this.entries) {
-      const playerPos = state.playerPos || { x: 0, z: 496 };
+      const door = entry.friend.doorPos || entry.friend.position;
+      // Place the friend at the doorway, facing out toward the courtyard.
+      entry.mesh.position.set(door.x, 0, door.z);
+      const playerPos0 = state.playerPos || { x: 0, z: 496 };
+      entry.mesh.rotation.y = Math.atan2(
+        playerPos0.x - door.x,
+        playerPos0.z - door.z,
+      );
+      entry.mesh.visible = true;
+      // Fade in over ~600ms (door opens), then a brief beat before walking
+      // so the eye registers the friend appearing at the door.
+      await fadeMesh(entry.mesh, 0, 1, 600);
+      await delay(250);
+
+      // Step a short distance forward from the door so the walk to the
+      // player starts in the open courtyard, not from a wall.
+      const dx0 = playerPos0.x - door.x;
+      const dz0 = playerPos0.z - door.z;
+      const len0 = Math.hypot(dx0, dz0) || 1;
+      const stepOut = {
+        x: door.x + (dx0 / len0) * 1.6,
+        z: door.z + (dz0 / len0) * 1.6,
+      };
+      entry.worldPos.set(door.x, 0, door.z);
+      await this._approach(entry, stepOut);
+
+      const playerPos = state.playerPos || playerPos0;
       // Target: ~2.2 units in front of the player on the player's z side.
       const target = {
         x: playerPos.x + (entry.friend.position.x < 0 ? -1 : 1) * 0.8,

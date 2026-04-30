@@ -4,6 +4,7 @@ import { Road } from './scene/Road.js';
 import { Environment } from './scene/Environment.js';
 import { VillageBuilder } from './scene/VillageBuilder.js';
 import { AshwickNPCs } from './scene/AshwickNPCs.js';
+import { TownNPCs } from './scene/TownNPCs.js';
 import { Westwind } from './scene/Westwind.js';
 import { CabinInterior } from './scene/CabinInterior.js';
 import { DayNight } from './scene/DayNight.js';
@@ -37,6 +38,7 @@ import { Exchanger } from './game/Exchanger.js';
 import { FPSCounter } from './ui/FPSCounter.js';
 import { ControlsIntro } from './ui/ControlsIntro.js';
 import { ObjectiveTracker } from './ui/ObjectiveTracker.js';
+import { QuestBanner } from './ui/QuestBanner.js';
 import { HUDTutorial } from './ui/HUDTutorial.js';
 import { DebugOverlay } from './ui/DebugOverlay.js';
 // Engine fixes (this prompt)
@@ -413,6 +415,7 @@ function start() {
   Tutorial.mount();
   Travel.init(camera, scene, { canvas: renderer.domElement });
   AshwickNPCs.init(scene);
+  TownNPCs.init(scene);
   RoadEvents.init(scene, {
     pause: () => Travel.pause(),
     resume: () => Travel.resume(),
@@ -457,6 +460,7 @@ function start() {
   Exchanger.init(scene, { travel: Travel });
   FPSCounter.mount();
   ObjectiveTracker.mount();
+  QuestBanner.mount();
 
   void Epilogue;
   AdminPanel.mount({ teleport: teleportPlayer });
@@ -509,6 +513,7 @@ function start() {
         Exchanger.update(state.playerPos);
         RoadEvents.update(delta, state.playerPos, Travel);
         AshwickNPCs.update(delta, t, state.playerPos);
+        TownNPCs.update(delta, t, state.playerPos);
       } else {
         Goblins.update(delta, state.playerPos);
       }

@@ -250,11 +250,8 @@ export const Road = {
     return this.segments[0] || null;
   },
 
-  update(delta, isWalking) {
-    if (!this.texture) return;
-    if (isWalking) {
-      this.texture.offset.y -= delta * 0.3;
-    }
+  update() {
+    // Road stays fixed in world space — no texture scroll on walk.
   },
 
   // Returns perpendicular distance from (x,z) to the nearest road segment.

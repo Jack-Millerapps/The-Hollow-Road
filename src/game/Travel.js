@@ -52,6 +52,20 @@ const _rollAxis = new THREE.Vector3(0, 0, 1);
 
 const WESTWIND_EXIT_Z = 470;
 
+// Each gate sits just past a town along the road. The player cannot cross a
+// gate (i.e. their z cannot go below `gateZ`) until that town's
+// `tradeComplete` flag is set by QuestSystem.complete / TradeSystem.choose.
+//
+// Ordered north → south so we can pick the first unsatisfied gate ahead of
+// the player and use that as the cap.
+const TOWN_GATES = [
+  { name: 'ashwick', gateZ: -540, displayName: 'Ashwick' },
+  { name: 'veilMarket', gateZ: -2545, displayName: 'The Veil Market' },
+  { name: 'stonehush', gateZ: -5045, displayName: 'Stonehush' },
+  { name: 'deeproot', gateZ: -6045, displayName: 'Deeproot' },
+  { name: 'mirrorTown', gateZ: -7840, displayName: 'Mirror Town' },
+];
+
 export const Travel = {
   scene: null,
   camera: null,
@@ -581,6 +595,24 @@ export const Travel = {
           DayNight.setStartPhase('day');
         }
         notify();
+      }
+    }
+
+    // --- Per-town quest gates --------------------------------------------
+    // Each gate is just south of its town. Until the town's quest/trade is
+    // finished (state.tradeComplete[name] === true) the player gets shoved
+    // back to gateZ + small offset and a prompt nudges them to finish up.
+    if (!inCave && !state.flags.endingStarted) {
+      for (const gate of TOWN_GATES) {
+        if (state.tradeComplete?.[gate.name]) continue;
+        if (this.player.position.z < gate.gateZ) {
+          this.player.position.z = gate.gateZ + 1.5;
+          state.playerPos.z = this.player.position.z;
+          this._showSoftPrompt(
+            `Finish your business in ${gate.displayName} before walking on.`,
+          );
+          break;
+        }
       }
     }
 

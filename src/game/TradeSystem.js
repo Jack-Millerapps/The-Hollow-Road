@@ -40,8 +40,15 @@ function classifyWrongness(option, village) {
 
 export const TradeSystem = {
   startTrade(village, onComplete) {
-    // Ashwick uses world NPCs (Aldric + townsfolk); no modal on zone entry.
+    // Ashwick uses world NPCs (Aldric + townsfolk). On the very first time
+    // the player enters the radius we still auto-open the miller's intro
+    // so the quest can't be missed; afterwards the player goes back to
+    // talking to him in-world.
     if (village.name === 'ashwick') {
+      const q = state.quests?.ashwick;
+      if (!q || q.step === 0) {
+        QuestSystem.talkAshwickMiller();
+      }
       if (onComplete) onComplete();
       return;
     }

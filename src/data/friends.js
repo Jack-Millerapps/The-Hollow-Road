@@ -7,6 +7,10 @@
 //   Tomas  — watch + sleepingBag
 //   Elen   — ripMap
 
+// `position` — where the friend stands idle once the arrival sequence ends.
+// `doorPos`  — an open spot just outside the friend's cabin door, used for the
+//              arrival cutscene so they appear emerging from the door instead
+//              of clipping through a wall on a straight line to the player.
 export const FRIENDS = [
   {
     id: 'mira',
@@ -14,6 +18,7 @@ export const FRIENDS = [
     robeColor: 0x5a3020,
     skinColor: 0xd7b78c,
     position: { x: 7.5, z: 502 },
+    doorPos: { x: 5.5, z: 500 },
     facing: -Math.PI / 1.5,
     ethos:
       "You won't survive on the road. Not at night. The caves are the only shelter, and the trolls won't open their hollows for an empty hand. Take these. The pickaxe lets you mine what they want. The shovel — well. The shovel is for what you'd rather not be seen burying.",
@@ -26,6 +31,7 @@ export const FRIENDS = [
     robeColor: 0x2a3548,
     skinColor: 0xc29a74,
     position: { x: -7.5, z: 491 },
+    doorPos: { x: -5.5, z: 493 },
     facing: Math.PI / 4,
     ethos:
       "My grandfather walked the road. He came back. He told me one thing before he died: the road forgives no one who can't tell day from night. This watch was his. The sleeping bag was his too. He carried it for forty years. He said the only mercy on the road is sleeping through the dark hours.",
@@ -38,6 +44,7 @@ export const FRIENDS = [
     robeColor: 0x4a2a4a,
     skinColor: 0xcfa382,
     position: { x: 8.5, z: 491 },
+    doorPos: { x: 6.5, z: 493 },
     facing: Math.PI,
     ethos:
       "I tore this from a book my brother left when he disappeared. The map is incomplete on purpose. He said no one is ready to see the whole road at once. I think he was right. You'll earn the rest. Or you won't.",
