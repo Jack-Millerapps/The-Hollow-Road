@@ -47,8 +47,9 @@ function renderCurrent() {
   });
 
   // Ensure any previous panel DOM is gone before we mount the new one so
-  // there's no flash of the prior body text.
-  if (DialoguePanel.root) DialoguePanel.close();
+  // there's no flash of the prior body text. Use keepFlag so the close
+  // doesn't trip pointer-lock acquisition between consecutive dialogues.
+  if (DialoguePanel.root) DialoguePanel.close({ keepFlag: true });
 
   DialoguePanel.open({
     title: cfg.title,

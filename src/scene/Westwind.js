@@ -553,12 +553,12 @@ export const Westwind = {
     if (this.group) this.group.visible = false;
   },
 
-  // World-space spawn on the south edge of the village facing the road
-  // south. Default Three.js forward is -z, so rotationY 0 points the
-  // player toward lower-z (the road toward Ashwick).
+  // World-space spawn on the road just south of the village so the player
+  // doesn't land inside a voxelized GLB wall. Default Three.js forward is
+  // -z, so rotationY 0 points the player toward lower-z (Ashwick).
   getArrivalSpawn() {
     return {
-      position: { x: this.center.x, z: this.center.z - 4 },
+      position: { x: this.center.x, z: this.center.z - 22 },
       rotationY: 0,
     };
   },
