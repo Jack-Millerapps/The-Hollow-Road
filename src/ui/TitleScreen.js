@@ -25,12 +25,10 @@ function makeStyleTag() {
   user-select: none;
   pointer-events: auto;
   overflow: hidden;
-  opacity: 0;
-  transition: opacity 1.2s ease;
+  opacity: 1;
 }
 
-.title-screen.visible { opacity: 1; }
-.title-screen.fadeout { opacity: 0; transition: opacity 1.2s ease; }
+.title-screen.fadeout { opacity: 0; transition: opacity 0.9s ease; }
 
 .title-screen .ember {
   position: absolute;
@@ -236,17 +234,14 @@ export const TitleScreen = {
       document.body.appendChild(root);
       this.root = root;
 
-      requestAnimationFrame(() => root.classList.add('visible'));
-
       const finish = (mode) => {
         document.removeEventListener('keydown', onKey);
         root.classList.add('fadeout');
-        root.classList.remove('visible');
         setTimeout(() => {
           root.remove();
           this.root = null;
           resolve({ mode });
-        }, 1200);
+        }, 900);
       };
 
       const showConfirm = () => {

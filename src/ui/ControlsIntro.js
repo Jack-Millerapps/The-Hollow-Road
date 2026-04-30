@@ -107,35 +107,6 @@ export const ControlsIntro = {
     wrap.style.opacity = '0';
     setTimeout(() => {
       wrap.remove();
-      showNightLine();
     }, 500);
   },
 };
-
-function showNightLine() {
-  const el = document.createElement('div');
-  el.textContent = 'It is night. The road is no kinder for it.';
-  Object.assign(el.style, {
-    position: 'fixed',
-    top: '40%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    fontFamily: 'Georgia, serif',
-    fontStyle: 'italic',
-    fontSize: '22px',
-    color: '#e5d9b6',
-    opacity: '0',
-    transition: 'opacity 1200ms ease',
-    zIndex: '85',
-    pointerEvents: 'none',
-    textShadow: '0 0 18px rgba(0,0,0,0.9)',
-  });
-  document.body.appendChild(el);
-  requestAnimationFrame(() => {
-    el.style.opacity = '1';
-  });
-  setTimeout(() => {
-    el.style.opacity = '0';
-    setTimeout(() => el.remove(), 1400);
-  }, 3500);
-}

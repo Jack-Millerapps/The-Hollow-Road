@@ -477,10 +477,10 @@ function start() {
   const fade = document.getElementById('fade-overlay');
   if (fade) {
     fade.style.transition = 'none';
-    // Keep transparent: IntroCutscene is its own fullscreen layer. A solid
-    // black fade here sits above the canvas and below the intro (z-index),
-    // but if anything blocks the intro the game looked permanently black.
-    fade.style.opacity = '0';
+    // Hold the screen black during boot and across every scene transition
+    // until the next entry point fades it out explicitly. Lets the title
+    // screen mount on top of black instead of a flash of the live canvas.
+    fade.style.opacity = '1';
     fade.style.pointerEvents = 'none';
   }
 
@@ -610,10 +610,10 @@ function start() {
       }
     }
 
-    // New game (or fallback): wipe any prior save + in-memory state and run
-    // the original intro flow.
+    // New game (or fallback): wipe any prior save and run the original intro
+    // flow. State is already at fresh defaults on page load — no need to
+    // re-reset and risk swapping object references modules captured at init.
     Save.clear();
-    Save.resetInMemory();
     IntroCutscene.start(() => {
       enterCabin();
     });

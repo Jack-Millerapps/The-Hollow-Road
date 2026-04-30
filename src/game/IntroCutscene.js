@@ -231,10 +231,19 @@ export const IntroCutscene = {
       notify();
       Save.write(state);
 
-      // 6. Hold, then fade to black.
+      // 6. Hold, then hand off to black.
       await wait(3000);
       await fadeTo(line, 0, 900);
-      await fadeTo(root, 0, 1600);
+
+      // Raise the global fade-overlay (z-index 50) to opaque BEFORE removing
+      // the intro root so the live canvas behind us never becomes visible
+      // during the handoff to the brother scene. enterCabin will fade it back.
+      const fadeOverlay = document.getElementById('fade-overlay');
+      if (fadeOverlay) {
+        fadeOverlay.style.transition = 'none';
+        fadeOverlay.style.opacity = '1';
+      }
+      await wait(60);
 
       root.remove();
       this.root = null;

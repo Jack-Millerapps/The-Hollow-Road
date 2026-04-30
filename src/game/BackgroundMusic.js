@@ -26,6 +26,12 @@ const TRACKS = {
   waysEnd: "Way's End.mp3",
 };
 const TRACK_IDS = Object.keys(TRACKS);
+// Tracks that should ONLY play inside their matching town zone, never in the
+// outdoor random rotation.
+const TOWN_ONLY_TRACKS = new Set(['veilMarket']);
+const RANDOM_TRACK_IDS = TRACK_IDS.filter(
+  (id) => id !== 'intro' && !TOWN_ONLY_TRACKS.has(id),
+);
 
 // Town music zones — entering the radius around the listed coords cross-fades
 // to that town's track. Centers match the GLB building positions used in
@@ -58,7 +64,7 @@ function tryPlay(audio) {
 }
 
 function pickRandomTrack() {
-  return TRACK_IDS[Math.floor(Math.random() * TRACK_IDS.length)];
+  return RANDOM_TRACK_IDS[Math.floor(Math.random() * RANDOM_TRACK_IDS.length)];
 }
 
 function scheduleNextRandom() {
