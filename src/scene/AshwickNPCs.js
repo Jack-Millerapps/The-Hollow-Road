@@ -6,6 +6,10 @@ import { QuestSystem } from '../game/QuestSystem.js';
 import { DialoguePanel } from '../ui/DialoguePanel.js';
 import { AshwickWorld, getQuestMeshes } from './AshwickTown.js';
 
+// Ashwick town-model center: the GLB is loaded with dx=-30 offset, so the
+// building cluster is centered around (-30, MILL_Z). NPCs anchor here, not at
+// MILL_X=0, so their waypoints land in town instead of in the road grass.
+const MX = AshwickWorld.MILL_X - 30;
 const MZ = AshwickWorld.MILL_Z;
 const SPEED = 0.6;
 const AI_INTERVAL = 0.5;
@@ -13,12 +17,12 @@ const INTERACT_R = 2;
 const LABEL_R = 3;
 
 const cabinAngles = [0.2, 1.1, 2.0, 3.35, 4.5, 5.4];
-const cabinRs = [19, 22, 20, 24, 21, 23];
+const cabinRs = [14, 16, 15, 17, 15, 16];
 
 function cabinWorld(i) {
   const a = cabinAngles[i % 6];
   const r = cabinRs[i % 6];
-  return { x: Math.cos(a) * r, z: MZ + Math.sin(a) * r };
+  return { x: MX + Math.cos(a) * r, z: MZ + Math.sin(a) * r };
 }
 
 function makeNameSprite(text) {
@@ -158,7 +162,7 @@ function npcDialogue(npc, body, extraButtons = []) {
 
 function buildNpcList() {
   const list = [];
-  const w = (x, z) => ({ x, z });
+  const w = (x, z) => ({ x: MX + x, z });
 
   // 0 Aldric — miller / quest
   list.push({
@@ -167,8 +171,8 @@ function buildNpcList() {
     role: 'miller',
     homeCabin: 0,
     group: humanoid({ cloak: 0x4a3018, skin: 0xc8a090, apron: true }),
-    dayWaypoints: [w(0, MZ), w(0, MZ - 12), w(-2, MZ)],
-    nightPos: w(-8, MZ),
+    dayWaypoints: [w(0, MZ), w(0, MZ - 8), w(-2, MZ)],
+    nightPos: w(-6, MZ),
     millPos: w(1.2, MZ + 0.5),
   });
 
@@ -179,8 +183,8 @@ function buildNpcList() {
     role: 'neighbor',
     homeCabin: 1,
     group: humanoid({ cloak: 0x5a2a4a, hat: 0x2a1020 }),
-    dayWaypoints: [w(-10, MZ), w(-6, MZ + 2)],
-    evePos: w(12, MZ - 10),
+    dayWaypoints: [w(-7, MZ), w(-4, MZ + 2)],
+    evePos: w(8, MZ - 7),
     nightPos: cabinWorld(1),
   });
 
@@ -191,7 +195,7 @@ function buildNpcList() {
     role: 'smith',
     homeCabin: 2,
     group: humanoid({ cloak: 0x2a2820, skin: 0xb89880 }),
-    dayWaypoints: [w(-12, MZ - 15), w(-10, MZ - 17)],
+    dayWaypoints: [w(-8, MZ - 10), w(-6, MZ - 12)],
     nightPos: cabinWorld(2),
     hammer: true,
   });
@@ -203,8 +207,8 @@ function buildNpcList() {
     role: 'tavern',
     homeCabin: 3,
     group: humanoid({ cloak: 0x4a3a60, hat: 0x1a1028 }),
-    dayWaypoints: [w(10, MZ - 10), w(8, MZ - 8)],
-    mornPos: w(10, MZ - 8),
+    dayWaypoints: [w(7, MZ - 7), w(5, MZ - 5)],
+    mornPos: w(7, MZ - 5),
     nightPos: cabinWorld(3),
   });
 
@@ -215,52 +219,31 @@ function buildNpcList() {
     role: 'lore',
     homeCabin: 4,
     group: humanoid({ cloak: 0x3a3a30, skin: 0xa89888 }),
-    dayWaypoints: [w(4, MZ - 5)],
+    dayWaypoints: [w(3, MZ - 4)],
     nightPos: cabinWorld(4),
     sway: true,
   });
 
-  // 5–6 vendors
-  const stallXs = [-12, -8, -4, 0, 4, 8];
-  list.push({
-    id: 'vendorA',
-    name: 'Market vendor',
-    role: 'vendor',
-    homeCabin: 0,
-    group: humanoid({ cloak: 0x4a6020 }),
-    dayWaypoints: [w(stallXs[0], MZ + 10)],
-    nightPos: cabinWorld(0),
-  });
-  list.push({
-    id: 'vendorB',
-    name: 'Market vendor',
-    role: 'vendor',
-    homeCabin: 1,
-    group: humanoid({ cloak: 0x204a60 }),
-    dayWaypoints: [w(stallXs[3], MZ + 10)],
-    nightPos: cabinWorld(1),
-  });
-
-  // 7–10 roamers
-  const roamerColors = [0x5a4030, 0x403a28, 0x483828, 0x3a4530];
-  for (let i = 0; i < 4; i++) {
+  // 5–6 roamers (kept down to two so the village feels lived-in but not
+  // crowded). Waypoints stay tight inside the building cluster.
+  const roamerColors = [0x5a4030, 0x403a28];
+  const roamerPaths = [
+    [w(-3, MZ - 3), w(5, MZ + 2), w(-6, MZ - 8)],
+    [w(0, MZ - 2), w(-7, MZ + 3), w(2, MZ - 9)],
+  ];
+  for (let i = 0; i < roamerColors.length; i++) {
     list.push({
       id: `roam${i}`,
       name: 'Townsfolk',
       role: 'roamer',
       homeCabin: (i + 2) % 6,
       group: humanoid({ cloak: roamerColors[i] }),
-      dayWaypoints: [
-        w(-5 + i * 3, MZ - 4),
-        w(8, MZ + 4),
-        w(-10, MZ - 12),
-        w(2, MZ + 8),
-      ].slice(0, 3),
+      dayWaypoints: roamerPaths[i],
       nightPos: cabinWorld((i + 2) % 6),
     });
   }
 
-  // 11 watchman (positions are overridden at night by patrol math; still need
+  // 7 watchman (positions are overridden at night by patrol math; still need
   // a spawn waypoint for init + day idle at home cabin.)
   list.push({
     id: 'watch',
@@ -336,10 +319,12 @@ export const AshwickNPCs = {
           continue;
         }
         const t = time * 0.15;
-        const rx = AshwickWorld.MILL_X + Math.cos(t) * 34;
-        const rz = MZ + Math.sin(t) * 28;
+        const rx = MX + Math.cos(t) * 18;
+        const rz = MZ + Math.sin(t) * 14;
         n.group.position.set(rx, 0, rz);
-        n.group.lookAt(px, n.group.position.y, pz);
+        const tx = MX + Math.cos(t + 0.3) * 18;
+        const tz = MZ + Math.sin(t + 0.3) * 14;
+        n.group.lookAt(tx, n.group.position.y, tz);
         const d2 = dist2(px, pz, rx, rz);
         if (d2 < nearestD2) {
           nearestD2 = d2;
@@ -391,6 +376,7 @@ export const AshwickNPCs = {
 
       const cur = wps[n.wpIndex % wps.length];
       if (!cur) continue;
+      const d2player = dist2(px, pz, n.group.position.x, n.group.position.z);
       if (time >= n.pauseUntil) {
         const gx = n.group.position.x;
         const gz = n.group.position.z;
@@ -400,6 +386,13 @@ export const AshwickNPCs = {
         const len = Math.hypot(vx, vz) || 1;
         n.group.position.x += (vx / len) * Math.min(step, len);
         n.group.position.z += (vz / len) * Math.min(step, len);
+        // Face walk direction; only turn to the player if they are close.
+        if (d2player < LABEL_R * LABEL_R) {
+          n.group.lookAt(px, n.group.position.y, pz);
+        } else {
+          n.group.lookAt(cur.x, n.group.position.y, cur.z);
+        }
+      } else if (d2player < LABEL_R * LABEL_R) {
         n.group.lookAt(px, n.group.position.y, pz);
       }
 

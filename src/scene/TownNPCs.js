@@ -26,39 +26,42 @@ const DOORWAY_HOLD_MIN = 2.2;
 const DOORWAY_HOLD_MAX = 4.8;
 const FADE_TIME = 0.55;
 
+// Town centers match the GLB model offsets in GreaterTowns.js so NPCs
+// wander inside the building cluster instead of in the surrounding field.
+// Stonehush and Deeproot have non-zero dx offsets on their models.
 const TOWNS = [
   {
     id: 'veilMarket',
     center: { x: 34, z: -2500 },
-    radius: 14,
+    radius: 12,
     npcCount: 6,
     palette: [0x4a2e18, 0x2a3548, 0x4a2a4a, 0x3a4a30, 0x4a3018, 0x2a4a4a],
   },
   {
     id: 'stonehush',
-    center: { x: -800, z: -5000 },
-    radius: 18,
+    center: { x: -830, z: -5000 },
+    radius: 14,
     npcCount: 5,
     palette: [0x3a3030, 0x2a2838, 0x3a2a30, 0x40362a, 0x2a3a40],
   },
   {
     id: 'deeproot',
-    center: { x: 600, z: -6000 },
-    radius: 18,
+    center: { x: 680, z: -6000 },
+    radius: 14,
     npcCount: 5,
     palette: [0x2e3a18, 0x4a3a1e, 0x3a2e18, 0x2e2a1a, 0x3a4a28],
   },
   {
     id: 'mirrorTown',
     center: { x: 200, z: -7800 },
-    radius: 16,
+    radius: 13,
     npcCount: 5,
     palette: [0x303a48, 0x4a4a5a, 0x382a3a, 0x303040, 0x4a3a4a],
   },
   {
     id: 'unnamed',
     center: { x: 0, z: -14500 },
-    radius: 18,
+    radius: 15,
     npcCount: 6,
     palette: [0x2a2018, 0x322a22, 0x281a18, 0x3a2a20, 0x2a2228, 0x40342a],
   },
