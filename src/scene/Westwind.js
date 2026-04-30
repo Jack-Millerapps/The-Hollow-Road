@@ -560,7 +560,7 @@ export const Westwind = {
   // -z, so rotationY 0 points the player toward lower-z (Ashwick).
   getArrivalSpawn() {
     return {
-      position: { x: this.center.x, z: this.center.z - 22 },
+      position: { x: this.center.x, z: this.center.z - 3 },
       rotationY: 0,
     };
   },
