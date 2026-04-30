@@ -47,6 +47,7 @@ import { PauseManager } from './game/PauseManager.js';
 import { BackgroundMusic } from './game/BackgroundMusic.js';
 import { Tutorial } from './game/Tutorial.js';
 import { AdminPanel } from './ui/AdminPanel.js';
+import { TitleScreen } from './ui/TitleScreen.js';
 
 // ---------------------------------------------------------------------------
 // Fade overlay helpers
@@ -587,38 +588,35 @@ function start() {
     }
   }, 3000);
 
-  const snapshot = Save.load();
-  if (snapshot) {
-    Save.apply(snapshot);
-    if (snapshot.currentScene === 'cave') {
-      resumeCaveFromSave();
-      return;
-    }
-    if (snapshot.currentScene === 'world') {
-      resumeWorldFromSave();
-      return;
-    }
-    if (snapshot.currentScene === 'cabin') {
-      // Cabin is an intro-only transient scene. Older saves may have persisted
-      // it; treat those as "start the cabin intro" and immediately rewrite the
-      // save on exit to world.
-      enterCabin();
-      return;
-    }
-    // Stale/unknown scene (e.g. persisted "cutscene" after the name intro) —
-    // do not leave the player on a black canvas with no IntroCutscene branch.
-    if (state.hasSeenIntro && state.playerName) {
-      if (!state.flags.friendsArrived) void enterCabin();
-      else void enterWestwind();
-      return;
-    }
-  }
-
   hideHUDChrome();
   Travel.pause();
 
-  IntroCutscene.start(() => {
-    enterCabin();
+  const hasSave = Save.exists();
+
+  TitleScreen.show({ hasSave }).then(({ mode }) => {
+    if (mode === 'continue' && hasSave) {
+      const snapshot = Save.load();
+      if (snapshot) {
+        Save.apply(snapshot);
+        if (snapshot.currentScene === 'cave') return resumeCaveFromSave();
+        if (snapshot.currentScene === 'world') return resumeWorldFromSave();
+        if (snapshot.currentScene === 'cabin') return enterCabin();
+        // Stale/unknown scene — fall through using the same recovery rules
+        // the auto-loader used to apply.
+        if (state.hasSeenIntro && state.playerName) {
+          if (!state.flags.friendsArrived) return void enterCabin();
+          return void enterWestwind();
+        }
+      }
+    }
+
+    // New game (or fallback): wipe any prior save + in-memory state and run
+    // the original intro flow.
+    Save.clear();
+    Save.resetInMemory();
+    IntroCutscene.start(() => {
+      enterCabin();
+    });
   });
 }
 
