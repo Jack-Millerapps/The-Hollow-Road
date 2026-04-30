@@ -116,6 +116,18 @@ function makeStyleTag() {
   cursor: default;
 }
 
+.title-screen .music-credit {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  text-align: left;
+  font-size: 13px;
+  font-style: italic;
+  letter-spacing: 0.06em;
+  color: rgba(232, 201, 138, 0.45);
+  font-family: 'Cormorant Garamond', Georgia, serif;
+}
+
 .title-screen .footer {
   position: absolute;
   bottom: 24px;
@@ -204,6 +216,11 @@ export const TitleScreen = {
       menu.appendChild(newBtn);
 
       root.appendChild(menu);
+
+      const musicCredit = document.createElement('div');
+      musicCredit.className = 'music-credit';
+      musicCredit.textContent = 'Music made by sloot';
+      root.appendChild(musicCredit);
 
       const footer = document.createElement('div');
       footer.className = 'footer';
