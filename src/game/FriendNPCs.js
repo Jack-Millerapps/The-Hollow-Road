@@ -348,7 +348,10 @@ export const FriendNPCs = {
                   {
                     label: 'Thank you.',
                     onClick: () => {
-                      DialogueManager.close();
+                      // keepFlag: true prevents pointer-lock from firing
+                      // between friends so the cursor stays visible for
+                      // the next dialogue.
+                      DialogueManager.close({ keepFlag: true });
                       resolve();
                     },
                   },

@@ -103,9 +103,11 @@ export const DialogueManager = {
   },
 
   // Close the current dialogue and drain the queue.
-  close() {
+  // Pass { keepFlag: true } to suppress pointer-lock acquisition (useful
+  // when another dialogue is about to open so the cursor must stay visible).
+  close(opts = {}) {
     currentCfg = null;
-    if (DialoguePanel.root) DialoguePanel.close();
+    if (DialoguePanel.root) DialoguePanel.close(opts);
     drainQueue();
   },
 

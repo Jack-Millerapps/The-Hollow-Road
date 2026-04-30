@@ -541,7 +541,9 @@ export const Westwind = {
     });
 
     scene.add(group);
-    ChunkManager.register(group, CENTER.x, CENTER.z);
+    // Large radius so the frustum pass doesn't cull the group when the
+    // player is facing south (away from the village) on first arrival.
+    ChunkManager.register(group, CENTER.x, CENTER.z, { radius: 400 });
     return group;
   },
 
