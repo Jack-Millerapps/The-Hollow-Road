@@ -8,15 +8,32 @@ const _ab = new THREE.Vector3();
 const _ac = new THREE.Vector3();
 const _n = new THREE.Vector3();
 
-export function voxelizeMeshCollision(model, {
-  cellSize = 0.5,
-  minY = 0.5,
-  maxNormalY = 0.7,
-} = {}) {
-  const cells = new Set();
+// Elevation-aware voxel collision builder.
+//
+// For each XZ cell the model touches, we track the min/max Y of the geometry
+// that passes through it. A cell only becomes a collider if its vertical
+// extent actually overlaps the player body band [stepHeight, playerCeiling].
+// That drops three classes of "phantom walls" the previous AABB voxel
+// approach kept registering:
+//   * raised platforms / ledge tops sitting above the player's head
+//   * curbs, garden borders, low fence trims under step height
+//   * second-floor walls or overhangs whose ground-level XZ has no real wall
+export function voxelizeMeshCollision(model, opts = {}) {
+  const {
+    cellSize = 0.5,
+    triFloorY = 0.1,
+    maxNormalY = 0.6,
+    stepHeight = 0.6,
+    playerCeiling = 2.2,
+  } = opts;
+
+  const cellRanges = new Map();
 
   model.traverse((child) => {
-    if (!child.isMesh || !child.geometry) return;
+    if (!child.isMesh || !child.geometry || child.visible === false) return;
+    const mat = Array.isArray(child.material) ? child.material[0] : child.material;
+    if (mat && mat.transparent && mat.opacity !== undefined && mat.opacity < 0.1) return;
+
     const geom = child.geometry;
     const pos = geom.attributes?.position;
     if (!pos) return;
@@ -32,7 +49,7 @@ export function voxelizeMeshCollision(model, {
       _b.fromBufferAttribute(pos, ib).applyMatrix4(mw);
       _c.fromBufferAttribute(pos, ic).applyMatrix4(mw);
 
-      if (_a.y < minY && _b.y < minY && _c.y < minY) continue;
+      if (_a.y < triFloorY && _b.y < triFloorY && _c.y < triFloorY) continue;
 
       _ab.subVectors(_b, _a);
       _ac.subVectors(_c, _a);
@@ -42,6 +59,9 @@ export function voxelizeMeshCollision(model, {
         const ny = _n.y / Math.sqrt(lenSq);
         if (Math.abs(ny) > maxNormalY) continue;
       }
+
+      const triMinY = Math.min(_a.y, _b.y, _c.y);
+      const triMaxY = Math.max(_a.y, _b.y, _c.y);
 
       const minX = Math.min(_a.x, _b.x, _c.x);
       const maxX = Math.max(_a.x, _b.x, _c.x);
@@ -54,19 +74,32 @@ export function voxelizeMeshCollision(model, {
 
       for (let cx = cx0; cx <= cx1; cx++) {
         for (let cz = cz0; cz <= cz1; cz++) {
-          cells.add(`${cx}|${cz}`);
+          const key = `${cx}|${cz}`;
+          const range = cellRanges.get(key);
+          if (range) {
+            if (triMinY < range[0]) range[0] = triMinY;
+            if (triMaxY > range[1]) range[1] = triMaxY;
+          } else {
+            cellRanges.set(key, [triMinY, triMaxY]);
+          }
         }
       }
     }
   });
 
   const half = cellSize / 2;
-  for (const key of cells) {
+  let registered = 0;
+  let skippedHigh = 0;
+  let skippedLow = 0;
+  for (const [key, [cellMinY, cellMaxY]] of cellRanges) {
+    if (cellMinY > playerCeiling) { skippedHigh++; continue; }
+    if (cellMaxY < stepHeight) { skippedLow++; continue; }
     const sep = key.indexOf('|');
     const cx = +key.slice(0, sep);
     const cz = +key.slice(sep + 1);
     Collision.registerBox((cx + 0.5) * cellSize, (cz + 0.5) * cellSize, half, half);
+    registered++;
   }
 
-  return cells.size;
+  return { registered, skippedHigh, skippedLow, totalCells: cellRanges.size };
 }

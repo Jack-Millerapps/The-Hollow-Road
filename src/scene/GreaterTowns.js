@@ -362,7 +362,7 @@ export function buildVeilMarketTown(scene, reg) {
 // =============================================================
 
 function loadTownGLB(path, group, opts = {}) {
-  const { dx = 0, dy = 0, dz = 0, rotateY = 0, walkable = false } = opts;
+  const { dx = 0, dy = 0, dz = 0, rotateY = 0, walkable = false, collision = {} } = opts;
   new GLTFLoader().load(
     path,
     (gltf) => {
@@ -386,8 +386,8 @@ function loadTownGLB(path, group, opts = {}) {
       group.add(model);
       if (walkable) {
         group.updateMatrixWorld(true);
-        const cellCount = voxelizeMeshCollision(model);
-        console.log(`[GLB] ${path} collision: ${cellCount} cells`);
+        const stats = voxelizeMeshCollision(model, collision);
+        console.log(`[GLB] ${path} collision:`, stats);
       }
       console.log(`[GLB] Loaded ${path} — bounds y ${box.min.y.toFixed(1)} → ${box.max.y.toFixed(1)}, pos (${model.position.x.toFixed(1)}, ${model.position.y.toFixed(1)}, ${model.position.z.toFixed(1)}), group:`, group.position);
     },
@@ -442,7 +442,17 @@ export function buildUnnamedTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(0, 0, -14500);
-  loadTownGLB(MODEL_URLS.The_unamed, group, { dy: -1, rotateY: -Math.PI / 12, walkable: true });
+  loadTownGLB(MODEL_URLS.The_unamed, group, {
+    dy: -1,
+    rotateY: -Math.PI / 12,
+    walkable: true,
+    collision: {
+      cellSize: 0.5,
+      maxNormalY: 0.5,
+      stepHeight: 1.0,
+      playerCeiling: 2.0,
+    },
+  });
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
