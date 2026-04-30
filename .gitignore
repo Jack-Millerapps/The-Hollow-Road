@@ -3,3 +3,9 @@ dist
 .DS_Store
 *.log
 .vite
+.env*.local
+.vercel
+
+# Town GLBs are hosted on Vercel Blob (see src/scene/modelUrls.js).
+# Local copies live in _local-models/ as a backup; never bundled or tracked.
+_local-models/

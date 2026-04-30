@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ChunkManager } from '../game/ChunkManager.js';
 import { getSoftCircleTexture } from './spriteTextures.js';
+import { MODEL_URLS } from './modelUrls.js';
 
 // Westwind — the player's hometown, perched just north of the existing
 // road network. Builds a small village and a dirt path running south to
@@ -520,7 +521,7 @@ export const Westwind = {
     this.windowLights = [];
     this.npcs = [];
 
-    new GLTFLoader().load('/Models/Westwind.glb', (gltf) => {
+    new GLTFLoader().load(MODEL_URLS.Westwind, (gltf) => {
       const model = gltf.scene;
       model.scale.setScalar(20);
       model.traverse((child) => {
@@ -529,6 +530,9 @@ export const Westwind = {
           child.receiveShadow = true;
         }
       });
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model);
+      if (isFinite(box.min.y)) model.position.y = -box.min.y;
       group.add(model);
     });
 

@@ -4,6 +4,7 @@ import { getSoftCircleTexture } from './spriteTextures.js';
 import { ChunkManager } from '../game/ChunkManager.js';
 import { Collision } from '../game/Collision.js';
 import { SceneManager } from './SceneManager.js';
+import { MODEL_URLS } from './modelUrls.js';
 
 function stdMat(color, opts = {}) {
   return new THREE.MeshStandardMaterial({
@@ -371,9 +372,13 @@ function loadTownGLB(path, group) {
           child.receiveShadow = true;
         }
       });
-      group.add(model);
+      model.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(model);
-      console.log(`[GLB] Loaded ${path} — bounds: y ${box.min.y.toFixed(1)} → ${box.max.y.toFixed(1)}, group world pos:`, group.position);
+      if (isFinite(box.min.y)) {
+        model.position.y = -box.min.y;
+      }
+      group.add(model);
+      console.log(`[GLB] Loaded ${path} — bounds y ${box.min.y.toFixed(1)} → ${box.max.y.toFixed(1)}, lifted by ${model.position.y.toFixed(1)}, group:`, group.position);
     },
     undefined,
     (err) => console.error(`[GLB] Failed to load ${path}:`, err),
@@ -388,7 +393,7 @@ export function buildStonehushTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(-800, 0, -5000);
-  loadTownGLB('/Models/Stonehush.glb', group);
+  loadTownGLB(MODEL_URLS.Stonehush, group);
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
@@ -401,7 +406,7 @@ export function buildDeeprootTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(600, 0, -6000);
-  loadTownGLB('/Models/Deeproot.glb', group);
+  loadTownGLB(MODEL_URLS.Deeproot, group);
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
@@ -415,7 +420,7 @@ export function buildMirrorTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(200, 0, -7800);
-  loadTownGLB('/Models/Mirror_town.glb', group);
+  loadTownGLB(MODEL_URLS.Mirror_town, group);
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
@@ -426,7 +431,7 @@ export function buildUnnamedTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(0, 0, -14500);
-  loadTownGLB('/Models/The_unamed.glb', group);
+  loadTownGLB(MODEL_URLS.The_unamed, group);
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });

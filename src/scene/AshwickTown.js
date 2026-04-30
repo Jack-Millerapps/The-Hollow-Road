@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ChunkManager } from '../game/ChunkManager.js';
 import { SceneManager } from './SceneManager.js';
+import { MODEL_URLS } from './modelUrls.js';
 
 export const AshwickWorld = {
   MILL_X: 0,
@@ -56,7 +57,7 @@ export function build(scene, reg) {
   reg.group = townRoot;
   reg._townRoot = townRoot;
 
-  new GLTFLoader().load('/Models/Ashwick.glb', (gltf) => {
+  new GLTFLoader().load(MODEL_URLS.Ashwick, (gltf) => {
     const model = gltf.scene;
     model.scale.setScalar(20);
     model.traverse((child) => {
@@ -65,6 +66,9 @@ export function build(scene, reg) {
         child.receiveShadow = true;
       }
     });
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(model);
+    if (isFinite(box.min.y)) model.position.y = -box.min.y;
     townRoot.add(model);
   });
 
