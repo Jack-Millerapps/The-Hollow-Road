@@ -34,6 +34,10 @@ const SPEED = 0.6;
 const AI_INTERVAL = 0.5;
 const INTERACT_R = 2;
 const LABEL_R = 3;
+// Grave / page markers are small; geometry and grass tufts extend farther than
+// the old 3-unit sphere, so players could stand "at" the grave and E did nothing.
+const GRAVE_INTERACT_SQ = 14 * 14;
+const PAGE_INTERACT_SQ = 8 * 8;
 
 const cabinAngles = [0.2, 1.1, 2.0, 3.35, 4.5, 5.4];
 const cabinRs = [14, 16, 15, 17, 15, 16];
@@ -470,21 +474,49 @@ export const AshwickNPCs = {
       if (nearestInteract && nearestInteract.group.visible) {
         this._talkTo(nearestInteract);
       } else {
-        const { grave, page, shrine } = getQuestMeshes();
-        if (grave && dist2(px, pz, AshwickWorld.GRAVE_X, AshwickWorld.GRAVE_Z) < 9) {
-          QuestSystem.tryAshwickGrave();
-        } else if (page && dist2(px, pz, AshwickWorld.PAGE_X, AshwickWorld.PAGE_Z) < 6) {
-          QuestSystem.tryAshwickPage();
-        } else if (shrine) {
-          const sx = AshwickWorld.CAVE_X + shrine.position.x;
-          const sz = AshwickWorld.CAVE_Z + shrine.position.z;
-          if (dist2(px, pz, sx, sz) < 16) QuestSystem.tryAshwickShrine();
+        const { shrine } = getQuestMeshes();
+        const qa = state.quests?.ashwick;
+        if (qa && !qa.done) {
+          if (
+            qa.step === 2 &&
+            dist2(px, pz, AshwickWorld.GRAVE_X, AshwickWorld.GRAVE_Z) < GRAVE_INTERACT_SQ
+          ) {
+            QuestSystem.tryAshwickGrave();
+          } else if (
+            qa.step === 3 &&
+            dist2(px, pz, AshwickWorld.PAGE_X, AshwickWorld.PAGE_Z) < PAGE_INTERACT_SQ
+          ) {
+            QuestSystem.tryAshwickPage();
+          } else if (
+            shrine &&
+            qa.step === 4
+          ) {
+            const sx = AshwickWorld.CAVE_X + shrine.position.x;
+            const sz = AshwickWorld.CAVE_Z + shrine.position.z;
+            if (dist2(px, pz, sx, sz) < 16) QuestSystem.tryAshwickShrine();
+          }
         }
       }
     }
 
+    const qAsh = state.quests?.ashwick;
+    const nearGraveForQuest =
+      qAsh &&
+      !qAsh.done &&
+      qAsh.step === 2 &&
+      dist2(px, pz, AshwickWorld.GRAVE_X, AshwickWorld.GRAVE_Z) < GRAVE_INTERACT_SQ;
+    const nearPageForQuest =
+      qAsh &&
+      !qAsh.done &&
+      qAsh.step === 3 &&
+      dist2(px, pz, AshwickWorld.PAGE_X, AshwickWorld.PAGE_Z) < PAGE_INTERACT_SQ;
+
     if (nearestInteract && nearestInteract.group.visible) {
       Travel._showSoftPrompt?.('[E] Talk');
+    } else if (nearGraveForQuest) {
+      Travel._showSoftPrompt?.('[E] Examine the grave');
+    } else if (nearPageForQuest) {
+      Travel._showSoftPrompt?.('[E] Pick up the page');
     }
   },
 
