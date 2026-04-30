@@ -498,6 +498,7 @@ function start() {
 
       Travel.update(delta);
       DayNight.update(delta);
+      BackgroundMusic.update(state.currentScene, state.playerPos);
       Environment.update(t);
       Environment.updateCulling(camera);
       VillageBuilder.update(t, state.playerPos);
