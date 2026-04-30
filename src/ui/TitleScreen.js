@@ -121,7 +121,7 @@ function makeStyleTag() {
   bottom: 24px;
   left: 24px;
   text-align: left;
-  font-size: 13px;
+  font-size: 20px;
   font-style: italic;
   letter-spacing: 0.06em;
   color: rgba(232, 201, 138, 0.45);

@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { state } from '../state.js';
 import { makeVillagerMesh } from './Westwind.js';
+import {
+  npcWorldBlocked,
+  snapNpcWorldXZ,
+  randomNpcPointInDisc,
+} from './npcWorldPlacement.js';
 
 // ---------------------------------------------------------------------------
 // TownNPCs — a generic wandering-villager system used by every greater town
@@ -72,9 +77,7 @@ function rand(a, b) {
 }
 
 function randomWaypoint(center, radius) {
-  const a = Math.random() * Math.PI * 2;
-  const r = Math.sqrt(Math.random()) * radius;
-  return { x: center.x + Math.cos(a) * r, z: center.z + Math.sin(a) * r };
+  return randomNpcPointInDisc(center.x, center.z, radius);
 }
 
 function buildDoorways(center, radius, count) {
@@ -82,7 +85,10 @@ function buildDoorways(center, radius, count) {
   for (let i = 0; i < count; i++) {
     const a = (i / count) * Math.PI * 2 + Math.random() * 0.4;
     const r = radius * (0.78 + Math.random() * 0.18);
-    out.push({ x: center.x + Math.cos(a) * r, z: center.z + Math.sin(a) * r });
+    const rawX = center.x + Math.cos(a) * r;
+    const rawZ = center.z + Math.sin(a) * r;
+    const s = snapNpcWorldXZ(rawX, rawZ);
+    out.push({ x: s.x, z: s.z });
   }
   return out;
 }
@@ -111,7 +117,8 @@ function makeNpc(town, doorways) {
   const skin = skinPick[Math.floor(Math.random() * skinPick.length)];
   const mesh = makeVillagerMesh({ robeColor: robe, skinColor: skin });
   const start = doorways[Math.floor(Math.random() * doorways.length)];
-  mesh.position.set(start.x, 0, start.z);
+  const s0 = snapNpcWorldXZ(start.x, start.z);
+  mesh.position.set(s0.x, 0, s0.z);
   mesh.userData.phase = Math.random() * Math.PI * 2;
   mesh.userData.baseY = 0;
   return {
@@ -175,6 +182,13 @@ function startFade(npc, to, duration) {
 function tickNpc(npc, town, doorways, delta, time, playerPos) {
   stepFade(npc, delta);
 
+  // Town GLB collision registers async — keep any NPC from staying inside voxels.
+  if (npc.state !== 'inside' && npcWorldBlocked(npc.mesh.position.x, npc.mesh.position.z)) {
+    const u = snapNpcWorldXZ(npc.mesh.position.x, npc.mesh.position.z);
+    npc.mesh.position.x = u.x;
+    npc.mesh.position.z = u.z;
+  }
+
   // While inside a building, hold position offstage and resurface when the
   // timer expires at a different doorway.
   if (npc.state === 'inside') {
@@ -187,7 +201,8 @@ function tickNpc(npc, town, doorways, delta, time, playerPos) {
           exit = doorways[Math.floor(Math.random() * doorways.length)];
         }
       }
-      npc.mesh.position.set(exit.x, 0, exit.z);
+      const ex = snapNpcWorldXZ(exit.x, exit.z);
+      npc.mesh.position.set(ex.x, 0, ex.z);
       npc.mesh.visible = true;
       startFade(npc, 1, FADE_TIME);
       npc.state = 'walk';
@@ -207,8 +222,9 @@ function tickNpc(npc, town, doorways, delta, time, playerPos) {
 
   // 'walk'
   const t = npc.target;
-  const dx = t.x - npc.mesh.position.x;
-  const dz = t.z - npc.mesh.position.z;
+  const tx = snapNpcWorldXZ(t.x, t.z);
+  const dx = tx.x - npc.mesh.position.x;
+  const dz = tx.z - npc.mesh.position.z;
   const dist = Math.hypot(dx, dz);
   if (dist <= ARRIVE_R) {
     if (t.door) {
@@ -227,10 +243,19 @@ function tickNpc(npc, town, doorways, delta, time, playerPos) {
     return;
   }
 
-  const step = Math.min(dist, SPEED * delta);
-  npc.mesh.position.x += (dx / dist) * step;
-  npc.mesh.position.z += (dz / dist) * step;
-  npc.mesh.rotation.y = Math.atan2(dx, dz);
+  const rdx = tx.x - npc.mesh.position.x;
+  const rdz = tx.z - npc.mesh.position.z;
+  const rdist = Math.hypot(rdx, rdz) || 1;
+
+  const step = Math.min(rdist, SPEED * delta);
+  npc.mesh.position.x += (rdx / rdist) * step;
+  npc.mesh.position.z += (rdz / rdist) * step;
+  if (npcWorldBlocked(npc.mesh.position.x, npc.mesh.position.z)) {
+    const u = snapNpcWorldXZ(npc.mesh.position.x, npc.mesh.position.z);
+    npc.mesh.position.x = u.x;
+    npc.mesh.position.z = u.z;
+  }
+  npc.mesh.rotation.y = Math.atan2(rdx, rdz);
   // Idle bob.
   npc.mesh.position.y = npc.mesh.userData.baseY + Math.sin(time * 5 + npc.mesh.userData.phase) * 0.04;
 }
