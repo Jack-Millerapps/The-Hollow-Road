@@ -7,7 +7,7 @@ import { DialoguePanel } from '../ui/DialoguePanel.js';
 import { AshwickWorld, getQuestMeshes } from './AshwickTown.js';
 import {
   npcWorldBlocked,
-  snapNpcWorldXZ,
+  snapNpcWorldXZWithFallbacks,
   NPC_WORLD_RADIUS,
 } from './npcWorldPlacement.js';
 
@@ -16,6 +16,20 @@ import {
 // MILL_X=0, so their waypoints land in town instead of in the road grass.
 const MX = AshwickWorld.MILL_X - 30;
 const MZ = AshwickWorld.MILL_Z;
+
+// Voxel collision can miss some vertical GLB faces; if snap still lands in
+// geometry, march toward these road/plaza anchors (see Travel gateZ -540).
+const ASHWICK_ESCAPE_ANCHORS = [
+  { x: MX + 16, z: MZ - 24 },
+  { x: MX + 6, z: MZ - 28 },
+  { x: MX - 10, z: MZ - 22 },
+  { x: 0, z: -533 },
+  { x: -18, z: -533 },
+];
+
+function snapAshwickNpc(x, z) {
+  return snapNpcWorldXZWithFallbacks(x, z, ASHWICK_ESCAPE_ANCHORS);
+}
 const SPEED = 0.6;
 const AI_INTERVAL = 0.5;
 const INTERACT_R = 2;
@@ -193,14 +207,15 @@ function buildNpcList() {
     nightPos: cabinWorld(1),
   });
 
-  // 2 Dov — smith
+  // 2 Dov — smith (keep south/east of cluster toward gate — NW coords sat
+  // inside the forge GLB where voxel collision did not always match the mesh.)
   list.push({
     id: 'dov',
     name: 'Dov',
     role: 'smith',
     homeCabin: 2,
     group: humanoid({ cloak: 0x2a2820, skin: 0xb89880 }),
-    dayWaypoints: [w(-8, MZ - 10), w(-6, MZ - 12)],
+    dayWaypoints: [w(10, MZ - 22), w(14, MZ - 26), w(8, MZ - 28)],
     nightPos: cabinWorld(2),
     hammer: true,
   });
@@ -276,7 +291,7 @@ function spawnWaypoint(n) {
   const p = n.dayWaypoints?.[0] ?? n.nightPos ?? { x: AshwickWorld.MILL_X, z: MZ };
   const rawX = Number(p.x) || 0;
   const rawZ = Number(p.z) || MZ;
-  return snapNpcWorldXZ(rawX, rawZ);
+  return snapAshwickNpc(rawX, rawZ);
 }
 
 export const AshwickNPCs = {
@@ -328,7 +343,7 @@ export const AshwickNPCs = {
         const t = time * 0.15;
         const rx = MX + Math.cos(t) * 18;
         const rz = MZ + Math.sin(t) * 14;
-        const safe = snapNpcWorldXZ(rx, rz);
+        const safe = snapAshwickNpc(rx, rz);
         n.group.position.set(safe.x, 0, safe.z);
         const tx = MX + Math.cos(t + 0.3) * 18;
         const tz = MZ + Math.sin(t + 0.3) * 14;
@@ -359,7 +374,7 @@ export const AshwickNPCs = {
       if (n.id === 'maren' && phase === 'sunset' && n.evePos) {
         const ep = n.evePos;
         n.group.position.lerp(new THREE.Vector3(ep.x, 0, ep.z), delta * 0.35);
-        const m = snapNpcWorldXZ(n.group.position.x, n.group.position.z);
+        const m = snapAshwickNpc(n.group.position.x, n.group.position.z);
         n.group.position.x = m.x;
         n.group.position.z = m.z;
       }
@@ -368,7 +383,7 @@ export const AshwickNPCs = {
       if (n.id === 'sera' && phase === 'sunrise' && n.mornPos) {
         const mp = n.mornPos;
         n.group.position.lerp(new THREE.Vector3(mp.x, 0, mp.z), delta * 0.4);
-        const m = snapNpcWorldXZ(n.group.position.x, n.group.position.z);
+        const m = snapAshwickNpc(n.group.position.x, n.group.position.z);
         n.group.position.x = m.x;
         n.group.position.z = m.z;
       }
@@ -378,7 +393,7 @@ export const AshwickNPCs = {
 
       const cur = wps[n.wpIndex % wps.length];
       if (!cur) continue;
-      const curSafe = snapNpcWorldXZ(cur.x, cur.z);
+      const curSafe = snapAshwickNpc(cur.x, cur.z);
 
       if (aiTick) {
         const gx = n.group.position.x;
@@ -400,7 +415,7 @@ export const AshwickNPCs = {
         n.group.position.z += (vz / len) * Math.min(step, len);
 
         if (npcWorldBlocked(n.group.position.x, n.group.position.z, NPC_WORLD_RADIUS)) {
-          const safe = snapNpcWorldXZ(n.group.position.x, n.group.position.z);
+          const safe = snapAshwickNpc(n.group.position.x, n.group.position.z);
           n.group.position.set(safe.x, 0, safe.z);
           n.pauseUntil = Math.min(n.pauseUntil, time + 0.25);
         }
@@ -417,7 +432,7 @@ export const AshwickNPCs = {
       if (n.id === 'aldric' && dayish && phase === 'day') {
         const mp = n.millPos;
         n.group.position.lerp(new THREE.Vector3(mp.x, 0, mp.z), delta * 0.12);
-        const m = snapNpcWorldXZ(n.group.position.x, n.group.position.z);
+        const m = snapAshwickNpc(n.group.position.x, n.group.position.z);
         n.group.position.x = m.x;
         n.group.position.z = m.z;
       }
@@ -441,7 +456,7 @@ export const AshwickNPCs = {
 
       // GLB collision loads async; lerp can also tunnel a frame into voxels.
       if (n.group.visible && npcWorldBlocked(n.group.position.x, n.group.position.z, NPC_WORLD_RADIUS)) {
-        const u = snapNpcWorldXZ(n.group.position.x, n.group.position.z);
+        const u = snapAshwickNpc(n.group.position.x, n.group.position.z);
         n.group.position.set(u.x, 0, u.z);
       }
     }

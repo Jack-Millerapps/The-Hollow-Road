@@ -56,6 +56,28 @@ export function snapNpcWorldXZ(x, z, opts = {}) {
 }
 
 /**
+ * If `snapNpcWorldXZ` leaves the point inside colliders (dense voxels) or you
+ * need a bias toward known-open areas, march from (x,z) toward each anchor in
+ * order until a free sample is found.
+ */
+export function snapNpcWorldXZWithFallbacks(x, z, anchors, opts = {}) {
+  const r = opts.radius ?? NPC_WORLD_RADIUS;
+  const base = snapNpcWorldXZ(x, z, opts);
+  if (!npcWorldBlocked(base.x, base.z, r)) return base;
+
+  for (const a of anchors) {
+    if (!a || !Number.isFinite(a.x) || !Number.isFinite(a.z)) continue;
+    for (let steps = 1; steps <= 72; steps++) {
+      const t = steps / 72;
+      const nx = x + (a.x - x) * t;
+      const nz = z + (a.z - z) * t;
+      if (!npcWorldBlocked(nx, nz, r)) return { x: nx, z: nz };
+    }
+  }
+  return base;
+}
+
+/**
  * Random point in a disc around (cx,cz); resamples then snaps toward center.
  */
 export function randomNpcPointInDisc(cx, cz, maxRadius, tries = 40) {
