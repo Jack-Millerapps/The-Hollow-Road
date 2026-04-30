@@ -18,13 +18,13 @@ import { Collision } from '../game/Collision.js';
 //   entry  ( 0,   0)                ← player spawn + exit portal
 //       │
 //       ▼
-//   mine1  ( 0, -20)
+//   mine1  ( 0, +20)
 //       │
 //       ▼
-//   mine2  ( 0, -40) ──── alcove (-18, -40)   (sleeping rest)
+//   mine2  ( 0, +40) ──── alcove (-18, +40)   (sleeping rest)
 //       │
 //       ▼
-//   troll  ( 0, -62)
+//   troll  ( 0, +62)
 // ---------------------------------------------------------------------------
 
 const ROOM_SIZE = 12;
@@ -257,13 +257,13 @@ function makeRooms() {
   return {
     entry: { name: 'entry', cx: 0, cz: 0, w: ROOM_SIZE, d: ROOM_SIZE,
       openSides: { n: false, s: true, e: false, w: false } },
-    mine1: { name: 'mine1', cx: 0, cz: -20, w: ROOM_SIZE, d: ROOM_SIZE,
+    mine1: { name: 'mine1', cx: 0, cz: 20, w: ROOM_SIZE, d: ROOM_SIZE,
       openSides: { n: true, s: true, e: false, w: false } },
-    mine2: { name: 'mine2', cx: 0, cz: -40, w: ROOM_SIZE, d: ROOM_SIZE,
+    mine2: { name: 'mine2', cx: 0, cz: 40, w: ROOM_SIZE, d: ROOM_SIZE,
       openSides: { n: true, s: true, e: false, w: true } },
-    alcove: { name: 'alcove', cx: -18, cz: -40, w: ROOM_SIZE, d: ROOM_SIZE,
+    alcove: { name: 'alcove', cx: -18, cz: 40, w: ROOM_SIZE, d: ROOM_SIZE,
       openSides: { n: false, s: false, e: true, w: false } },
-    troll: { name: 'troll', cx: 0, cz: -62, w: ROOM_SIZE, d: ROOM_SIZE,
+    troll: { name: 'troll', cx: 0, cz: 62, w: ROOM_SIZE, d: ROOM_SIZE,
       openSides: { n: true, s: false, e: false, w: false } },
   };
 }
