@@ -4,8 +4,15 @@ import { Collision } from '../game/Collision.js';
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 const _c = new THREE.Vector3();
+const _ab = new THREE.Vector3();
+const _ac = new THREE.Vector3();
+const _n = new THREE.Vector3();
 
-export function voxelizeMeshCollision(model, { cellSize = 1, minY = 0.5 } = {}) {
+export function voxelizeMeshCollision(model, {
+  cellSize = 0.5,
+  minY = 0.5,
+  maxNormalY = 0.7,
+} = {}) {
   const cells = new Set();
 
   model.traverse((child) => {
@@ -26,6 +33,15 @@ export function voxelizeMeshCollision(model, { cellSize = 1, minY = 0.5 } = {}) 
       _c.fromBufferAttribute(pos, ic).applyMatrix4(mw);
 
       if (_a.y < minY && _b.y < minY && _c.y < minY) continue;
+
+      _ab.subVectors(_b, _a);
+      _ac.subVectors(_c, _a);
+      _n.crossVectors(_ab, _ac);
+      const lenSq = _n.x * _n.x + _n.y * _n.y + _n.z * _n.z;
+      if (lenSq > 0) {
+        const ny = _n.y / Math.sqrt(lenSq);
+        if (Math.abs(ny) > maxNormalY) continue;
+      }
 
       const minX = Math.min(_a.x, _b.x, _c.x);
       const maxX = Math.max(_a.x, _b.x, _c.x);

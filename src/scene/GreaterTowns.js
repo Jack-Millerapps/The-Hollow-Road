@@ -417,7 +417,7 @@ export function buildDeeprootTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(600, 0, -6000);
-  loadTownGLB(MODEL_URLS.Deeproot, group, { dy: -1, dx: -30, rotateY: -Math.PI / 6, walkable: true });
+  loadTownGLB(MODEL_URLS.Deeproot, group, { dy: -1, dx: 80, rotateY: -Math.PI / 2, walkable: true });
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
@@ -431,7 +431,7 @@ export function buildMirrorTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(200, 0, -7800);
-  loadTownGLB(MODEL_URLS.Mirror_town, group, { rotateY: -Math.PI / 2, walkable: true });
+  loadTownGLB(MODEL_URLS.Mirror_town, group, { rotateY: Math.PI / 2, walkable: true });
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
