@@ -13,6 +13,7 @@ import { DayNight } from '../scene/DayNight.js';
 import { Collision } from './Collision.js';
 import { PauseManager } from './PauseManager.js';
 import { RoadWhisperPopup } from '../ui/RoadWhisperPopup.js';
+import { CAVE_ROOM_HEIGHT } from '../scene/CaveInterior.js';
 
 const PLAYER_RADIUS = 0.5;
 
@@ -354,10 +355,10 @@ export const Travel = {
     const dzTown = this.player.position.z - DEEPROOT_CENTER_Z;
     const inDeeproot = !inCave && (dxTown * dxTown + dzTown * dzTown < 110 * 110);
 
-    const CAMERA_PROBE = inDeeproot ? 0.22 : 0.35;
+    const CAMERA_PROBE = inCave ? 0.3 : inDeeproot ? 0.22 : 0.35;
     const eyeX = this.player.position.x;
     const eyeZ = this.player.position.z;
-    if (!inCave && Collision.hits(this._cameraPos.x, this._cameraPos.z, CAMERA_PROBE)) {
+    if (Collision.hits(this._cameraPos.x, this._cameraPos.z, CAMERA_PROBE)) {
       const camDX = this._cameraPos.x - eyeX;
       const camDZ = this._cameraPos.z - eyeZ;
       let lo = 0;
@@ -381,6 +382,13 @@ export const Travel = {
       const fullLen = Math.hypot(camDX, camDZ);
       const clampLen = fullLen > 0.001 ? Math.hypot(this._cameraPos.x - eyeX, this._cameraPos.z - eyeZ) / fullLen : 1;
       this._cameraPos.y = this.player.position.y + (_scratchTargetPos.y - this.player.position.y) * clampLen;
+    }
+
+    // Caves have a low ceiling; keep the third-person camera under it so it
+    // can’t clip through / above the ceiling plane.
+    if (inCave) {
+      const maxY = CAVE_ROOM_HEIGHT - 0.35;
+      if (this._cameraPos.y > maxY) this._cameraPos.y = maxY;
     }
 
     this.camera.position.copy(this._cameraPos);

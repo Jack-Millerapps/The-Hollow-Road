@@ -23,13 +23,13 @@ import * as THREE from 'three';
 // ---------------------------------------------------------------------------
 
 export const CHUNK_SIZE = 500;
-export const LOAD_RADIUS = 900;
+export const LOAD_RADIUS = 720;
 /** Extra world-units forward (along camera yaw) for the second load anchor. */
-export const LOAD_LOOKAHEAD = 450;
+export const LOAD_LOOKAHEAD = 360;
 /** Unload when past this distance from player — ahead of facing (deg > 0). */
-export const UNLOAD_AHEAD = 1200;
+export const UNLOAD_AHEAD = 980;
 /** Unload when past this distance — behind facing; larger so trail stays hot. */
-export const UNLOAD_BEHIND = 2000;
+export const UNLOAD_BEHIND = 1600;
 /** Legacy single radius — used only when yaw is omitted (symmetric fallback). */
 export const UNLOAD_RADIUS = UNLOAD_AHEAD;
 

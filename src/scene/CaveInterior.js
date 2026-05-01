@@ -33,6 +33,9 @@ const ROOM_HEIGHT = 4;
 const TUNNEL_WIDTH = 3;
 const WALL_THICKNESS = 0.5;
 
+// Shared cave ceiling height for camera clamping.
+export const CAVE_ROOM_HEIGHT = ROOM_HEIGHT;
+
 const CAVE_FOG_COLOR = 0x1a0604;
 const CAVE_FOG_DENSITY = 0.11;
 const CAVE_AMBIENT_COLOR = 0x3a1810;

@@ -14,6 +14,7 @@ const WORLD_X_MAX = 1400;
 const WORLD_Z_MIN = -14800;
 const WORLD_Z_MAX = 700;
 const WORLD_W = WORLD_X_MAX - WORLD_X_MIN;
+const WORLD_H = WORLD_Z_MAX - WORLD_Z_MIN;
 
 const REGIONS = [
   {
@@ -335,6 +336,18 @@ export const Map = {
     wrap.addEventListener('click', (e) => {
       if (e.target === wrap) this.close();
     });
+    // Prevent trackpad / mouse-wheel scrolling from bubbling to the page
+    // (on macOS this can trigger navigation/gesture behaviors that dismiss
+    // overlays). We still handle zoom on the canvas wheel listener below.
+    wrap.addEventListener(
+      'wheel',
+      (e) => {
+        if (!this.open) return;
+        e.preventDefault();
+        e.stopPropagation();
+      },
+      { passive: false },
+    );
 
     const panel = document.createElement('div');
     panel.style.cssText = [
@@ -347,6 +360,15 @@ export const Map = {
       'max-width: 96vmin',
       'max-height: 96vmin',
     ].join(';');
+    panel.addEventListener(
+      'wheel',
+      (e) => {
+        if (!this.open) return;
+        e.preventDefault();
+        e.stopPropagation();
+      },
+      { passive: false },
+    );
 
     const canvas = document.createElement('canvas');
     canvas.width = SIZE;
@@ -425,10 +447,12 @@ export const Map = {
       (e) => {
         if (!this.open) return;
         e.preventDefault();
+        e.stopPropagation();
         const dir = e.deltaY > 0 ? 1.08 : 1 / 1.08;
         let span = this._view.halfSpan * dir;
         const minH = 220;
-        const maxH = WORLD_W * 2;
+        // Allow zooming out far enough to see the full road length.
+        const maxH = Math.max(WORLD_W, WORLD_H) * 0.75;
         span = Math.max(minH, Math.min(maxH, span));
         this._view.halfSpan = span;
       },

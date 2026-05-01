@@ -457,7 +457,8 @@ export class Character {
       new THREE.BoxGeometry(0.15, 0.12, 0.22),
       bootMat,
     );
-    boot.position.set(0, -0.43, 0.03);
+    // Character faces local -Z while walking the road, so toes must point -Z.
+    boot.position.set(0, -0.43, -0.03);
     boot.castShadow = true;
     knee.add(boot);
 
@@ -466,7 +467,7 @@ export class Character {
       bootMat,
     );
     toe.rotation.x = Math.PI / 2;
-    toe.position.set(0, -0.46, 0.13);
+    toe.position.set(0, -0.46, -0.13);
     knee.add(toe);
 
     hip.userData.knee = knee;
