@@ -13,6 +13,7 @@ export const Wetland = {
     const g = new THREE.Group();
     g.name = 'Wetland';
     g.position.set(0, 0, 0);
+    g.frustumCulled = false;
 
     // Water sheet.
     const waterMat = new THREE.MeshStandardMaterial({
@@ -22,14 +23,20 @@ export const Wetland = {
       transparent: true,
       opacity: 0.52,
       depthWrite: false,
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
     });
     const water = new THREE.Mesh(
       new THREE.CircleGeometry(MIRROR_WETLAND_R, 48),
       waterMat,
     );
     water.rotation.x = -Math.PI / 2;
-    water.position.set(MIRROR_WETLAND_CENTER.x, 0.02, MIRROR_WETLAND_CENTER.z);
+    // Lift off the ground plane to prevent angle-dependent z-fighting.
+    water.position.set(MIRROR_WETLAND_CENTER.x, 0.16, MIRROR_WETLAND_CENTER.z);
     water.receiveShadow = false;
+    water.frustumCulled = false;
     g.add(water);
     this._water = water;
 
@@ -41,7 +48,7 @@ export const Wetland = {
       metalness: 0,
       flatShading: true,
     });
-    const count = 220;
+    const count = 180;
     const inst = new THREE.InstancedMesh(reedGeom, reedMat, count);
     inst.frustumCulled = false;
     const m = new THREE.Matrix4();
@@ -69,7 +76,9 @@ export const Wetland = {
 
     scene.add(g);
     this.group = g;
-    ChunkManager.register(g, MIRROR_WETLAND_CENTER.x, MIRROR_WETLAND_CENTER.z, { radius: MIRROR_WETLAND_R + 80 });
+    ChunkManager.register(g, MIRROR_WETLAND_CENTER.x, MIRROR_WETLAND_CENTER.z, {
+      radius: MIRROR_WETLAND_R + 120,
+    });
   },
 
   update(timeS) {

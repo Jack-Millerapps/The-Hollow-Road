@@ -21,6 +21,7 @@ import {
   DEEPROOT_ROOTKEEPER_SPOT,
   DEEPROOT_ROOTKEEPER_R,
 } from '../data/deeprootTargets.js';
+import { MIRROR_HIDDEN_MIRROR_SPOT, MIRROR_HIDDEN_MIRROR_R } from '../data/mirrorTownTargets.js';
 
 // ---------------------------------------------------------------------------
 // TownNPCs — a generic wandering-villager system used by every greater town
@@ -135,6 +136,9 @@ const DEEPROOT_JOURNAL_R_SQ = DEEPROOT_JOURNAL_R * DEEPROOT_JOURNAL_R;
 let _prevDeeprootJournalE = false;
 const DEEPROOT_ROOTKEEPER_R_SQ = DEEPROOT_ROOTKEEPER_R * DEEPROOT_ROOTKEEPER_R;
 let _prevDeeprootRootkeeperE = false;
+
+const MIRROR_HIDDEN_R_SQ = MIRROR_HIDDEN_MIRROR_R * MIRROR_HIDDEN_MIRROR_R;
+let _prevMirrorHiddenE = false;
 
 // Stable posts for Deeproot quest villagers (keeps them reachable in voxel-heavy GLB).
 const DEEPROOT_FRAGMENT_STANDS = [
@@ -316,6 +320,29 @@ function handleMirrorTownInteract(entry, playerPos) {
   if (eEdge && candidates.length) {
     const target = unheard || candidates[0];
     QuestSystem.tryMirrorTownVillager(target.slot);
+  }
+}
+
+function handleMirrorHiddenMirrorInteract(playerPos) {
+  const q = state.quests?.mirrorTown;
+  if (!q || q.done || q.step !== 3 || state.dialogueActive) {
+    _prevMirrorHiddenE = Travel.keys?.has?.('e') ?? false;
+    return;
+  }
+  const dx = MIRROR_HIDDEN_MIRROR_SPOT.x - playerPos.x;
+  const dz = MIRROR_HIDDEN_MIRROR_SPOT.z - playerPos.z;
+  if (dx * dx + dz * dz > MIRROR_HIDDEN_R_SQ) {
+    _prevMirrorHiddenE = Travel.keys?.has?.('e') ?? false;
+    return;
+  }
+  const keys = Travel.keys;
+  const eDown = keys?.has?.('e') ?? false;
+  const eEdge = eDown && !_prevMirrorHiddenE;
+  _prevMirrorHiddenE = eDown;
+
+  Travel._showSoftPrompt?.('[E] Hidden mirror');
+  if (eEdge) {
+    QuestSystem.tryMirrorHiddenMirror();
   }
 }
 
@@ -779,6 +806,7 @@ export const TownNPCs = {
       }
       if (entry.town.id === 'mirrorTown') {
         handleMirrorTownInteract(entry, playerPos);
+        handleMirrorHiddenMirrorInteract(playerPos);
       }
     }
   },

@@ -712,6 +712,29 @@ export const QuestSystem = {
     });
     return true;
   },
+
+  /** Mirror Town: hidden mirror spot in the wetland (step "found"). */
+  tryMirrorHiddenMirror() {
+    const q = ensureQuest('mirrorTown');
+    // Quest steps: mirror(0) → villagers(1) → guide(2) → found(3) → choice(4)
+    if (q.done || q.step !== 3) return false;
+    DialoguePanel.open({
+      title: 'Hidden mirror',
+      body:
+        'Half-submerged in black water, it waits. The glass does not show the sky — it shows you leaving.',
+      buttons: [
+        {
+          label: 'Touch the frame.',
+          onClick: () => {
+            DialoguePanel.close();
+            QuestSystem.advance('mirrorTown'); // → choice
+            Save.write(state);
+          },
+        },
+      ],
+    });
+    return true;
+  },
 };
 
 // ---------------------------------------------------------------------------
