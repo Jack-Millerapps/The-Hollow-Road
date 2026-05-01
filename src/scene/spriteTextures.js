@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 let _softCircleTex = null;
 let _bellTex = null;
+let _journalTex = null;
 
 function makeSoftCircleCanvas() {
   const c = document.createElement('canvas');
@@ -80,6 +81,63 @@ export function getBellTexture() {
   const tex = new THREE.CanvasTexture(makeBellCanvas());
   tex.needsUpdate = true;
   _bellTex = tex;
+  return tex;
+}
+
+function makeJournalCanvas() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.save();
+  ctx.translate(64, 64);
+
+  // Cool green glow.
+  const g = ctx.createRadialGradient(0, 0, 6, 0, 0, 58);
+  g.addColorStop(0, 'rgba(140, 215, 163, 0.95)');
+  g.addColorStop(0.28, 'rgba(140, 215, 163, 0.30)');
+  g.addColorStop(1, 'rgba(140, 215, 163, 0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, 58, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Journal silhouette (simple book).
+  ctx.fillStyle = 'rgba(12, 10, 8, 0.92)';
+  ctx.beginPath();
+  ctx.roundRect?.(-20, -18, 40, 36, 5);
+  if (!ctx.roundRect) {
+    ctx.rect(-20, -18, 40, 36);
+  }
+  ctx.fill();
+
+  // Spine.
+  ctx.strokeStyle = 'rgba(200, 255, 220, 0.6)';
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.moveTo(-6, -16);
+  ctx.lineTo(-6, 16);
+  ctx.stroke();
+
+  // Page hint.
+  ctx.strokeStyle = 'rgba(200, 255, 220, 0.35)';
+  ctx.lineWidth = 1.2;
+  for (let y = -10; y <= 10; y += 6) {
+    ctx.beginPath();
+    ctx.moveTo(-2, y);
+    ctx.lineTo(16, y);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+  return c;
+}
+
+export function getJournalTexture() {
+  if (_journalTex) return _journalTex;
+  const tex = new THREE.CanvasTexture(makeJournalCanvas());
+  tex.needsUpdate = true;
+  _journalTex = tex;
   return tex;
 }
 

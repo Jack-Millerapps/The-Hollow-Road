@@ -15,6 +15,7 @@ import {
   STONEHUSH_BELL_WORLD,
   STONEHUSH_BELL_INTERACT_R,
 } from '../data/stonehushBell.js';
+import { DEEPROOT_JOURNAL_SPOT, DEEPROOT_JOURNAL_R } from '../data/deeprootTargets.js';
 
 // ---------------------------------------------------------------------------
 // TownNPCs — a generic wandering-villager system used by every greater town
@@ -94,6 +95,8 @@ const STONEHUSH_UPDATE_RANGE_SQ = 360 * 360;
 
 const DEEPROOT_INTERACT_R = 5.2;
 const DEEPROOT_INTERACT_R_SQ = DEEPROOT_INTERACT_R * DEEPROOT_INTERACT_R;
+const DEEPROOT_JOURNAL_R_SQ = DEEPROOT_JOURNAL_R * DEEPROOT_JOURNAL_R;
+let _prevDeeprootJournalE = false;
 
 // Stable posts for Deeproot quest villagers (keeps them reachable in voxel-heavy GLB).
 const DEEPROOT_FRAGMENT_STANDS = [
@@ -237,6 +240,29 @@ function handleDeeprootInteract(entry, playerPos) {
   if (eEdge && candidates.length) {
     const target = unheard || candidates[0];
     QuestSystem.tryDeeprootVillager(target.slot);
+  }
+}
+
+function handleDeeprootJournalInteract(playerPos) {
+  const q = state.quests?.deeproot;
+  if (!q || q.done || q.step !== 2 || state.dialogueActive) {
+    _prevDeeprootJournalE = Travel.keys?.has?.('e') ?? false;
+    return;
+  }
+  const dx = DEEPROOT_JOURNAL_SPOT.x - playerPos.x;
+  const dz = DEEPROOT_JOURNAL_SPOT.z - playerPos.z;
+  if (dx * dx + dz * dz > DEEPROOT_JOURNAL_R_SQ) {
+    _prevDeeprootJournalE = Travel.keys?.has?.('e') ?? false;
+    return;
+  }
+  const keys = Travel.keys;
+  const eDown = keys?.has?.('e') ?? false;
+  const eEdge = eDown && !_prevDeeprootJournalE;
+  _prevDeeprootJournalE = eDown;
+
+  Travel._showSoftPrompt?.('[E] Search stones');
+  if (eEdge) {
+    QuestSystem.tryDeeprootJournal();
   }
 }
 
@@ -597,6 +623,7 @@ export const TownNPCs = {
       }
       if (entry.town.id === 'deeproot') {
         handleDeeprootInteract(entry, playerPos);
+        handleDeeprootJournalInteract(playerPos);
       }
     }
   },

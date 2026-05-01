@@ -40,7 +40,9 @@ import { ControlsIntro } from './ui/ControlsIntro.js';
 import { ObjectiveTracker } from './ui/ObjectiveTracker.js';
 import { QuestBanner } from './ui/QuestBanner.js';
 import { StonehushBellPointer } from './ui/StonehushBellPointer.js';
+import { FinderBar } from './ui/FinderBar.js';
 import { StonehushBellSprite } from './scene/StonehushBellSprite.js';
+import { DeeprootJournalSprite } from './scene/DeeprootJournalSprite.js';
 import { HUDTutorial } from './ui/HUDTutorial.js';
 import { DebugOverlay } from './ui/DebugOverlay.js';
 // Engine fixes (this prompt)
@@ -451,6 +453,7 @@ function start() {
   GoblinPopup.mount();
   Goblins.init(scene);
   StonehushBellSprite.init(scene);
+  DeeprootJournalSprite.init(scene);
   CaveInterior.init(scene);
   CaveInterior.setOnExit(() => exitCave());
   CaveEntrance.setOnEnter((caveId) => enterCave(caveId));
@@ -468,6 +471,7 @@ function start() {
   ObjectiveTracker.mount();
   QuestBanner.mount();
   StonehushBellPointer.mount();
+  FinderBar.mount();
 
   void Epilogue;
   AdminPanel.mount({ teleport: teleportPlayer });
@@ -521,6 +525,7 @@ function start() {
         Exchanger.update(state.playerPos);
         RoadEvents.update(delta, state.playerPos, Travel);
         StonehushBellSprite.update(t);
+        DeeprootJournalSprite.update(t);
         // TownNPCs first so Stonehush (etc.) E-interacts win the same frame
         // before Ashwick's shared Travel.keys edge detection.
         TownNPCs.update(delta, t, state.playerPos);

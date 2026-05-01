@@ -567,6 +567,28 @@ export const QuestSystem = {
     });
     return true;
   },
+
+  /** Deeproot journal search spot during the "journal" step. */
+  tryDeeprootJournal() {
+    const q = ensureQuest('deeproot');
+    if (q.done || q.step !== 2) return false;
+    DialoguePanel.open({
+      title: 'Loose stones',
+      body:
+        'Under slick roots and piled stones you find it: a journal sealed in oilcloth. The pages smell like sap and smoke.',
+      buttons: [
+        {
+          label: 'Take it.',
+          onClick: () => {
+            DialoguePanel.close();
+            QuestSystem.advance('deeproot'); // → choice
+            Save.write(state);
+          },
+        },
+      ],
+    });
+    return true;
+  },
 };
 
 // ---------------------------------------------------------------------------
