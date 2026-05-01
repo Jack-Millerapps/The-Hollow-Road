@@ -467,7 +467,8 @@ export function buildMirrorTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(200, 0, -7800);
-  loadTownGLB(MODEL_URLS.Mirror_town, group, { rotateY: Math.PI / 2, walkable: true });
+  // Rotate Mirror Town an additional 90°.
+  loadTownGLB(MODEL_URLS.Mirror_town, group, { rotateY: Math.PI, walkable: true });
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });
