@@ -124,7 +124,12 @@ function freshDefaults() {
         // Three villagers for Deeproot "villagers" step.
         villagerHeard: [false, false, false],
       },
-      mirrorTown: { step: 0, done: false, branch: null },
+      mirrorTown: {
+        step: 0,
+        done: false,
+        branch: null,
+        villagerHeard: [false, false, false, false],
+      },
     },
     // View state
     cameraYaw: 0,

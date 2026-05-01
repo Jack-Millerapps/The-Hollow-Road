@@ -92,6 +92,7 @@ function findOpenStonehushPost(sx, sz) {
 
 let _prevStonehushE = false;
 let _prevDeeprootE = false;
+let _prevMirrorTownE = false;
 
 const STONEHUSH_INTERACT_R = 4.8;
 const STONEHUSH_INTERACT_R_SQ = STONEHUSH_INTERACT_R * STONEHUSH_INTERACT_R;
@@ -100,6 +101,36 @@ const STONEHUSH_UPDATE_RANGE_SQ = 360 * 360;
 
 const DEEPROOT_INTERACT_R = 5.2;
 const DEEPROOT_INTERACT_R_SQ = DEEPROOT_INTERACT_R * DEEPROOT_INTERACT_R;
+
+const MIRROR_INTERACT_R = 5.2;
+const MIRROR_INTERACT_R_SQ = MIRROR_INTERACT_R * MIRROR_INTERACT_R;
+
+// Stable posts for Mirror Town quest villagers (slot 0..3).
+const MIRROR_FRAGMENT_STANDS = [
+  { x: 186, z: -7792 },
+  { x: 214, z: -7798 },
+  { x: 192, z: -7810 },
+  { x: 208, z: -7812 },
+];
+const MIRROR_FOOT_RADIUS = 0.5;
+
+function findOpenMirrorPost(sx, sz) {
+  if (!Collision.count || Collision.count() === 0) return { x: sx, z: sz };
+  if (!npcWorldBlocked(sx, sz, MIRROR_FOOT_RADIUS)) return { x: sx, z: sz };
+  const anchors = [
+    { x: 200, z: -7800 },
+    { x: 190, z: -7790 },
+    { x: 214, z: -7794 },
+    { x: 186, z: -7812 },
+    { x: 208, z: -7816 },
+  ];
+  const s = snapNpcWorldXZWithFallbacks(sx, sz, anchors, {
+    radius: MIRROR_FOOT_RADIUS,
+    maxSearchRadius: 120,
+  });
+  if (!npcWorldBlocked(s.x, s.z, MIRROR_FOOT_RADIUS)) return s;
+  return { x: sx, z: sz };
+}
 const DEEPROOT_JOURNAL_R_SQ = DEEPROOT_JOURNAL_R * DEEPROOT_JOURNAL_R;
 let _prevDeeprootJournalE = false;
 const DEEPROOT_ROOTKEEPER_R_SQ = DEEPROOT_ROOTKEEPER_R * DEEPROOT_ROOTKEEPER_R;
@@ -247,6 +278,44 @@ function handleDeeprootInteract(entry, playerPos) {
   if (eEdge && candidates.length) {
     const target = unheard || candidates[0];
     QuestSystem.tryDeeprootVillager(target.slot);
+  }
+}
+
+function handleMirrorTownInteract(entry, playerPos) {
+  const q = state.quests?.mirrorTown;
+  // Mirror Town "villagers" is step 1 in the current quest catalogue.
+  if (!q || q.done || q.step !== 1 || state.dialogueActive) {
+    _prevMirrorTownE = Travel.keys?.has?.('e') ?? false;
+    return;
+  }
+  const heard = q.villagerHeard || [false, false, false, false];
+  const px = playerPos.x;
+  const pz = playerPos.z;
+  const candidates = [];
+  for (const npc of entry.npcs) {
+    if (npc.mirrorSlot === undefined || npc.mirrorSlot === null) continue;
+    const dx = npc.mesh.position.x - px;
+    const dz = npc.mesh.position.z - pz;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < MIRROR_INTERACT_R_SQ) {
+      candidates.push({ npc, d2, slot: npc.mirrorSlot });
+    }
+  }
+  candidates.sort((a, b) => a.d2 - b.d2);
+
+  const keys = Travel.keys;
+  const eDown = keys?.has?.('e') ?? false;
+  const eEdge = eDown && !_prevMirrorTownE;
+  _prevMirrorTownE = eDown;
+
+  const unheard = candidates.find((c) => !heard[c.slot]);
+  const promptTarget = unheard || candidates[0];
+  if (promptTarget) {
+    Travel._showSoftPrompt?.('[E] Talk');
+  }
+  if (eEdge && candidates.length) {
+    const target = unheard || candidates[0];
+    QuestSystem.tryMirrorTownVillager(target.slot);
   }
 }
 
@@ -446,6 +515,22 @@ function ensureTown(scene, town) {
       npcs.push(n);
       continue;
     }
+    if (town.id === 'mirrorTown' && i < 4) {
+      const n = makeNpc(town, doorways);
+      n.mirrorSlot = i;
+      n.mirrorPinned = true;
+      n.state = 'walk';
+      n.fadeTotal = 0;
+      n.opacity = 1;
+      setOpacity(n.mesh, 1);
+      n.mesh.visible = true;
+      const prefer = MIRROR_FRAGMENT_STANDS[i];
+      const free = findOpenMirrorPost(prefer.x, prefer.z);
+      n.mesh.position.set(free.x, 0, free.z);
+      root.add(n.mesh);
+      npcs.push(n);
+      continue;
+    }
     const n = makeNpc(town, doorways);
     root.add(n.mesh);
     npcs.push(n);
@@ -523,6 +608,25 @@ function tickNpc(npc, town, doorways, delta, time, playerPos) {
     if (collReady && npcWorldBlocked(npc.mesh.position.x, npc.mesh.position.z, DEEPROOT_FOOT_RADIUS)) {
       const prefer = DEEPROOT_FRAGMENT_STANDS[npc.deeprootSlot % DEEPROOT_FRAGMENT_STANDS.length];
       const u = findOpenDeeprootPost(prefer.x, prefer.z);
+      npc.mesh.position.x = u.x;
+      npc.mesh.position.z = u.z;
+    }
+    npc.mesh.rotation.y = Math.atan2(
+      playerPos.x - npc.mesh.position.x,
+      playerPos.z - npc.mesh.position.z,
+    );
+    npc.mesh.position.y = npc.mesh.userData.baseY + Math.sin(time * 5 + npc.mesh.userData.phase) * 0.04;
+    return;
+  }
+  if (npc.mirrorPinned) {
+    npc.fadeTotal = 0;
+    npc.opacity = 1;
+    setOpacity(npc.mesh, 1);
+    npc.mesh.visible = true;
+    const collReady = !!Collision.count && Collision.count() > 0;
+    if (collReady && npcWorldBlocked(npc.mesh.position.x, npc.mesh.position.z, MIRROR_FOOT_RADIUS)) {
+      const prefer = MIRROR_FRAGMENT_STANDS[npc.mirrorSlot % MIRROR_FRAGMENT_STANDS.length];
+      const u = findOpenMirrorPost(prefer.x, prefer.z);
       npc.mesh.position.x = u.x;
       npc.mesh.position.z = u.z;
     }
@@ -656,6 +760,9 @@ export const TownNPCs = {
         handleDeeprootInteract(entry, playerPos);
         handleDeeprootJournalInteract(playerPos);
         handleDeeprootRootkeeperInteract(playerPos);
+      }
+      if (entry.town.id === 'mirrorTown') {
+        handleMirrorTownInteract(entry, playerPos);
       }
     }
   },

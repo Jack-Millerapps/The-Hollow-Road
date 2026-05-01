@@ -47,6 +47,11 @@ function ensureQuest(name) {
       q.villagerHeard = [false, false, false];
     }
   }
+  if (name === 'mirrorTown') {
+    if (!Array.isArray(q.villagerHeard) || q.villagerHeard.length < 4) {
+      q.villagerHeard = [false, false, false, false];
+    }
+  }
   return q;
 }
 
@@ -582,6 +587,46 @@ export const QuestSystem = {
           onClick: () => {
             DialoguePanel.close();
             QuestSystem.advance('deeproot'); // → choice
+            Save.write(state);
+          },
+        },
+      ],
+    });
+    return true;
+  },
+
+  /** Mirror Town villager E-interact during the "villagers" step; `slot` is 0..3. */
+  tryMirrorTownVillager(slot) {
+    const q = ensureQuest('mirrorTown');
+    // Mirror Town quest catalogue starts with 'mirror' step; villagers is step 1.
+    if (q.done || q.step !== 1 || slot < 0 || slot > 3) return false;
+    const heard = q.villagerHeard;
+    if (heard[slot]) {
+      DialoguePanel.open({
+        title: 'Villager',
+        body: '"I already told you. It isn’t me in the glass."',
+        buttons: [{ label: 'Step away.', onClick: () => DialoguePanel.close() }],
+      });
+      return true;
+    }
+    heard[slot] = true;
+    const bodies = [
+      '"My hands move like mine, but the face does not follow."',
+      '"Sometimes the reflection blinks when I do not."',
+      '"The mirror shows me leaving. I am still here."',
+      '"If you stare long enough, it starts to smile first."',
+    ];
+    const all = heard[0] && heard[1] && heard[2] && heard[3];
+    DialoguePanel.open({
+      title: 'A villager',
+      body: bodies[slot],
+      buttons: [
+        {
+          label: all ? 'Enough. Move on.' : '…',
+          onClick: () => {
+            DialoguePanel.close();
+            if (all) QuestSystem.advance('mirrorTown');
+            else notify();
             Save.write(state);
           },
         },
