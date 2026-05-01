@@ -44,6 +44,7 @@ import { FinderBar } from './ui/FinderBar.js';
 import { StonehushBellSprite } from './scene/StonehushBellSprite.js';
 import { DeeprootJournalSprite } from './scene/DeeprootJournalSprite.js';
 import { DeeprootQuestSprites } from './scene/DeeprootQuestSprites.js';
+import { Wetland } from './scene/Wetland.js';
 import { HUDTutorial } from './ui/HUDTutorial.js';
 import { DebugOverlay } from './ui/DebugOverlay.js';
 // Engine fixes (this prompt)
@@ -413,6 +414,7 @@ function start() {
   ChunkManager.setCamera(camera);
   Road.init(scene);
   Environment.init(scene);
+  Wetland.init(scene);
   for (const v of villages) VillageBuilder.buildVillage(v.name, scene);
   Westwind.build(scene);
   CabinInterior.build(scene);
@@ -514,6 +516,7 @@ function start() {
       BackgroundMusic.update(state.currentScene, state.playerPos);
       Environment.update(t);
       Environment.updateCulling(camera);
+      Wetland.update(t);
       VillageBuilder.update(t, state.playerPos);
       Road.update(delta, state.isWalking);
       CabinInterior.update(t);
@@ -549,6 +552,7 @@ function start() {
       const pz = state.playerPos?.z ?? 0;
       ChunkManager.update(px, pz, state.cameraYaw);
 
+      SceneManager.updateTownLook();
       SceneManager.updateShadowFollow(state.playerPos);
       SceneManager.render();
       FPSCounter.tick();

@@ -7,6 +7,7 @@ import {
   DEEPROOT_VILLAGER_POSTS,
   DEEPROOT_JOURNAL_SPOT,
 } from '../data/deeprootTargets.js';
+import { MIRROR_WETLAND_CENTER, MIRROR_HIDDEN_MIRROR_SPOT } from '../data/mirrorTownTargets.js';
 
 // ---------------------------------------------------------------------------
 // FinderBar — directional objective bar (old-school quest finder).
@@ -126,10 +127,25 @@ function deeprootTarget() {
   return null;
 }
 
+function mirrorTownTarget() {
+  const q = state.quests?.mirrorTown;
+  if (!q || q.done) return null;
+  const step = QuestSystem.currentStep?.('mirrorTown')?.id ?? null;
+
+  if (step === 'guide') {
+    return { ...MIRROR_WETLAND_CENTER, label: 'Wetland' };
+  }
+  if (step === 'found') {
+    return { ...MIRROR_HIDDEN_MIRROR_SPOT, label: 'Hidden mirror' };
+  }
+  return null;
+}
+
 function getTarget() {
   const qname = pickActiveQuest();
   if (!qname) return null;
   if (qname === 'deeproot') return deeprootTarget();
+  if (qname === 'mirrorTown') return mirrorTownTarget();
   return null;
 }
 

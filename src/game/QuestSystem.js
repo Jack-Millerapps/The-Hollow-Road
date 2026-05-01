@@ -67,6 +67,50 @@ function giveMapPiece(piece) {
 }
 
 // ---------------------------------------------------------------------------
+// Time-skip helper — fade to black, jump to sunset start, fade back in.
+// Caller must have closed (or keepFlag-closed) any open dialogue first.
+// ---------------------------------------------------------------------------
+
+function skipToSunset() {
+  const overlay = document.getElementById('fade-overlay');
+  const run = async () => {
+    if (overlay) {
+      overlay.style.transition = 'opacity 900ms ease';
+      void overlay.offsetWidth;
+      overlay.style.opacity = '1';
+      await new Promise((r) => setTimeout(r, 930));
+    }
+    // Advance gameTime to the start of the sunset phase within the current cycle.
+    const cycle = DayNight.CYCLE_LENGTH;
+    let sunsetStart = 0;
+    let acc = 0;
+    for (const p of DayNight.PHASES) {
+      if (p.name === 'sunset') { sunsetStart = acc; break; }
+      acc += p.duration;
+    }
+    const t = state.gameTime || 0;
+    const cycleBase = Math.floor(t / cycle) * cycle;
+    const wrapped = t - cycleBase;
+    let advance = sunsetStart - wrapped;
+    // If already at or past sunset in this cycle, jump to next cycle's sunset.
+    if (advance <= 0) advance += cycle;
+    state.gameTime = t + advance;
+    notify();
+    Save.write(state);
+    await new Promise((r) => setTimeout(r, 300));
+    if (overlay) {
+      overlay.style.transition = 'opacity 900ms ease';
+      void overlay.offsetWidth;
+      overlay.style.opacity = '0';
+      await new Promise((r) => setTimeout(r, 930));
+    }
+    state.dialogueActive = false;
+    notify();
+  };
+  run();
+}
+
+// ---------------------------------------------------------------------------
 // Quests catalogue (compact, functional).
 // ---------------------------------------------------------------------------
 
@@ -380,6 +424,11 @@ export const QuestSystem = {
     // (shovel for Deeproot, sleeping bag for Stonehush bell, etc.).
     const step = def.steps[q.step];
     const canSkip = canAdvanceMidQuest(name, q.step);
+    // Stonehush waitNight step: offer to wait until nightfall while talking to the Weaver.
+    const canWaitNight =
+      name === 'stonehush' &&
+      q.step === 2 &&
+      DayNight.getCurrentPhase() === 'day';
     DialoguePanel.open({
       title: def.giver,
       body: `(Current task:) ${step.hint}`,
@@ -392,6 +441,17 @@ export const QuestSystem = {
                   DialoguePanel.close();
                   this.advance(name);
                   onClose();
+                },
+              },
+            ]
+          : []),
+        ...(canWaitNight
+          ? [
+              {
+                label: 'Wait until nightfall.',
+                onClick: () => {
+                  DialoguePanel.close({ keepFlag: true });
+                  skipToSunset();
                 },
               },
             ]
@@ -424,7 +484,16 @@ export const QuestSystem = {
         DialoguePanel.open({
           title: 'The bell-frame',
           body: 'Rope and iron wait in daylight like any other village gear. Whatever the weaver meant, it is not sounding now.',
-          buttons: [{ label: 'Come back later.', onClick: () => DialoguePanel.close() }],
+          buttons: [
+            {
+              label: 'Wait for nightfall.',
+              onClick: () => {
+                DialoguePanel.close({ keepFlag: true });
+                skipToSunset();
+              },
+            },
+            { label: 'Come back later.', onClick: () => DialoguePanel.close() },
+          ],
         });
         return true;
       }
@@ -452,7 +521,16 @@ export const QuestSystem = {
         DialoguePanel.open({
           title: 'The bell',
           body: 'In daylight it is only iron. The sound you heard has gone thin again.',
-          buttons: [{ label: 'Step back.', onClick: () => DialoguePanel.close() }],
+          buttons: [
+            {
+              label: 'Wait for nightfall.',
+              onClick: () => {
+                DialoguePanel.close({ keepFlag: true });
+                skipToSunset();
+              },
+            },
+            { label: 'Step back.', onClick: () => DialoguePanel.close() },
+          ],
         });
         return true;
       }

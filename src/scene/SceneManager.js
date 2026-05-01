@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { state } from '../state.js';
 
 // ---------------------------------------------------------------------------
 // Light budget. Only the moon DirectionalLight casts shadows. All PointLights
@@ -82,6 +83,8 @@ export const SceneManager = {
   _lastCullMs: 0,
   _cullScratch: null,
   _shadowFrame: 0,
+  _baseExposure: 1.1,
+  _baseBloomStrength: 0.75,
 
   init() {
     const scene = new THREE.Scene();
@@ -197,6 +200,9 @@ export const SceneManager = {
     this.renderer = renderer;
     this.composer = composer;
     this.bloomPass = bloomPass;
+    this._baseExposure = renderer.toneMappingExposure;
+    this._baseBloomStrength = bloomPass ? bloomPass.strength : 0.75;
+
     this.fog = fog;
     this.moonLight = moonLight;
     this.moonFill = moonFill;
@@ -204,6 +210,27 @@ export const SceneManager = {
     this.hemi = hemi;
 
     return { scene, camera, renderer, fog };
+  },
+
+  // Mirror Town is intentionally uncanny/dim. Reduce exposure/bloom while in its zone.
+  updateTownLook() {
+    if (!this.renderer) return;
+    const pos = state.playerPos;
+    const inWorld = state.currentScene === 'world' && !!pos;
+    let inMirror = false;
+    if (inWorld) {
+      const dx = (pos.x ?? 0) - 200;
+      const dz = (pos.z ?? 0) - -7800;
+      inMirror = dx * dx + dz * dz < 120 * 120;
+    }
+    const targetExposure = inMirror ? 0.82 : this._baseExposure;
+    const cur = this.renderer.toneMappingExposure ?? this._baseExposure;
+    this.renderer.toneMappingExposure = cur + (targetExposure - cur) * 0.06;
+
+    if (this.bloomPass) {
+      const targetBloom = inMirror ? 0.45 : this._baseBloomStrength;
+      this.bloomPass.strength = this.bloomPass.strength + (targetBloom - this.bloomPass.strength) * 0.06;
+    }
   },
 
   // Register a PointLight so we can cap the active count per frame.
