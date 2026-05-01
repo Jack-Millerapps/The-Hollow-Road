@@ -61,7 +61,10 @@ const WESTWIND_EXIT_Z = 470;
 const TOWN_GATES = [
   { name: 'ashwick', gateZ: -540, displayName: 'Ashwick' },
   { name: 'veilMarket', gateZ: -2545, displayName: 'The Veil Market' },
-  { name: 'stonehush', gateZ: -5045, displayName: 'Stonehush' },
+  // South of town center (-5000); must clear the bell / lower plaza in the
+  // Stonehush GLB (~50–120m past center). Deeproot gate (-6045) still blocks
+  // the road well before the next village.
+  { name: 'stonehush', gateZ: -5260, displayName: 'Stonehush' },
   { name: 'deeproot', gateZ: -6045, displayName: 'Deeproot' },
   { name: 'mirrorTown', gateZ: -7840, displayName: 'Mirror Town' },
 ];

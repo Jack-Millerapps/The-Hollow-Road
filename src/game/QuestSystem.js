@@ -2,6 +2,7 @@ import { state, notify, grantItem } from '../state.js';
 import { DialoguePanel } from '../ui/DialoguePanel.js';
 import { Save } from './Save.js';
 import { setMillWheelSpinning } from '../scene/AshwickTown.js';
+import { DayNight } from '../scene/DayNight.js';
 
 // ---------------------------------------------------------------------------
 // QuestSystem — replaces SpecialTasks.js. Each destination's main NPC offers
@@ -397,6 +398,37 @@ export const QuestSystem = {
   // Expose advance helpers used by quest objects scattered in the world.
   questObjects() {
     return questWorldObjects();
+  },
+
+  /** Bell in the lower square — advances waitNight → bellChoice at dusk/night. */
+  tryStonehushBell() {
+    const q = ensureQuest('stonehush');
+    if (q.done || q.step !== 2) return false;
+    const phase = DayNight.getCurrentPhase();
+    if (phase !== 'night' && phase !== 'sunset') {
+      DialoguePanel.open({
+        title: 'The bell-frame',
+        body: 'Rope and iron wait in daylight like any other village gear. Whatever the weaver meant, it is not sounding now.',
+        buttons: [{ label: 'Come back later.', onClick: () => DialoguePanel.close() }],
+      });
+      return true;
+    }
+    DialoguePanel.open({
+      title: 'The bell',
+      body:
+        'Under the low sky you finally catch it — a thin, tireless note threading through stone. The square seems to lean toward the sound.',
+      buttons: [
+        {
+          label: 'Remember this.',
+          onClick: () => {
+            DialoguePanel.close();
+            QuestSystem.advance('stonehush');
+            Save.write(state);
+          },
+        },
+      ],
+    });
+    return true;
   },
 
   /** Villager E-interact during Stonehush fragment step; `slot` is 0..3. */

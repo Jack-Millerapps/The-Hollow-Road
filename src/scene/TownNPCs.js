@@ -10,6 +10,7 @@ import {
 import { Travel } from '../game/Travel.js';
 import { QuestSystem } from '../game/QuestSystem.js';
 import { Collision } from '../game/Collision.js';
+import { DayNight } from './DayNight.js';
 
 // ---------------------------------------------------------------------------
 // TownNPCs — a generic wandering-villager system used by every greater town
@@ -85,6 +86,43 @@ const STONEHUSH_INTERACT_R = 4.8;
 const STONEHUSH_INTERACT_R_SQ = STONEHUSH_INTERACT_R * STONEHUSH_INTERACT_R;
 /** Wider bubble so NPCs + E work before ChunkManager clips the GLB at the town edge. */
 const STONEHUSH_UPDATE_RANGE_SQ = 360 * 360;
+
+// Bell sits south of the fragment plaza — must stay *north* of Travel.js
+// stonehush gateZ so the quest does not rubber-band the player away first.
+const STONEHUSH_BELL = { x: -828, z: -5060 };
+const STONEHUSH_BELL_R = 7.5;
+const STONEHUSH_BELL_R_SQ = STONEHUSH_BELL_R * STONEHUSH_BELL_R;
+let _prevStonehushBellE = false;
+
+function handleStonehushBellInteract(playerPos) {
+  const q = state.quests?.stonehush;
+  if (!q || q.done || q.step !== 2 || state.dialogueActive) {
+    _prevStonehushBellE = Travel.keys?.has?.('e') ?? false;
+    return;
+  }
+  const dx = STONEHUSH_BELL.x - playerPos.x;
+  const dz = STONEHUSH_BELL.z - playerPos.z;
+  if (dx * dx + dz * dz > STONEHUSH_BELL_R_SQ) {
+    _prevStonehushBellE = Travel.keys?.has?.('e') ?? false;
+    return;
+  }
+  const keys = Travel.keys;
+  const eDown = keys?.has?.('e') ?? false;
+  const eEdge = eDown && !_prevStonehushBellE;
+  _prevStonehushBellE = eDown;
+
+  const phase = DayNight.getCurrentPhase?.() ?? 'day';
+  const darkEnough = phase === 'night' || phase === 'sunset';
+  if (darkEnough) {
+    Travel._showSoftPrompt?.('[E] The bell');
+  } else {
+    Travel._showSoftPrompt?.('[E] Inspect');
+  }
+
+  if (eEdge) {
+    QuestSystem.tryStonehushBell();
+  }
+}
 
 function handleStonehushInteract(entry, playerPos) {
   const q = state.quests?.stonehush;
@@ -441,6 +479,7 @@ export const TownNPCs = {
       }
       if (entry.town.id === 'stonehush') {
         handleStonehushInteract(entry, playerPos);
+        handleStonehushBellInteract(playerPos);
       }
     }
   },
