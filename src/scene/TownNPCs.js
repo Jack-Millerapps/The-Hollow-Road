@@ -22,6 +22,8 @@ import {
   DEEPROOT_ROOTKEEPER_R,
 } from '../data/deeprootTargets.js';
 import {
+  MIRROR_GLASSMAKER_R,
+  MIRROR_GLASSMAKER_SPOT,
   MIRROR_HIDDEN_MIRROR_SPOT,
   MIRROR_HIDDEN_MIRROR_R,
   MIRROR_VILLAGER_POSTS,
@@ -105,6 +107,7 @@ const DEEPROOT_INTERACT_R_SQ = DEEPROOT_INTERACT_R * DEEPROOT_INTERACT_R;
 
 const MIRROR_INTERACT_R = 5.2;
 const MIRROR_INTERACT_R_SQ = MIRROR_INTERACT_R * MIRROR_INTERACT_R;
+const MIRROR_GLASSMAKER_R_SQ = MIRROR_GLASSMAKER_R * MIRROR_GLASSMAKER_R;
 
 const MIRROR_FOOT_RADIUS = 0.5;
 const MIRROR_ESCAPE_ANCHORS = [
@@ -281,39 +284,50 @@ function handleDeeprootInteract(entry, playerPos) {
 
 function handleMirrorTownInteract(entry, playerPos) {
   const q = state.quests?.mirrorTown;
-  // Mirror Town "villagers" is step 1 in the current quest catalogue.
-  if (!q || q.done || q.step !== 1 || state.dialogueActive) {
+  if (!q || q.done || state.dialogueActive) {
     _prevMirrorTownE = Travel.keys?.has?.('e') ?? false;
     return;
   }
-  const heard = q.villagerHeard || [false, false, false, false];
-  const px = playerPos.x;
-  const pz = playerPos.z;
-  const candidates = [];
-  for (const npc of entry.npcs) {
-    if (npc.mirrorSlot === undefined || npc.mirrorSlot === null) continue;
-    const dx = npc.mesh.position.x - px;
-    const dz = npc.mesh.position.z - pz;
-    const d2 = dx * dx + dz * dz;
-    if (d2 < MIRROR_INTERACT_R_SQ) {
-      candidates.push({ npc, d2, slot: npc.mirrorSlot });
-    }
-  }
-  candidates.sort((a, b) => a.d2 - b.d2);
 
   const keys = Travel.keys;
   const eDown = keys?.has?.('e') ?? false;
   const eEdge = eDown && !_prevMirrorTownE;
   _prevMirrorTownE = eDown;
 
-  const unheard = candidates.find((c) => !heard[c.slot]);
-  const promptTarget = unheard || candidates[0];
-  if (promptTarget) {
-    Travel._showSoftPrompt?.('[E] Talk');
+  // Step 1: quest villagers take priority when in range (shared E-edge).
+  if (q.step === 1) {
+    const heard = q.villagerHeard || [false, false, false, false];
+    const px = playerPos.x;
+    const pz = playerPos.z;
+    const candidates = [];
+    for (const npc of entry.npcs) {
+      if (npc.mirrorSlot === undefined || npc.mirrorSlot === null) continue;
+      const dx = npc.mesh.position.x - px;
+      const dz = npc.mesh.position.z - pz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < MIRROR_INTERACT_R_SQ) {
+        candidates.push({ npc, d2, slot: npc.mirrorSlot });
+      }
+    }
+    candidates.sort((a, b) => a.d2 - b.d2);
+    const unheard = candidates.find((c) => !heard[c.slot]);
+    if (candidates.length) {
+      Travel._showSoftPrompt?.('[E] Talk');
+      if (eEdge) {
+        const target = unheard || candidates[0];
+        QuestSystem.tryMirrorTownVillager(target.slot);
+      }
+      return;
+    }
   }
-  if (eEdge && candidates.length) {
-    const target = unheard || candidates[0];
-    QuestSystem.tryMirrorTownVillager(target.slot);
+
+  const gdx = MIRROR_GLASSMAKER_SPOT.x - playerPos.x;
+  const gdz = MIRROR_GLASSMAKER_SPOT.z - playerPos.z;
+  if (gdx * gdx + gdz * gdz <= MIRROR_GLASSMAKER_R_SQ) {
+    Travel._showSoftPrompt?.('[E] Speak (Glassmaker)');
+    if (eEdge) {
+      QuestSystem.talkToQuestNpc('mirrorTown', { onClose: () => {} });
+    }
   }
 }
 

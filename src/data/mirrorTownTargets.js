@@ -2,6 +2,10 @@
 
 export const MIRROR_TOWN_CENTER = { x: 200, z: -7800 };
 
+// World interact for the quest giver (same pattern as Deeproot Root-keeper).
+export const MIRROR_GLASSMAKER_SPOT = { x: 188, z: -7786 };
+export const MIRROR_GLASSMAKER_R = 8.0;
+
 // Pinned villager posts (slots 0..3) — keep in sync with TownNPCs mirror NPCs.
 export const MIRROR_VILLAGER_POSTS = [
   { x: 186, z: -7792 },

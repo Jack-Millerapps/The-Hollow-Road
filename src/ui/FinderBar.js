@@ -8,6 +8,7 @@ import {
   DEEPROOT_JOURNAL_SPOT,
 } from '../data/deeprootTargets.js';
 import {
+  MIRROR_GLASSMAKER_SPOT,
   MIRROR_TOWN_CENTER,
   MIRROR_VILLAGER_POSTS,
   MIRROR_WETLAND_CENTER,
@@ -246,9 +247,9 @@ function mirrorTownTarget() {
     return { ...MIRROR_HIDDEN_MIRROR_SPOT, label: 'Hidden mirror' };
   }
   if (step === 'choice') {
-    return { ...MIRROR_TOWN_CENTER, label: 'The glassmaker' };
+    return { ...MIRROR_GLASSMAKER_SPOT, label: 'The glassmaker' };
   }
-  if (step === 'intro') return { ...MIRROR_TOWN_CENTER, label: 'The glassmaker' };
+  if (step === 'intro') return { ...MIRROR_GLASSMAKER_SPOT, label: 'The glassmaker' };
   return null;
 }
 

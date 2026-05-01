@@ -44,6 +44,7 @@ import { FinderBar } from './ui/FinderBar.js';
 import { StonehushBellSprite } from './scene/StonehushBellSprite.js';
 import { DeeprootJournalSprite } from './scene/DeeprootJournalSprite.js';
 import { DeeprootQuestSprites } from './scene/DeeprootQuestSprites.js';
+import { MirrorQuestSprites } from './scene/MirrorQuestSprites.js';
 import { Wetland } from './scene/Wetland.js';
 import { MirrorHiddenSprite } from './scene/MirrorHiddenSprite.js';
 import { HUDTutorial } from './ui/HUDTutorial.js';
@@ -459,6 +460,7 @@ function start() {
   StonehushBellSprite.init(scene);
   DeeprootJournalSprite.init(scene);
   DeeprootQuestSprites.init(scene);
+  MirrorQuestSprites.init(scene);
   MirrorHiddenSprite.init(scene);
   CaveInterior.init(scene);
   CaveInterior.setOnExit(() => exitCave());
@@ -534,6 +536,7 @@ function start() {
         StonehushBellSprite.update(t);
         DeeprootJournalSprite.update(t);
         DeeprootQuestSprites.update(t);
+        MirrorQuestSprites.update(t);
         MirrorHiddenSprite.update(t);
         // TownNPCs first so Stonehush (etc.) E-interacts win the same frame
         // before Ashwick's shared Travel.keys edge detection.
