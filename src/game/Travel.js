@@ -322,7 +322,17 @@ export const Travel = {
 
     // Camera occlusion — prevent camera from passing through GLB collision geometry.
     // Ray-march from player eye to ideal camera position; stop at first hit.
-    const CAMERA_PROBE = 0.35;
+    //
+    // Deeproot collision is root-heavy and can be very dense; probing too wide
+    // makes the camera feel twitchy (rapid snap/unsnap). So we soften the
+    // occlusion while the player is inside Deeproot's plaza region.
+    const DEEPROOT_CENTER_X = 680;
+    const DEEPROOT_CENTER_Z = -6000;
+    const dxTown = this.player.position.x - DEEPROOT_CENTER_X;
+    const dzTown = this.player.position.z - DEEPROOT_CENTER_Z;
+    const inDeeproot = !inCave && (dxTown * dxTown + dzTown * dzTown < 110 * 110);
+
+    const CAMERA_PROBE = inDeeproot ? 0.22 : 0.35;
     const eyeX = this.player.position.x;
     const eyeZ = this.player.position.z;
     if (!inCave && Collision.hits(this._cameraPos.x, this._cameraPos.z, CAMERA_PROBE)) {
@@ -330,16 +340,21 @@ export const Travel = {
       const camDZ = this._cameraPos.z - eyeZ;
       let lo = 0;
       let hi = 1;
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < (inDeeproot ? 6 : 8); i++) {
         const mid = (lo + hi) * 0.5;
         const tx = eyeX + camDX * mid;
         const tz = eyeZ + camDZ * mid;
         if (Collision.hits(tx, tz, CAMERA_PROBE)) hi = mid;
         else lo = mid;
       }
-      const t = Math.max(0, lo - 0.02);
-      this._cameraPos.x = eyeX + camDX * t;
-      this._cameraPos.z = eyeZ + camDZ * t;
+      const backoff = inDeeproot ? 0.05 : 0.02;
+      const t = Math.max(0, lo - backoff);
+      const clampX = eyeX + camDX * t;
+      const clampZ = eyeZ + camDZ * t;
+      // Extra smoothing inside Deeproot to avoid harsh snaps against many close voxels.
+      const k = inDeeproot ? 0.55 : 1.0;
+      this._cameraPos.x = this._cameraPos.x + (clampX - this._cameraPos.x) * k;
+      this._cameraPos.z = this._cameraPos.z + (clampZ - this._cameraPos.z) * k;
       // Interpolate y along the same ratio so the camera doesn't float.
       const fullLen = Math.hypot(camDX, camDZ);
       const clampLen = fullLen > 0.001 ? Math.hypot(this._cameraPos.x - eyeX, this._cameraPos.z - eyeZ) / fullLen : 1;
