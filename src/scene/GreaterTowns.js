@@ -439,7 +439,21 @@ export function buildDeeprootTown(scene, reg) {
 
   const group = new THREE.Group();
   group.position.set(600, 0, -6000);
-  loadTownGLB(MODEL_URLS.Deeproot, group, { dy: -1, dx: 80, rotateY: -Math.PI / 2, walkable: true });
+  // Deeproot GLB has lots of thin roots / trims; default 0.5m voxels can
+  // create dense "phantom" collision. Use coarser cells + higher stepHeight.
+  loadTownGLB(MODEL_URLS.Deeproot, group, {
+    dy: -1,
+    dx: 80,
+    rotateY: -Math.PI / 2,
+    walkable: true,
+    collision: {
+      cellSize: 0.85,
+      triFloorY: 0.18,
+      maxNormalY: 0.55,
+      stepHeight: 0.9,
+      playerCeiling: 2.05,
+    },
+  });
   scene.add(group);
   reg.group = group;
   ChunkManager.register(group, group.position.x, group.position.z, { radius: 600 });

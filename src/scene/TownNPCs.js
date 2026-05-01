@@ -85,11 +85,51 @@ function findOpenStonehushPost(sx, sz) {
 }
 
 let _prevStonehushE = false;
+let _prevDeeprootE = false;
 
 const STONEHUSH_INTERACT_R = 4.8;
 const STONEHUSH_INTERACT_R_SQ = STONEHUSH_INTERACT_R * STONEHUSH_INTERACT_R;
 /** Wider bubble so NPCs + E work before ChunkManager clips the GLB at the town edge. */
 const STONEHUSH_UPDATE_RANGE_SQ = 360 * 360;
+
+const DEEPROOT_INTERACT_R = 5.2;
+const DEEPROOT_INTERACT_R_SQ = DEEPROOT_INTERACT_R * DEEPROOT_INTERACT_R;
+
+// Stable posts for Deeproot quest villagers (keeps them reachable in voxel-heavy GLB).
+const DEEPROOT_FRAGMENT_STANDS = [
+  { x: 670, z: -5992 },
+  { x: 694, z: -6006 },
+  { x: 676, z: -6014 },
+];
+const DEEPROOT_FOOT_RADIUS = 0.5;
+
+function findOpenDeeprootPost(sx, sz) {
+  if (!Collision.count || Collision.count() === 0) return { x: sx, z: sz };
+  if (!npcWorldBlocked(sx, sz, DEEPROOT_FOOT_RADIUS)) return { x: sx, z: sz };
+  const anchors = [
+    { x: 680, z: -6000 },
+    { x: 666, z: -5990 },
+    { x: 698, z: -6008 },
+    { x: 672, z: -6020 },
+    { x: 690, z: -5986 },
+  ];
+  const s = snapNpcWorldXZWithFallbacks(sx, sz, anchors, {
+    radius: DEEPROOT_FOOT_RADIUS,
+    maxSearchRadius: 110,
+  });
+  if (!npcWorldBlocked(s.x, s.z, DEEPROOT_FOOT_RADIUS)) return s;
+  for (let ring = 1; ring <= 72; ring++) {
+    const step = ring * 0.38;
+    const samples = Math.max(12, Math.round((2 * Math.PI * step) / 0.42));
+    for (let i = 0; i < samples; i++) {
+      const a = (i / samples) * Math.PI * 2;
+      const nx = sx + Math.cos(a) * step;
+      const nz = sz + Math.sin(a) * step;
+      if (!npcWorldBlocked(nx, nz, DEEPROOT_FOOT_RADIUS)) return { x: nx, z: nz };
+    }
+  }
+  return { x: sx, z: sz };
+}
 
 const STONEHUSH_BELL_R_SQ =
   STONEHUSH_BELL_INTERACT_R * STONEHUSH_BELL_INTERACT_R;
@@ -159,6 +199,44 @@ function handleStonehushInteract(entry, playerPos) {
   if (eEdge && candidates.length) {
     const target = unheard || candidates[0];
     QuestSystem.tryStonehushFragment(target.slot);
+  }
+}
+
+function handleDeeprootInteract(entry, playerPos) {
+  const q = state.quests?.deeproot;
+  if (!q || q.done || q.step !== 1 || state.dialogueActive) {
+    _prevDeeprootE = Travel.keys?.has?.('e') ?? false;
+    return;
+  }
+  const heard = q.villagerHeard || [false, false, false];
+  const px = playerPos.x;
+  const pz = playerPos.z;
+  const candidates = [];
+  for (const npc of entry.npcs) {
+    if (npc.deeprootSlot === undefined || npc.deeprootSlot === null) continue;
+    const dx = npc.mesh.position.x - px;
+    const dz = npc.mesh.position.z - pz;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < DEEPROOT_INTERACT_R_SQ) {
+      candidates.push({ npc, d2, slot: npc.deeprootSlot });
+    }
+  }
+  candidates.sort((a, b) => a.d2 - b.d2);
+
+  const keys = Travel.keys;
+  const eDown = keys?.has?.('e') ?? false;
+  const eEdge = eDown && !_prevDeeprootE;
+  _prevDeeprootE = eDown;
+
+  const unheard = candidates.find((c) => !heard[c.slot]);
+  const promptTarget = unheard || candidates[0];
+  if (promptTarget) {
+    Travel._showSoftPrompt?.('[E] Ask');
+  }
+
+  if (eEdge && candidates.length) {
+    const target = unheard || candidates[0];
+    QuestSystem.tryDeeprootVillager(target.slot);
   }
 }
 
@@ -295,6 +373,22 @@ function ensureTown(scene, town) {
       npcs.push(n);
       continue;
     }
+    if (town.id === 'deeproot' && i < 3) {
+      const n = makeNpc(town, doorways);
+      n.deeprootSlot = i;
+      n.deeprootPinned = true;
+      n.state = 'walk';
+      n.fadeTotal = 0;
+      n.opacity = 1;
+      setOpacity(n.mesh, 1);
+      n.mesh.visible = true;
+      const prefer = DEEPROOT_FRAGMENT_STANDS[i];
+      const free = findOpenDeeprootPost(prefer.x, prefer.z);
+      n.mesh.position.set(free.x, 0, free.z);
+      root.add(n.mesh);
+      npcs.push(n);
+      continue;
+    }
     const n = makeNpc(town, doorways);
     root.add(n.mesh);
     npcs.push(n);
@@ -360,6 +454,26 @@ function tickNpc(npc, town, doorways, delta, time, playerPos) {
     }
     npc.mesh.position.y =
       npc.mesh.userData.baseY + Math.sin(time * 2.2 + npc.mesh.userData.phase) * 0.035;
+    return;
+  }
+  if (npc.deeprootPinned) {
+    npc.fadeTotal = 0;
+    npc.opacity = 1;
+    setOpacity(npc.mesh, 1);
+    npc.mesh.visible = true;
+
+    const collReady = !!Collision.count && Collision.count() > 0;
+    if (collReady && npcWorldBlocked(npc.mesh.position.x, npc.mesh.position.z, DEEPROOT_FOOT_RADIUS)) {
+      const prefer = DEEPROOT_FRAGMENT_STANDS[npc.deeprootSlot % DEEPROOT_FRAGMENT_STANDS.length];
+      const u = findOpenDeeprootPost(prefer.x, prefer.z);
+      npc.mesh.position.x = u.x;
+      npc.mesh.position.z = u.z;
+    }
+    npc.mesh.rotation.y = Math.atan2(
+      playerPos.x - npc.mesh.position.x,
+      playerPos.z - npc.mesh.position.z,
+    );
+    npc.mesh.position.y = npc.mesh.userData.baseY + Math.sin(time * 5 + npc.mesh.userData.phase) * 0.04;
     return;
   }
 
@@ -480,6 +594,9 @@ export const TownNPCs = {
       if (entry.town.id === 'stonehush') {
         handleStonehushInteract(entry, playerPos);
         handleStonehushBellInteract(playerPos);
+      }
+      if (entry.town.id === 'deeproot') {
+        handleDeeprootInteract(entry, playerPos);
       }
     }
   },

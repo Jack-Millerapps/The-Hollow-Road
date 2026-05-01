@@ -116,7 +116,13 @@ function freshDefaults() {
         // Four villagers for the "fragments" step (see QuestSystem / TownNPCs).
         fragmentHeard: [false, false, false, false],
       },
-      deeproot: { step: 0, done: false, branch: null },
+      deeproot: {
+        step: 0,
+        done: false,
+        branch: null,
+        // Three villagers for Deeproot "villagers" step.
+        villagerHeard: [false, false, false],
+      },
       mirrorTown: { step: 0, done: false, branch: null },
     },
     // View state

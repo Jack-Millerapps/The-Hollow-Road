@@ -42,6 +42,11 @@ function ensureQuest(name) {
       q.fragmentHeard = [false, false, false, false];
     }
   }
+  if (name === 'deeproot') {
+    if (!Array.isArray(q.villagerHeard) || q.villagerHeard.length < 3) {
+      q.villagerHeard = [false, false, false];
+    }
+  }
   return q;
 }
 
@@ -517,6 +522,44 @@ export const QuestSystem = {
             } else {
               notify();
             }
+            Save.write(state);
+          },
+        },
+      ],
+    });
+    return true;
+  },
+
+  /** Deeproot villager E-interact during the "villagers" step; `slot` is 0..2. */
+  tryDeeprootVillager(slot) {
+    const q = ensureQuest('deeproot');
+    if (q.done || q.step !== 1 || slot < 0 || slot > 2) return false;
+    const heard = q.villagerHeard;
+    if (heard[slot]) {
+      DialoguePanel.open({
+        title: 'Villager',
+        body: 'They have already told you what they can.',
+        buttons: [{ label: 'Leave.', onClick: () => DialoguePanel.close() }],
+      });
+      return true;
+    }
+    heard[slot] = true;
+    const bodies = [
+      '"He went into the roots with a lantern. It came back without him."',
+      '"We pretend the tree does not choose. But it does. It always does."',
+      '"If you listen, you can hear the bark drinking. Like it remembers every name."',
+    ];
+    const all = heard[0] && heard[1] && heard[2];
+    DialoguePanel.open({
+      title: 'A villager',
+      body: bodies[slot],
+      buttons: [
+        {
+          label: all ? 'Return to the Root-keeper.' : 'Thank them.',
+          onClick: () => {
+            DialoguePanel.close();
+            if (all) QuestSystem.advance('deeproot');
+            else notify();
             Save.write(state);
           },
         },
