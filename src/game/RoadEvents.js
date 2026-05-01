@@ -467,7 +467,7 @@ export const RoadEvents = {
       g.userData.head.rotation.y = ang - g.rotation.y;
     }
 
-    if (dist < INTERACT_RADIUS && a.fadeT >= FADE_IN_S && !state.dialogueActive) {
+    if (dist < INTERACT_RADIUS && a.fadeT >= FADE_IN_S && !state.dialogueActive && !a.interacted) {
       showPrompt();
       const wantsE = travel?.keys?.has('e');
       if (wantsE && !_eDown) {
@@ -500,6 +500,8 @@ export const RoadEvents = {
 
   _resolve(event, option, onComplete) {
     if (option.cost && !canAfford(option.cost)) return;
+    // Prevent re-interaction after the player has chosen an option.
+    if (_active) _active.interacted = true;
     if (option.cost) {
       for (const [type, amount] of Object.entries(option.cost)) {
         spend(type, amount);

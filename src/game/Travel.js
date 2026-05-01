@@ -12,6 +12,7 @@ import { FirstNightWarning } from '../ui/FirstNightWarning.js';
 import { DayNight } from '../scene/DayNight.js';
 import { Collision } from './Collision.js';
 import { PauseManager } from './PauseManager.js';
+import { RoadWhisperPopup } from '../ui/RoadWhisperPopup.js';
 
 const PLAYER_RADIUS = 0.5;
 
@@ -51,6 +52,8 @@ const _rollQuat = new THREE.Quaternion();
 const _rollAxis = new THREE.Vector3(0, 0, 1);
 
 const WESTWIND_EXIT_Z = 470;
+const WRONG_WAY_TIME_S = 18;
+const WRONG_WAY_DIST = 220;
 
 // Each gate sits just past a town along the road. The player cannot cross a
 // gate (i.e. their z cannot go below `gateZ`) until that town's
@@ -92,6 +95,8 @@ export const Travel = {
   _softPrompt: null,
   _softPromptTimer: 0,
   _lastNotifyMs: 0,
+  _wrongWayAcc: 0,
+  _wrongWayDist: 0,
   // Ground level — overridden when entering/exiting caves.
   _groundY: DEFAULT_GROUND_Y,
   _lastYawForRoll: 0,
@@ -616,6 +621,29 @@ export const Travel = {
     if (!state.playerPos) state.playerPos = { x: 0, z: 0 };
     state.playerPos.x = this.player.position.x;
     state.playerPos.z = this.player.position.z;
+
+    // --- Wrong-way whisper (north on the road) ----------------------------
+    // If the player keeps walking north (back home) for a while, nudge them.
+    const inWorld = state.currentScene === 'world' && !inCave;
+    const onRoad = inWorld && state.flags.hasLeftWestwind && !state.offRoad;
+    const movingNorth = moved && actualDZ > 0.02;
+    if (onRoad && movingNorth && !state.dialogueActive && !PauseManager.isPaused()) {
+      this._wrongWayAcc += clampedDelta;
+      this._wrongWayDist += Math.hypot(actualDX, actualDZ);
+      if (
+        this._wrongWayAcc >= WRONG_WAY_TIME_S ||
+        this._wrongWayDist >= WRONG_WAY_DIST
+      ) {
+        RoadWhisperPopup.maybeShow();
+        // Prevent retriggering spam after it fires.
+        this._wrongWayAcc = 0;
+        this._wrongWayDist = 0;
+      }
+    } else {
+      // Decay instead of hard reset so brief corrections don't wipe progress.
+      this._wrongWayAcc = Math.max(0, this._wrongWayAcc - clampedDelta * 1.5);
+      this._wrongWayDist = Math.max(0, this._wrongWayDist - Math.hypot(actualDX, actualDZ) * 1.2);
+    }
 
     // --- Westwind exit gate ------------------------------------------------
     if (!state.flags.hasLeftWestwind && !inCave &&

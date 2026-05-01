@@ -56,6 +56,7 @@ function freshDefaults() {
       // Consolidation additions
       seenControls: false,
       seenFirstNightWarning: false,
+      seenWrongWayWhisper: false,
       // Friend gifting gates
       friendMiraGifted: false,
       friendTomasGifted: false,

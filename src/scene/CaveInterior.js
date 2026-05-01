@@ -33,8 +33,8 @@ const ROOM_HEIGHT = 4;
 const TUNNEL_WIDTH = 3;
 const WALL_THICKNESS = 0.5;
 
-const CAVE_FOG_COLOR = 0x2a0a08;
-const CAVE_FOG_DENSITY = 0.08;
+const CAVE_FOG_COLOR = 0x1a0604;
+const CAVE_FOG_DENSITY = 0.11;
 const CAVE_AMBIENT_COLOR = 0x3a1810;
 const CAVE_AMBIENT_INTENSITY = 0.2;
 
@@ -72,6 +72,7 @@ function caveMaterials() {
       roughness: 0.98,
       metalness: 0.0,
       flatShading: true,
+      side: THREE.DoubleSide,
     }),
     floor: new THREE.MeshStandardMaterial({
       color: 0x241712,
@@ -152,7 +153,8 @@ function buildWallSegment(group, cx, cz, length, axis, mat, walls) {
   mesh.position.set(cx, ROOM_HEIGHT / 2, cz);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  const axisScale = 0.92 + ((Math.sin(cx * 7.3 + cz * 1.9) + 1) * 0.5) * 0.22;
+  // Minimum of 1.0 ensures walls always reach the ceiling — no gaps above.
+  const axisScale = 1.0 + ((Math.sin(cx * 7.3 + cz * 1.9) + 1) * 0.5) * 0.14;
   mesh.scale.y = axisScale;
   mesh.position.y = (ROOM_HEIGHT * axisScale) / 2;
   group.add(mesh);
