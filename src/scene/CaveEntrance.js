@@ -83,6 +83,9 @@ function buildEntrance(cave) {
   const group = new THREE.Group();
   group.name = `caveEntrance:${cave.id}`;
   group.position.set(cave.position.x, 0, cave.position.z);
+  if (typeof cave.entranceRotationY === 'number') {
+    group.rotation.y = cave.entranceRotationY;
+  }
 
   // Face the player: entrances face "road-ward" (toward z=0 axis roughly).
   // We just let them face +Z (player is usually approaching from road).
@@ -129,6 +132,15 @@ function buildEntrance(cave) {
   const innerGlow = new THREE.PointLight(0xffaa55, 0.9, 10, 1.8);
   innerGlow.position.set(0, 2.0, -5.0);
   group.add(innerGlow);
+
+  // Ashwick story cave — extra beacon so it reads from the road east of town.
+  if (cave.id === 'ashCave') {
+    const beacon = new THREE.PointLight(0xffc080, 1.35, 32, 1.85);
+    beacon.position.set(0, 7.5, 1.2);
+    group.add(beacon);
+    innerGlow.intensity = 1.35;
+    innerGlow.distance = 14;
+  }
 
   // Flanking torches.
   for (const side of [-1, 1]) {
@@ -206,6 +218,12 @@ function buildEntrance(cave) {
   return group;
 }
 
+function rotateFlatXZ(lx, lz, rotY) {
+  const c = Math.cos(rotY);
+  const s = Math.sin(rotY);
+  return { x: lx * c - lz * s, z: lx * s + lz * c };
+}
+
 // ---------------------------------------------------------------------------
 // Prompt element
 // ---------------------------------------------------------------------------
@@ -257,10 +275,12 @@ export const CaveEntrance = {
       const mesh = buildEntrance(cave);
       parent.add(mesh);
       this.entries.push({ cave, mesh });
-      // Flanking boulder colliders so the player can't walk through the
-      // arch walls. The center mouth is left open.
-      Collision.addCircle(cave.position.x - 1.9, cave.position.z, 1.2);
-      Collision.addCircle(cave.position.x + 1.9, cave.position.z, 1.2);
+      // Flanking boulder colliders — rotate with entrance so they match the mesh.
+      const rot = cave.entranceRotationY ?? 0;
+      const oL = rotateFlatXZ(-1.9, 0, rot);
+      const oR = rotateFlatXZ(1.9, 0, rot);
+      Collision.addCircle(cave.position.x + oL.x, cave.position.z + oL.z, 1.2);
+      Collision.addCircle(cave.position.x + oR.x, cave.position.z + oR.z, 1.2);
     }
     scene.add(parent);
     this.group = parent;
@@ -320,7 +340,8 @@ export const CaveEntrance = {
       const dx = playerPos.x - cave.position.x;
       const dz = playerPos.z - cave.position.z;
       const dist = Math.hypot(dx, dz);
-      if (dist < CAVE_TRIGGER_RADIUS && dist < nearestDist) {
+      const triggerR = cave.triggerRadius ?? CAVE_TRIGGER_RADIUS;
+      if (dist < triggerR && dist < nearestDist) {
         nearest = cave;
         nearestDist = dist;
       }

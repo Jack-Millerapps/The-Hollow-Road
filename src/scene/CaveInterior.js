@@ -3,6 +3,7 @@ import { state, notify } from '../state.js';
 import { caves, CURRENCY_COLORS } from '../data/caves.js';
 import { SceneManager } from './SceneManager.js';
 import { Collision } from '../game/Collision.js';
+import { QuestSystem } from '../game/QuestSystem.js';
 
 // ---------------------------------------------------------------------------
 // Phase 3 — Cave interiors.
@@ -478,6 +479,40 @@ function buildExitPortal(group, room, materials) {
   return { x: cx, z: cz };
 }
 
+// Ashwick quest — stone stack + carving in the alcove (same props as the old
+// overworld fake cave; now lives inside The Ash Hollow interior).
+function buildAshwickQuestShrine(group, rooms, materials) {
+  const alc = rooms.alcove;
+  const shrine = new THREE.Group();
+  shrine.name = 'ashwickQuestShrine';
+  shrine.position.set(alc.cx + 0.35, 0, alc.cz - 2.35);
+  for (let s = 0; s < 4; s++) {
+    const b = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9 - s * 0.12, 0.45, 0.7 - s * 0.08),
+      materials.stone,
+    );
+    b.position.set(0, 0.22 + s * 0.42, 0);
+    b.castShadow = true;
+    shrine.add(b);
+  }
+  const figurine = new THREE.Mesh(
+    new THREE.BoxGeometry(0.35, 0.85, 0.25),
+    new THREE.MeshStandardMaterial({
+      color: 0x4a3018,
+      roughness: 0.85,
+      flatShading: true,
+    }),
+  );
+  figurine.position.set(0, 2.05, 0);
+  figurine.castShadow = true;
+  shrine.add(figurine);
+  const gl = new THREE.PointLight(0xaaccff, 0.55, 9, 2);
+  gl.position.set(0.45, 2.95, 0.05);
+  shrine.add(gl);
+  group.add(shrine);
+  return { x: shrine.position.x, z: shrine.position.z, r: 3.6 };
+}
+
 // ---------------------------------------------------------------------------
 // Build one cave (cached).
 // ---------------------------------------------------------------------------
@@ -539,6 +574,11 @@ function buildCave(cave, caveIndex) {
   const troll = buildTroll(group, cave, rooms.troll, materials);
   const exitPortal = buildExitPortal(group, rooms.entry, materials);
 
+  let ashwickShrineLocal = null;
+  if (cave.id === 'ashCave') {
+    ashwickShrineLocal = buildAshwickQuestShrine(group, rooms, materials);
+  }
+
   // A single slightly brighter torch-pair flanking the entry room interior
   // so first sight on spawn is inviting.
   for (const side of [-1, 1]) {
@@ -560,6 +600,7 @@ function buildCave(cave, caveIndex) {
     spawnLocal: { x: rooms.entry.cx, z: rooms.entry.cz + 1.5, rotationY: Math.PI },
     compassLocal: { x: rooms.troll.cx, z: rooms.troll.cz },
     floorY: 0, // cave floor height — flat for now
+    ashwickShrineLocal,
   };
 }
 
@@ -643,6 +684,34 @@ function buildExitPromptDOM() {
   return el;
 }
 
+function buildShrinePromptDOM() {
+  const el = document.createElement('div');
+  el.className = 'cave-shrine-prompt';
+  el.style.cssText = [
+    'position: fixed',
+    'bottom: 118px',
+    'left: 50%',
+    'transform: translateX(-50%)',
+    'padding: 8px 18px',
+    'background: rgba(13, 10, 6, 0.88)',
+    'border: 1px solid #5a3820',
+    'border-radius: 999px',
+    'color: #ffaa60',
+    'font-family: Georgia, serif',
+    'font-size: 13px',
+    'font-variant: small-caps',
+    'letter-spacing: 0.22em',
+    'z-index: 25',
+    'opacity: 0',
+    'transition: opacity 0.25s ease',
+    'pointer-events: none',
+  ].join(';');
+  el.textContent = 'Press E — examine the stones';
+  const root = document.getElementById('ui-root') || document.body;
+  root.appendChild(el);
+  return el;
+}
+
 // ---------------------------------------------------------------------------
 // CaveInterior module
 // ---------------------------------------------------------------------------
@@ -657,20 +726,35 @@ export const CaveInterior = {
   _savedMoon: null,
   _compass: null,
   _exitPrompt: null,
+  _shrinePrompt: null,
   _playerRef: null,
   onExit: null, // called when player presses E at the exit portal
   EXIT_TRIGGER_RADIUS: 2.2,
+  _atAshwickShrine: false,
+  _shrinePromptVisible: null,
 
   init(scene) {
     this.scene = scene;
     if (!this._compass) this._compass = buildCompassDOM();
     if (!this._exitPrompt) this._exitPrompt = buildExitPromptDOM();
+    if (!this._shrinePrompt) this._shrinePrompt = buildShrinePromptDOM();
 
     window.addEventListener('keydown', (e) => {
       if (state.currentScene !== 'cave') return;
-      if (e.key === 'e' || e.key === 'E') {
-        if (this._atExit) {
-          if (typeof this.onExit === 'function') this.onExit();
+      if (e.repeat) return;
+      if (e.key !== 'e' && e.key !== 'E') return;
+      if (this._atExit) {
+        if (typeof this.onExit === 'function') this.onExit();
+        return;
+      }
+      if (
+        this._atAshwickShrine &&
+        this.active?.cave?.id === 'ashCave' &&
+        !state.dialogueActive
+      ) {
+        const q = state.quests?.ashwick;
+        if (q && !q.done && q.step === 4) {
+          QuestSystem.tryAshwickShrine();
         }
       }
     });
@@ -793,7 +877,12 @@ export const CaveInterior = {
     entry.group.visible = false;
     this.active = null;
     this._atExit = false;
+    this._atAshwickShrine = false;
     if (this._exitPrompt) this._exitPrompt.style.opacity = '0';
+    if (this._shrinePrompt) {
+      this._shrinePrompt.style.opacity = '0';
+      this._shrinePromptVisible = false;
+    }
     if (this._compass) this._compass.el.style.opacity = '0';
 
     // Restore world lighting to saved values — DayNight will continue
@@ -867,6 +956,10 @@ export const CaveInterior = {
         this._exitPrompt.style.opacity = '0';
         this._exitPromptVisible = false;
       }
+      if (this._shrinePrompt && this._shrinePromptVisible) {
+        this._shrinePrompt.style.opacity = '0';
+        this._shrinePromptVisible = false;
+      }
       return;
     }
     const local = this.worldToLocal(playerPos.x, playerPos.z);
@@ -882,6 +975,29 @@ export const CaveInterior = {
     if (this._exitPrompt && this._exitPromptVisible !== this._atExit) {
       this._exitPrompt.style.opacity = this._atExit ? '1' : '0';
       this._exitPromptVisible = this._atExit;
+    }
+
+    // Ashwick quest shrine (inside ashCave only).
+    let atShrine = false;
+    const shr = this.active.ashwickShrineLocal;
+    if (shr && this.active.cave?.id === 'ashCave') {
+      const dxs = local.x - shr.x;
+      const dzs = local.z - shr.z;
+      const rr = (shr.r ?? 3.5) * (shr.r ?? 3.5);
+      atShrine = dxs * dxs + dzs * dzs < rr;
+    }
+    this._atAshwickShrine = atShrine;
+    const qAsh = state.quests?.ashwick;
+    const showShrinePrompt =
+      atShrine &&
+      qAsh &&
+      !qAsh.done &&
+      qAsh.step === 4 &&
+      !state.dialogueActive &&
+      !this._atExit;
+    if (this._shrinePrompt && this._shrinePromptVisible !== showShrinePrompt) {
+      this._shrinePrompt.style.opacity = showShrinePrompt ? '1' : '0';
+      this._shrinePromptVisible = showShrinePrompt;
     }
 
     // Compass toward troll chamber — DOM style writes trigger restyle,

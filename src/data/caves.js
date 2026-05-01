@@ -2,7 +2,7 @@
 // Each cave sits off the road on a specific leg.
 //
 // Leg mapping (positions chosen mid-leg, ~20 units off-road):
-//   Westwind (0, 500) → Ashwick (0, -500)         ashCave   @ (25, 0)
+//   Ashwick (0, -500): ashCave sits east of town (same entrance kit as other caves).
 //   Ashwick  (0, -500) → Veil (0, -2500)          veilCave  @ (-25, -1500)
 //   Veil     (0, -2500) → Stonehush (-800, -5000) stoneCave @ (-400, -3700)  *the worst time
 //   Stonehush (-800, -5000) → Deeproot (600, -6000) deepCave @ (-100, -5500)
@@ -13,7 +13,10 @@ export const caves = [
   {
     id: 'ashCave',
     name: 'The Ash Hollow',
-    position: { x: 25, z: 0 },
+    // East of Ashwick (town ~0,-500); mouth faces west toward the road / town.
+    position: { x: 200, z: -500 },
+    entranceRotationY: Math.PI,
+    triggerRadius: 11,
     currency: 'gold',
     troll: 'Ogrim',
     mapReward: 'ashwickPiece',

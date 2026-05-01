@@ -78,7 +78,8 @@ const QUESTS = {
       },
       {
         id: 'cave',
-        hint: 'Find the cave east of Ashwick.',
+        hint:
+          'Enter The Ash Hollow east of Ashwick — torched stone arch, signpost, then find the shrine deep inside.',
       },
       {
         id: 'choice',

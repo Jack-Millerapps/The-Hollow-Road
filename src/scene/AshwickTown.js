@@ -12,21 +12,16 @@ export const AshwickWorld = {
   GRAVE_Z: -500,
   PAGE_X: 82,
   PAGE_Z: -498,
-  CAVE_X: 200,
-  CAVE_Z: -500,
 };
 
 /** @type {THREE.Object3D | null} */
 let _graveMarker = null;
 /** @type {THREE.Mesh | null} */
 let _tornPage = null;
-/** @type {THREE.Group | null} */
-let _shrineGroup = null;
-/** @type {THREE.Group | null} */
-let _caveInterior = null;
 
 export function getQuestMeshes() {
-  return { grave: _graveMarker, page: _tornPage, shrine: _shrineGroup, caveRoot: _caveInterior };
+  // Quest shrine / cave interior live in CaveInterior (ashCave) — see caves.js.
+  return { grave: _graveMarker, page: _tornPage, shrine: null, caveRoot: null };
 }
 
 function stdMat(color, opts = {}) {
@@ -50,7 +45,6 @@ export function build(scene, reg) {
   reg.tavernWindowMeshes = [];
   reg._townRoot = null;
   reg._graveRoot = null;
-  reg._caveRoot = null;
 
   const townRoot = new THREE.Group();
   townRoot.position.set(0, 0, AshwickWorld.MILL_Z);
@@ -130,7 +124,8 @@ export function build(scene, reg) {
   pctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
   pctx.fillStyle = '#2a1810';
   pctx.font = '22px Georgia, serif';
-  const line = 'He went to the cave in the hills to the east. He said he heard it singing.';
+  const line =
+    'He went to the cave in the hills to the east — the stone arch they call The Ash Hollow. He said he heard it singing.';
   const words = line.split(' ');
   let lineY = 40;
   let buf = '';
@@ -157,61 +152,6 @@ export function build(scene, reg) {
   scene.add(pageMesh);
   _tornPage = pageMesh;
   ChunkManager.register(pageMesh, AshwickWorld.PAGE_X, AshwickWorld.PAGE_Z);
-
-  // --- Cave / shrine (quest items) ---
-  const caveRoot = new THREE.Group();
-  caveRoot.position.set(AshwickWorld.CAVE_X, 0, AshwickWorld.CAVE_Z);
-  scene.add(caveRoot);
-  reg._caveRoot = caveRoot;
-  _caveInterior = caveRoot;
-
-  const caveMat = stdMat(0x3a3530, { roughness: 1 });
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 10), caveMat);
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(0, 0.02, -4);
-  floor.receiveShadow = true;
-  caveRoot.add(floor);
-
-  const wallT = new THREE.Mesh(new THREE.BoxGeometry(12, 4, 0.4), caveMat);
-  wallT.position.set(0, 2, -9);
-  caveRoot.add(wallT);
-  const wallL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4, 10), caveMat);
-  wallL.position.set(-6, 2, -4);
-  caveRoot.add(wallL);
-  const wallR = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4, 10), caveMat);
-  wallR.position.set(6, 2, -4);
-  caveRoot.add(wallR);
-  const wallBack = new THREE.Mesh(new THREE.BoxGeometry(12, 4, 0.4), caveMat);
-  wallBack.position.set(0, 2, 1);
-  caveRoot.add(wallBack);
-
-  const shrine = new THREE.Group();
-  shrine.position.set(0, 0, -5.5);
-  caveRoot.add(shrine);
-  for (let s = 0; s < 4; s++) {
-    const b = new THREE.Mesh(
-      new THREE.BoxGeometry(0.9 - s * 0.12, 0.45, 0.7 - s * 0.08),
-      stdMat(0x5a5a58),
-    );
-    b.position.set(0, 0.22 + s * 0.42, 0);
-    b.castShadow = true;
-    shrine.add(b);
-  }
-  const figurine = new THREE.Mesh(
-    new THREE.BoxGeometry(0.35, 0.85, 0.25),
-    stdMat(0x4a3018, { roughness: 0.85 }),
-  );
-  figurine.position.set(0, 2.05, 0);
-  figurine.castShadow = true;
-  shrine.add(figurine);
-  _shrineGroup = shrine;
-
-  const caveGlow = new THREE.PointLight(0xaaccff, 0.5, 12, 2);
-  caveGlow.position.set(0, 2.5, -5);
-  caveRoot.add(caveGlow);
-  SceneManager.registerPointLight(caveGlow);
-
-  ChunkManager.register(caveRoot, AshwickWorld.CAVE_X, AshwickWorld.CAVE_Z);
 }
 
 export function setMillWheelSpinning() {}

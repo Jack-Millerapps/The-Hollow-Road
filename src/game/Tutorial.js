@@ -69,6 +69,10 @@ function distToAshCave() {
   );
 }
 
+function ashCaveInteractRadius() {
+  return ASH_CAVE?.triggerRadius ?? CAVE_TRIGGER_RADIUS;
+}
+
 function distToAshwick() {
   if (!ASHWICK || !state.playerPos) return 1e9;
   return Math.hypot(
@@ -286,7 +290,7 @@ function syncFromState() {
     f.tutorialS5Night &&
     !f.tutorialS6Cave &&
     ASH_CAVE &&
-    distToAshCave() < CAVE_TRIGGER_RADIUS + 3 &&
+    distToAshCave() < ashCaveInteractRadius() + 3 &&
     !_queue.some((q) => q.id === 's6') &&
     _active?.id !== 's6'
   ) {

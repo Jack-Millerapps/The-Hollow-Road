@@ -4,7 +4,7 @@ import { DayNight } from './DayNight.js';
 import { Travel } from '../game/Travel.js';
 import { QuestSystem } from '../game/QuestSystem.js';
 import { DialoguePanel } from '../ui/DialoguePanel.js';
-import { AshwickWorld, getQuestMeshes } from './AshwickTown.js';
+import { AshwickWorld } from './AshwickTown.js';
 import {
   npcWorldBlocked,
   snapNpcWorldXZWithFallbacks,
@@ -474,7 +474,6 @@ export const AshwickNPCs = {
       if (nearestInteract && nearestInteract.group.visible) {
         this._talkTo(nearestInteract);
       } else {
-        const { shrine } = getQuestMeshes();
         const qa = state.quests?.ashwick;
         if (qa && !qa.done) {
           if (
@@ -487,13 +486,6 @@ export const AshwickNPCs = {
             dist2(px, pz, AshwickWorld.PAGE_X, AshwickWorld.PAGE_Z) < PAGE_INTERACT_SQ
           ) {
             QuestSystem.tryAshwickPage();
-          } else if (
-            shrine &&
-            qa.step === 4
-          ) {
-            const sx = AshwickWorld.CAVE_X + shrine.position.x;
-            const sz = AshwickWorld.CAVE_Z + shrine.position.z;
-            if (dist2(px, pz, sx, sz) < 16) QuestSystem.tryAshwickShrine();
           }
         }
       }
