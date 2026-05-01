@@ -39,6 +39,7 @@ import { FPSCounter } from './ui/FPSCounter.js';
 import { ControlsIntro } from './ui/ControlsIntro.js';
 import { ObjectiveTracker } from './ui/ObjectiveTracker.js';
 import { QuestBanner } from './ui/QuestBanner.js';
+import { StonehushBellPointer } from './ui/StonehushBellPointer.js';
 import { HUDTutorial } from './ui/HUDTutorial.js';
 import { DebugOverlay } from './ui/DebugOverlay.js';
 // Engine fixes (this prompt)
@@ -464,6 +465,7 @@ function start() {
   FPSCounter.mount();
   ObjectiveTracker.mount();
   QuestBanner.mount();
+  StonehushBellPointer.mount();
 
   void Epilogue;
   AdminPanel.mount({ teleport: teleportPlayer });

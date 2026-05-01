@@ -1,0 +1,192 @@
+import { state, subscribe } from '../state.js';
+import { DayNight } from '../scene/DayNight.js';
+import { PauseManager } from '../game/PauseManager.js';
+import {
+  STONEHUSH_BELL_WORLD,
+  STONEHUSH_BELL_INTERACT_R,
+} from '../data/stonehushBell.js';
+
+// ---------------------------------------------------------------------------
+// StonehushBellPointer — only while sunset/night + quest step "find the bell".
+// Rotating chevron shows which way to walk toward the bell interact point.
+// ---------------------------------------------------------------------------
+
+/** Signed angle (rad) from view-forward to flat target, Travel.js convention. */
+function relativeBearingRad(yaw, fromX, fromZ, toX, toZ) {
+  const dx = toX - fromX;
+  const dz = toZ - fromZ;
+  const len = Math.hypot(dx, dz);
+  if (len < 0.25) return 0;
+  const tx = dx / len;
+  const tz = dz / len;
+  const fx = -Math.sin(yaw);
+  const fz = -Math.cos(yaw);
+  return Math.atan2(fx * tz - fz * tx, fx * tx + fz * tz);
+}
+
+function ensureStyle() {
+  if (document.getElementById('stonehush-bell-pointer-style')) return;
+  const s = document.createElement('style');
+  s.id = 'stonehush-bell-pointer-style';
+  s.textContent = `
+.stonehush-bell-pointer {
+  position: fixed;
+  bottom: 108px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 37;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 18px 7px 12px;
+  background: linear-gradient(180deg, rgba(32, 22, 14, 0.92), rgba(14, 10, 6, 0.92));
+  border: 1px solid rgba(200, 144, 58, 0.42);
+  border-radius: 999px;
+  box-shadow: 0 4px 22px rgba(0, 0, 0, 0.55),
+              0 0 20px -8px rgba(200, 144, 58, 0.25);
+  color: #f0e0c0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  max-width: min(92vw, 420px);
+}
+.stonehush-bell-pointer.visible {
+  opacity: 1;
+}
+.stonehush-bell-pointer .arrow-wrap {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stonehush-bell-pointer .arrow {
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 12px solid #f0c86a;
+  filter: drop-shadow(0 0 6px rgba(240, 200, 106, 0.45));
+  transform-origin: 50% 65%;
+}
+.stonehush-bell-pointer .copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.25;
+}
+.stonehush-bell-pointer .copy strong {
+  font-weight: 600;
+  color: #f5e6b8;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+}
+.stonehush-bell-pointer .copy span {
+  font-size: 11px;
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  color: #c8b898;
+}
+`;
+  document.head.appendChild(s);
+}
+
+function shouldShow() {
+  if (state.currentScene !== 'world') return false;
+  if (!state.flags?.hasLeftWestwind) return false;
+  if (state.dialogueActive) return false;
+  if (PauseManager.isPaused()) return false;
+
+  const q = state.quests?.stonehush;
+  if (!q || q.done || q.step !== 2) return false;
+
+  const phase = DayNight.getCurrentPhase?.() ?? 'day';
+  if (phase !== 'night' && phase !== 'sunset') return false;
+
+  const px = state.playerPos?.x ?? 0;
+  const pz = state.playerPos?.z ?? 0;
+  const dx = STONEHUSH_BELL_WORLD.x - px;
+  const dz = STONEHUSH_BELL_WORLD.z - pz;
+  const dist = Math.hypot(dx, dz);
+  if (dist < STONEHUSH_BELL_INTERACT_R * 1.35) return false;
+
+  return true;
+}
+
+export const StonehushBellPointer = {
+  root: null,
+  _arrow: null,
+  _raf: 0,
+  _lastRenderMs: 0,
+
+  mount() {
+    ensureStyle();
+    const root = document.createElement('div');
+    root.className = 'stonehush-bell-pointer';
+    root.setAttribute('role', 'status');
+    root.setAttribute('aria-live', 'polite');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'arrow-wrap';
+    const arrow = document.createElement('span');
+    arrow.className = 'arrow';
+    wrap.appendChild(arrow);
+
+    const copy = document.createElement('div');
+    copy.className = 'copy';
+    copy.innerHTML =
+      '<strong>Bell</strong><span>Follow the arrow toward the lower square.</span>';
+
+    root.appendChild(wrap);
+    root.appendChild(copy);
+
+    document.getElementById('ui-root')?.appendChild(root);
+    this.root = root;
+    this._arrow = arrow;
+
+    subscribe(() => this.syncVisibility());
+
+    const loop = (now) => {
+      if (now - this._lastRenderMs > 40) {
+        this._lastRenderMs = now;
+        // Phase / time can change without a state notify — re-check visibility here.
+        this.syncVisibility();
+        this.render();
+      }
+      this._raf = requestAnimationFrame(loop);
+    };
+    this._raf = requestAnimationFrame(loop);
+    this.syncVisibility();
+  },
+
+  syncVisibility() {
+    if (!this.root) return;
+    const on = shouldShow();
+    this.root.classList.toggle('visible', on);
+  },
+
+  render() {
+    if (!this.root || !this._arrow) return;
+    if (!this.root.classList.contains('visible')) return;
+
+    const yaw = state.cameraYaw ?? 0;
+    const px = state.playerPos?.x ?? 0;
+    const pz = state.playerPos?.z ?? 0;
+    const rel = relativeBearingRad(
+      yaw,
+      px,
+      pz,
+      STONEHUSH_BELL_WORLD.x,
+      STONEHUSH_BELL_WORLD.z,
+    );
+    const deg = -(rel * 180) / Math.PI;
+    this._arrow.style.transform = `rotate(${deg}deg)`;
+  },
+};
