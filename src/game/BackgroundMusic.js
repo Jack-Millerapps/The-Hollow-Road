@@ -11,10 +11,14 @@
 // when the selection changes.
 // ---------------------------------------------------------------------------
 
+import { state } from '../state.js';
+import { DayNight } from '../scene/DayNight.js';
+
 const MASTER_VOLUME = 0.5;
 const FADE_DURATION = 2.0;
 const RANDOM_GAP_MIN_SEC = 20;
 const RANDOM_GAP_MAX_SEC = 5 * 60;
+const BELL_VOLUME = 0.33;
 
 const TRACKS = {
   hollowPath: 'Hollow Path.mp3',
@@ -52,6 +56,17 @@ let _currentZoneId = null;
 let _randomTrackId = null;
 let _randomGapTimer = null;
 
+let _bellAudio = null;
+let _bellResolved = false;
+let _bellCandidateIdx = 0;
+const BELL_CANDIDATES = [
+  'Bell.mp3',
+  'Bell.wav',
+  'Bell.ogg',
+  'Bell.m4a',
+  'Bell',
+];
+
 function srcFor(file) {
   const base = import.meta.env.BASE_URL || './';
   const prefix = base.endsWith('/') ? base : `${base}/`;
@@ -61,6 +76,46 @@ function srcFor(file) {
 function tryPlay(audio) {
   const p = audio.play();
   if (p && typeof p.catch === 'function') p.catch(() => {});
+}
+
+function shouldPlayBell() {
+  if (state.currentScene !== 'world') return false;
+  if (_currentZoneId !== 'stonehush') return false;
+  const q = state.quests?.stonehush;
+  if (!q || q.done || (q.step ?? 0) <= 0) return false;
+  const phase = DayNight.getCurrentPhase?.() ?? 'day';
+  return phase === 'night';
+}
+
+function ensureBellAudio() {
+  if (typeof Audio === 'undefined' || _bellAudio) return;
+  const a = new Audio();
+  a.loop = true;
+  a.preload = 'auto';
+  a.volume = 0;
+
+  const tryNext = () => {
+    if (_bellResolved) return;
+    if (_bellCandidateIdx >= BELL_CANDIDATES.length) {
+      _bellResolved = true;
+      return;
+    }
+    const file = BELL_CANDIDATES[_bellCandidateIdx++];
+    a.src = srcFor(file);
+    // Force a load attempt so the error event fires quickly if missing.
+    try { a.load?.(); } catch { /* ignore */ }
+  };
+
+  a.addEventListener('error', () => {
+    // Try the next extension/name until one works.
+    tryNext();
+  });
+  a.addEventListener('canplaythrough', () => {
+    _bellResolved = true;
+  }, { once: true });
+
+  _bellAudio = a;
+  tryNext();
 }
 
 function pickRandomTrack() {
@@ -121,11 +176,13 @@ export const BackgroundMusic = {
     }
     _randomTrackId = pickRandomTrack();
     _lastTickMs = performance.now();
+    ensureBellAudio();
 
     // Browsers block autoplay until the first user gesture. Retry whatever
     // track is currently desired on the first interaction.
     const resume = () => {
       if (_activeId && _audios[_activeId]?.paused) tryPlay(_audios[_activeId]);
+      if (_bellAudio && _bellAudio.volume > 0.001 && _bellAudio.paused) tryPlay(_bellAudio);
     };
     window.addEventListener('pointerdown', resume, { once: true });
     window.addEventListener('keydown', resume, { once: true });
@@ -149,6 +206,18 @@ export const BackgroundMusic = {
 
       if (a.volume > 0.001 && a.paused) tryPlay(a);
       else if (a.volume <= 0.001 && !a.paused) a.pause();
+    }
+
+    // --- Stonehush bell loop (night only, quest active) -------------------
+    ensureBellAudio();
+    if (_bellAudio) {
+      const target = shouldPlayBell() ? BELL_VOLUME : 0;
+      const bellStep = (BELL_VOLUME / 0.8) * dt; // faster fade than music
+      if (_bellAudio.volume < target) _bellAudio.volume = Math.min(target, _bellAudio.volume + bellStep);
+      else if (_bellAudio.volume > target) _bellAudio.volume = Math.max(target, _bellAudio.volume - bellStep);
+
+      if (_bellAudio.volume > 0.001 && _bellAudio.paused) tryPlay(_bellAudio);
+      else if (_bellAudio.volume <= 0.001 && !_bellAudio.paused) _bellAudio.pause();
     }
   },
 };
