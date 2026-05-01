@@ -1,6 +1,8 @@
 import { Travel } from '../game/Travel.js';
 import { VillageBuilder } from '../scene/VillageBuilder.js';
 import { state } from '../state.js';
+import { QuestSystem } from '../game/QuestSystem.js';
+import { Save } from '../game/Save.js';
 
 // ---------------------------------------------------------------------------
 // AdminPanel — F1 dev overlay
@@ -273,6 +275,93 @@ function buildPanel() {
   });
 
   el.appendChild(townSection);
+
+  // ---- Quest Debug ----
+  const questSection = document.createElement('div');
+  questSection.className = 'adm-section';
+  questSection.innerHTML = `<div class="adm-label">Quest Step</div>`;
+
+  const questRow = document.createElement('div');
+  questRow.className = 'adm-row';
+
+  const questSelect = document.createElement('select');
+  Object.assign(questSelect.style, {
+    flex: '1',
+    minWidth: '160px',
+    background: 'rgba(40, 28, 12, 0.85)',
+    border: '1px solid #3a2e1a',
+    borderRadius: '4px',
+    color: '#e8dcc8',
+    fontFamily: "Georgia, 'Times New Roman', serif",
+    fontSize: '12px',
+    padding: '5px 8px',
+  });
+  const questOptions = [
+    { key: 'ashwick', label: 'Ashwick' },
+    { key: 'stonehush', label: 'Stonehush' },
+    { key: 'deeproot', label: 'Deeproot' },
+    { key: 'mirrorTown', label: 'Mirror Town' },
+  ];
+  for (const q of questOptions) {
+    const opt = document.createElement('option');
+    opt.value = q.key;
+    opt.textContent = q.label;
+    questSelect.appendChild(opt);
+  }
+
+  const status = document.createElement('div');
+  status.className = 'adm-hint';
+  status.textContent = '(Select a quest.)';
+
+  const backBtn = document.createElement('button');
+  backBtn.className = 'adm-btn';
+  backBtn.textContent = 'Step −1';
+  backBtn.onclick = () => {
+    const key = questSelect.value;
+    const q = state.quests?.[key];
+    const def = QuestSystem.getQuest?.(key);
+    if (!q || !def) return;
+    q.done = false;
+    q.step = Math.max(0, (q.step ?? 0) - 1);
+    // If we step back into stonehush bellChoice, don't require the bag to exist;
+    // player can re-obtain via admin/inventory if desired.
+    Save.write(state);
+  };
+
+  const fwdBtn = document.createElement('button');
+  fwdBtn.className = 'adm-btn';
+  fwdBtn.textContent = 'Step +1';
+  fwdBtn.onclick = () => {
+    const key = questSelect.value;
+    const q = state.quests?.[key];
+    const def = QuestSystem.getQuest?.(key);
+    if (!q || !def) return;
+    q.done = false;
+    q.step = Math.min(def.steps.length - 1, (q.step ?? 0) + 1);
+    Save.write(state);
+  };
+
+  const refreshStatus = () => {
+    const key = questSelect.value;
+    const q = state.quests?.[key];
+    const step = QuestSystem.currentStep?.(key);
+    if (!q) {
+      status.textContent = 'No quest state found.';
+      return;
+    }
+    status.textContent =
+      `step=${q.step ?? 0}  id=${step?.id ?? 'none'}  done=${q.done ? 'yes' : 'no'}`;
+  };
+  questSelect.onchange = refreshStatus;
+  setInterval(refreshStatus, 400);
+  refreshStatus();
+
+  questRow.appendChild(questSelect);
+  questRow.appendChild(backBtn);
+  questRow.appendChild(fwdBtn);
+  questSection.appendChild(questRow);
+  questSection.appendChild(status);
+  el.appendChild(questSection);
 
   return el;
 }
