@@ -69,7 +69,9 @@ const TOWN_GATES = [
   // the road well before the next village.
   { name: 'stonehush', gateZ: -5260, displayName: 'Stonehush' },
   { name: 'deeproot', gateZ: -6045, displayName: 'Deeproot' },
-  { name: 'mirrorTown', gateZ: -7840, displayName: 'Mirror Town' },
+  // Mirror Town quest sends the player into the wetland south-east of town;
+  // keep the gate far enough south to avoid softlocking that objective.
+  { name: 'mirrorTown', gateZ: -8350, displayName: 'Mirror Town' },
 ];
 
 export const Travel = {
