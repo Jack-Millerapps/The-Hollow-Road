@@ -44,6 +44,8 @@ const ARRIVE_R = 0.6;
 const PAUSE_MIN = 1.4;
 const PAUSE_MAX = 3.2;
 const UPDATE_RANGE_SQ = 280 * 280;
+/** Mirror Town includes an off-town wetland objective — keep hooks in range. */
+const MIRROR_UPDATE_RANGE_SQ = 520 * 520;
 const DOORWAY_HOLD_MIN = 2.2;
 const DOORWAY_HOLD_MAX = 4.8;
 const FADE_TIME = 0.55;
@@ -802,7 +804,11 @@ export const TownNPCs = {
       const dx = c.x - playerPos.x;
       const dz = c.z - playerPos.z;
       const rangeSq =
-        entry.town.id === 'stonehush' ? STONEHUSH_UPDATE_RANGE_SQ : UPDATE_RANGE_SQ;
+        entry.town.id === 'stonehush'
+          ? STONEHUSH_UPDATE_RANGE_SQ
+          : entry.town.id === 'mirrorTown'
+            ? MIRROR_UPDATE_RANGE_SQ
+            : UPDATE_RANGE_SQ;
       const inRange = dx * dx + dz * dz < rangeSq;
       // Hide root when far away to skip per-NPC work and keep them off the
       // GPU until the player approaches.

@@ -742,7 +742,6 @@ export const QuestSystem = {
     const q = ensureQuest('mirrorTown');
     if (q.done || q.step !== 2) return false;
     if (q.wetlandArrived) return false;
-    q.wetlandArrived = true;
     DialoguePanel.open({
       title: 'Wetland',
       body:
@@ -758,6 +757,8 @@ export const QuestSystem = {
         },
       ],
     });
+    // Only after a successful open — avoids a softlock if the panel fails to mount.
+    q.wetlandArrived = true;
     return true;
   },
 };
