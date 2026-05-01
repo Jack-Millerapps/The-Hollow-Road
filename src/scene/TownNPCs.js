@@ -43,9 +43,18 @@ const STONHUSH_ESCAPE_ANCHORS = [
   { x: -838, z: -4988 },
 ];
 
+// Fixed posts for the four fragment NPCs — avoids one wanderer pathing into
+// dense GLB voxels or ending up effectively untargetable.
+const STONHUSH_FRAGMENT_STANDS = [
+  { x: -816, z: -4994 },
+  { x: -844, z: -5002 },
+  { x: -826, z: -5010 },
+  { x: -836, z: -4988 },
+];
+
 let _prevStonehushE = false;
 
-const STONEHUSH_INTERACT_R = 2.8;
+const STONEHUSH_INTERACT_R = 3.5;
 const STONEHUSH_INTERACT_R_SQ = STONEHUSH_INTERACT_R * STONEHUSH_INTERACT_R;
 
 function handleStonehushInteract(entry, playerPos) {
@@ -60,8 +69,6 @@ function handleStonehushInteract(entry, playerPos) {
   let bestD2 = STONEHUSH_INTERACT_R_SQ;
   for (const npc of entry.npcs) {
     if (npc.stonehushSlot === undefined || npc.stonehushSlot === null) continue;
-    if (npc.state === 'inside') continue;
-    if (npc.opacity < 0.2) continue;
     const dx = npc.mesh.position.x - px;
     const dz = npc.mesh.position.z - pz;
     const d2 = dx * dx + dz * dz;
@@ -201,10 +208,23 @@ function ensureTown(scene, town) {
   const doorways = buildDoorways(town.center, town.radius, 7);
   const npcs = [];
   for (let i = 0; i < town.npcCount; i++) {
-    const n = makeNpc(town, doorways);
     if (town.id === 'stonehush' && i < 4) {
+      const n = makeNpc(town, doorways);
       n.stonehushSlot = i;
+      n.stonehushPinned = true;
+      n.state = 'walk';
+      n.fadeTotal = 0;
+      n.opacity = 1;
+      setOpacity(n.mesh, 1);
+      n.mesh.visible = true;
+      const prefer = STONHUSH_FRAGMENT_STANDS[i];
+      const free = snapNpcWorldXZWithFallbacks(prefer.x, prefer.z, STONHUSH_ESCAPE_ANCHORS);
+      n.mesh.position.set(free.x, 0, free.z);
+      root.add(n.mesh);
+      npcs.push(n);
+      continue;
     }
+    const n = makeNpc(town, doorways);
     root.add(n.mesh);
     npcs.push(n);
   }
@@ -240,6 +260,30 @@ function startFade(npc, to, duration) {
 
 function tickNpc(npc, town, doorways, delta, time, playerPos) {
   stepFade(npc, delta);
+
+  // Stonehush fragment NPCs: stay at fixed posts (no doorway / wander into walls).
+  if (npc.stonehushPinned) {
+    npc.fadeTotal = 0;
+    npc.opacity = 1;
+    setOpacity(npc.mesh, 1);
+    npc.mesh.visible = true;
+    npc.state = 'walk';
+    const px = npc.mesh.position.x;
+    const pz = npc.mesh.position.z;
+    if (npcWorldBlocked(px, pz)) {
+      const prefer = STONHUSH_FRAGMENT_STANDS[npc.stonehushSlot % STONHUSH_FRAGMENT_STANDS.length];
+      const u = snapNpcWorldXZWithFallbacks(prefer.x, prefer.z, STONHUSH_ESCAPE_ANCHORS);
+      npc.mesh.position.set(u.x, 0, u.z);
+    }
+    const plx = playerPos.x - px;
+    const plz = playerPos.z - pz;
+    if (plx * plx + plz * plz > 0.04) {
+      npc.mesh.rotation.y = Math.atan2(plx, plz);
+    }
+    npc.mesh.position.y =
+      npc.mesh.userData.baseY + Math.sin(time * 2.2 + npc.mesh.userData.phase) * 0.035;
+    return;
+  }
 
   // Town GLB collision registers async — keep any NPC from staying inside voxels.
   if (npc.state !== 'inside' && npcWorldBlocked(npc.mesh.position.x, npc.mesh.position.z)) {
