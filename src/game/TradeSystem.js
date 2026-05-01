@@ -2,6 +2,7 @@ import { state, spend, canAfford, addInventory, notify } from '../state.js';
 import { TradePanel } from '../ui/TradePanel.js';
 import { DialoguePanel } from '../ui/DialoguePanel.js';
 import { QuestSystem } from './QuestSystem.js';
+import { Save } from './Save.js';
 
 // Consolidation — villages that have multi-step quests. Entering these towns
 // hands off to QuestSystem (the quest's main NPC drives the dialogue).
@@ -89,8 +90,9 @@ export const TradeSystem = {
       } else {
         headerNote = 'You already hold every piece of the road they know.';
       }
-      // Whispers do not mark the village's main trade as complete.
-      state.tradeComplete[village.name] = state.tradeComplete[village.name] || false;
+      // Count as finished for gates / banners — otherwise the town reads as
+      // still "awaiting" the auctioneer after any purchase here.
+      state.tradeComplete[village.name] = true;
     } else if (option.isTrue) {
       repDelta = 1;
       addInventory({ ...village.sells, source: village.name });
@@ -108,6 +110,7 @@ export const TradeSystem = {
       state.reputation[village.name] = repDelta;
     }
     notify();
+    Save.write(state);
 
     TradePanel.close();
 
