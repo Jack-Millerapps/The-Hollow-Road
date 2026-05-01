@@ -36,6 +36,11 @@ function ensureQuest(name) {
     if (q.spokeDov === undefined) q.spokeDov = false;
     if (q.spokeSera === undefined) q.spokeSera = false;
   }
+  if (name === 'stonehush') {
+    if (!Array.isArray(q.fragmentHeard) || q.fragmentHeard.length < 4) {
+      q.fragmentHeard = [false, false, false, false];
+    }
+  }
   return q;
 }
 
@@ -93,7 +98,10 @@ const QUESTS = {
     mapReward: 'stonePiece',
     steps: [
       { id: 'intro', hint: 'Hear the weaver out.' },
-      { id: 'fragments', hint: 'Gather fragments from four villagers.' },
+      {
+        id: 'fragments',
+        hint: 'Gather fragments from four villagers in the square — stand close and press E to listen.',
+      },
       { id: 'waitNight', hint: 'Wait for night and find the bell.' },
       {
         id: 'bellChoice',
@@ -390,6 +398,48 @@ export const QuestSystem = {
   questObjects() {
     return questWorldObjects();
   },
+
+  /** Villager E-interact during Stonehush fragment step; `slot` is 0..3. */
+  tryStonehushFragment(slot) {
+    const q = ensureQuest('stonehush');
+    if (q.done || q.step !== 1 || slot < 0 || slot > 3) return false;
+    const heard = q.fragmentHeard;
+    if (heard[slot]) {
+      DialoguePanel.open({
+        title: 'Villager',
+        body: 'They look away. You have already heard what they will say.',
+        buttons: [{ label: 'Leave them be.', onClick: () => DialoguePanel.close() }],
+      });
+      return true;
+    }
+    heard[slot] = true;
+    const bodies = [
+      'They touch their ear. "The bell was always there. We just stopped hearing everything else."',
+      '"Weaver said silence would keep us safe. I think it kept us… present."',
+      '"I remember laughter. Then the threads went tight, and no one dared pull them."',
+      '"If you listen long enough, the stone starts to sound like rain. Or breathing."',
+    ];
+    const all = heard[0] && heard[1] && heard[2] && heard[3];
+    DialoguePanel.open({
+      title: 'A villager',
+      body: bodies[slot],
+      buttons: [
+        {
+          label: all ? 'Return to the weaver.' : 'Thank them.',
+          onClick: () => {
+            DialoguePanel.close();
+            if (all) {
+              QuestSystem.advance('stonehush');
+            } else {
+              notify();
+            }
+            Save.write(state);
+          },
+        },
+      ],
+    });
+    return true;
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -417,6 +467,14 @@ function canAdvanceMidQuest(name, step) {
   // many scattered sub-NPCs.
   if (name === 'deeproot' && step === 2) {
     return !!state.items.shovel || true; // fallback location accessible
+  }
+  if (name === 'stonehush' && step === 1) {
+    const q = ensureQuest('stonehush');
+    const h = q.fragmentHeard || [false, false, false, false];
+    return !!(h[0] && h[1] && h[2] && h[3]);
+  }
+  if (name === 'stonehush' && step === 2) {
+    return false;
   }
   if (name === 'stonehush' && step === 3) {
     return !!state.items.sleepingBag;

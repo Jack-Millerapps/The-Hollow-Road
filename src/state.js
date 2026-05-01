@@ -109,7 +109,13 @@ function freshDefaults() {
         spokeDov: false,
         spokeSera: false,
       },
-      stonehush: { step: 0, done: false, branch: null },
+      stonehush: {
+        step: 0,
+        done: false,
+        branch: null,
+        // Four villagers for the "fragments" step (see QuestSystem / TownNPCs).
+        fragmentHeard: [false, false, false, false],
+      },
       deeproot: { step: 0, done: false, branch: null },
       mirrorTown: { step: 0, done: false, branch: null },
     },

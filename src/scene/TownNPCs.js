@@ -4,8 +4,11 @@ import { makeVillagerMesh } from './Westwind.js';
 import {
   npcWorldBlocked,
   snapNpcWorldXZ,
+  snapNpcWorldXZWithFallbacks,
   randomNpcPointInDisc,
 } from './npcWorldPlacement.js';
+import { Travel } from '../game/Travel.js';
+import { QuestSystem } from '../game/QuestSystem.js';
 
 // ---------------------------------------------------------------------------
 // TownNPCs — a generic wandering-villager system used by every greater town
@@ -31,6 +34,57 @@ const DOORWAY_HOLD_MIN = 2.2;
 const DOORWAY_HOLD_MAX = 4.8;
 const FADE_TIME = 0.55;
 
+// Stonehush GLB voxel collision is dense — march stuck wanderers toward open plaza.
+const STONHUSH_ESCAPE_ANCHORS = [
+  { x: -830, z: -5000 },
+  { x: -810, z: -4992 },
+  { x: -850, z: -5008 },
+  { x: -822, z: -5018 },
+  { x: -838, z: -4988 },
+];
+
+let _prevStonehushE = false;
+
+const STONEHUSH_INTERACT_R = 2.8;
+const STONEHUSH_INTERACT_R_SQ = STONEHUSH_INTERACT_R * STONEHUSH_INTERACT_R;
+
+function handleStonehushInteract(entry, playerPos) {
+  const q = state.quests?.stonehush;
+  if (!q || q.done || q.step !== 1 || state.dialogueActive) {
+    _prevStonehushE = Travel.keys?.has?.('e') ?? false;
+    return;
+  }
+  const px = playerPos.x;
+  const pz = playerPos.z;
+  let nearest = null;
+  let bestD2 = STONEHUSH_INTERACT_R_SQ;
+  for (const npc of entry.npcs) {
+    if (npc.stonehushSlot === undefined || npc.stonehushSlot === null) continue;
+    if (npc.state === 'inside') continue;
+    if (npc.opacity < 0.2) continue;
+    const dx = npc.mesh.position.x - px;
+    const dz = npc.mesh.position.z - pz;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < bestD2) {
+      bestD2 = d2;
+      nearest = npc;
+    }
+  }
+
+  const keys = Travel.keys;
+  const eDown = keys?.has?.('e') ?? false;
+  const eEdge = eDown && !_prevStonehushE;
+  _prevStonehushE = eDown;
+
+  if (nearest) {
+    Travel._showSoftPrompt?.('[E] Listen');
+  }
+
+  if (eEdge && nearest) {
+    QuestSystem.tryStonehushFragment(nearest.stonehushSlot);
+  }
+}
+
 // Town centers match the GLB model offsets in GreaterTowns.js so NPCs
 // wander inside the building cluster instead of in the surrounding field.
 // Stonehush and Deeproot have non-zero dx offsets on their models.
@@ -45,9 +99,11 @@ const TOWNS = [
   {
     id: 'stonehush',
     center: { x: -830, z: -5000 },
-    radius: 14,
-    npcCount: 5,
-    palette: [0x3a3030, 0x2a2838, 0x3a2a30, 0x40362a, 0x2a3a40],
+    radius: 17,
+    npcCount: 6,
+    // Doorway fade puts NPCs "inside" for seconds; with tight voxels many never read as visible.
+    doorChance: 0,
+    palette: [0x3a3030, 0x2a2838, 0x3a2a30, 0x40362a, 0x2a3a40, 0x322828],
   },
   {
     id: 'deeproot',
@@ -146,6 +202,9 @@ function ensureTown(scene, town) {
   const npcs = [];
   for (let i = 0; i < town.npcCount; i++) {
     const n = makeNpc(town, doorways);
+    if (town.id === 'stonehush' && i < 4) {
+      n.stonehushSlot = i;
+    }
     root.add(n.mesh);
     npcs.push(n);
   }
@@ -155,9 +214,9 @@ function ensureTown(scene, town) {
 }
 
 function pickTarget(town, doorways) {
-  // 35% chance the next target is a doorway (will trigger an "enter building"
-  // fade-out on arrival); otherwise wander inside the ring.
-  if (Math.random() < 0.35) {
+  // Some towns disable doorways so NPCs stay visible inside voxel-heavy GLBs.
+  const doorChance = typeof town.doorChance === 'number' ? town.doorChance : 0.35;
+  if (Math.random() < doorChance) {
     return { ...doorways[Math.floor(Math.random() * doorways.length)], door: true };
   }
   return { ...randomWaypoint(town.center, town.radius * 0.85), door: false };
@@ -184,7 +243,14 @@ function tickNpc(npc, town, doorways, delta, time, playerPos) {
 
   // Town GLB collision registers async — keep any NPC from staying inside voxels.
   if (npc.state !== 'inside' && npcWorldBlocked(npc.mesh.position.x, npc.mesh.position.z)) {
-    const u = snapNpcWorldXZ(npc.mesh.position.x, npc.mesh.position.z);
+    let u = snapNpcWorldXZ(npc.mesh.position.x, npc.mesh.position.z);
+    if (town.id === 'stonehush' && npcWorldBlocked(u.x, u.z)) {
+      u = snapNpcWorldXZWithFallbacks(
+        npc.mesh.position.x,
+        npc.mesh.position.z,
+        STONHUSH_ESCAPE_ANCHORS,
+      );
+    }
     npc.mesh.position.x = u.x;
     npc.mesh.position.z = u.z;
   }
@@ -251,7 +317,14 @@ function tickNpc(npc, town, doorways, delta, time, playerPos) {
   npc.mesh.position.x += (rdx / rdist) * step;
   npc.mesh.position.z += (rdz / rdist) * step;
   if (npcWorldBlocked(npc.mesh.position.x, npc.mesh.position.z)) {
-    const u = snapNpcWorldXZ(npc.mesh.position.x, npc.mesh.position.z);
+    let u = snapNpcWorldXZ(npc.mesh.position.x, npc.mesh.position.z);
+    if (town.id === 'stonehush' && npcWorldBlocked(u.x, u.z)) {
+      u = snapNpcWorldXZWithFallbacks(
+        npc.mesh.position.x,
+        npc.mesh.position.z,
+        STONHUSH_ESCAPE_ANCHORS,
+      );
+    }
     npc.mesh.position.x = u.x;
     npc.mesh.position.z = u.z;
   }
@@ -279,6 +352,9 @@ export const TownNPCs = {
       if (!inRange) continue;
       for (const npc of entry.npcs) {
         tickNpc(npc, entry.town, entry.doorways, delta, time, playerPos);
+      }
+      if (entry.town.id === 'stonehush') {
+        handleStonehushInteract(entry, playerPos);
       }
     }
   },
