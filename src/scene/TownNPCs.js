@@ -97,7 +97,7 @@ let _prevStonehushBellE = false;
 
 function handleStonehushBellInteract(playerPos) {
   const q = state.quests?.stonehush;
-  if (!q || q.done || q.step !== 2 || state.dialogueActive) {
+  if (!q || q.done || (q.step !== 2 && q.step !== 3) || state.dialogueActive) {
     _prevStonehushBellE = Travel.keys?.has?.('e') ?? false;
     return;
   }
@@ -113,12 +113,11 @@ function handleStonehushBellInteract(playerPos) {
   _prevStonehushBellE = eDown;
 
   const phase = DayNight.getCurrentPhase?.() ?? 'day';
-  const darkEnough = phase === 'night' || phase === 'sunset';
-  if (darkEnough) {
-    Travel._showSoftPrompt?.('[E] The bell');
-  } else {
-    Travel._showSoftPrompt?.('[E] Inspect');
-  }
+  const darkEnough = phase === 'night' || phase === 'sunset' || phase === 'sunrise';
+  const label = q.step === 3
+    ? (darkEnough ? '[E] The bell (choose)' : '[E] The bell')
+    : (darkEnough ? '[E] The bell' : '[E] Inspect');
+  Travel._showSoftPrompt?.(label);
 
   if (eEdge) {
     QuestSystem.tryStonehushBell();

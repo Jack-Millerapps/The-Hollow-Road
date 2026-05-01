@@ -40,6 +40,7 @@ import { ControlsIntro } from './ui/ControlsIntro.js';
 import { ObjectiveTracker } from './ui/ObjectiveTracker.js';
 import { QuestBanner } from './ui/QuestBanner.js';
 import { StonehushBellPointer } from './ui/StonehushBellPointer.js';
+import { StonehushBellSprite } from './scene/StonehushBellSprite.js';
 import { HUDTutorial } from './ui/HUDTutorial.js';
 import { DebugOverlay } from './ui/DebugOverlay.js';
 // Engine fixes (this prompt)
@@ -449,6 +450,7 @@ function start() {
 
   GoblinPopup.mount();
   Goblins.init(scene);
+  StonehushBellSprite.init(scene);
   CaveInterior.init(scene);
   CaveInterior.setOnExit(() => exitCave());
   CaveEntrance.setOnEnter((caveId) => enterCave(caveId));
@@ -518,6 +520,7 @@ function start() {
         VeilWander.update(delta, state.playerPos);
         Exchanger.update(state.playerPos);
         RoadEvents.update(delta, state.playerPos, Travel);
+        StonehushBellSprite.update(t);
         // TownNPCs first so Stonehush (etc.) E-interacts win the same frame
         // before Ashwick's shared Travel.keys edge detection.
         TownNPCs.update(delta, t, state.playerPos);

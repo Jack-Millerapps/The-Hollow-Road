@@ -403,32 +403,84 @@ export const QuestSystem = {
   /** Bell in the lower square — advances waitNight → bellChoice at dusk/night. */
   tryStonehushBell() {
     const q = ensureQuest('stonehush');
-    if (q.done || q.step !== 2) return false;
+    if (q.done) return false;
+
     const phase = DayNight.getCurrentPhase();
-    if (phase !== 'night' && phase !== 'sunset') {
+    const darkEnough = phase === 'night' || phase === 'sunset' || phase === 'sunrise';
+
+    // Step 2: discover the bell.
+    if (q.step === 2) {
+      if (!darkEnough) {
+        DialoguePanel.open({
+          title: 'The bell-frame',
+          body: 'Rope and iron wait in daylight like any other village gear. Whatever the weaver meant, it is not sounding now.',
+          buttons: [{ label: 'Come back later.', onClick: () => DialoguePanel.close() }],
+        });
+        return true;
+      }
       DialoguePanel.open({
-        title: 'The bell-frame',
-        body: 'Rope and iron wait in daylight like any other village gear. Whatever the weaver meant, it is not sounding now.',
-        buttons: [{ label: 'Come back later.', onClick: () => DialoguePanel.close() }],
+        title: 'The bell',
+        body:
+          'Under the low sky you finally catch it — a thin, tireless note threading through stone. The square seems to lean toward the sound.',
+        buttons: [
+          {
+            label: '…',
+            onClick: () => {
+              DialoguePanel.close();
+              QuestSystem.advance('stonehush'); // → bellChoice
+              Save.write(state);
+            },
+          },
+        ],
       });
       return true;
     }
-    DialoguePanel.open({
-      title: 'The bell',
-      body:
-        'Under the low sky you finally catch it — a thin, tireless note threading through stone. The square seems to lean toward the sound.',
-      buttons: [
-        {
-          label: 'Remember this.',
-          onClick: () => {
-            DialoguePanel.close();
-            QuestSystem.advance('stonehush');
-            Save.write(state);
+
+    // Step 3: choose at the bell (silence with sleeping bag, or listen).
+    if (q.step === 3) {
+      if (!darkEnough) {
+        DialoguePanel.open({
+          title: 'The bell',
+          body: 'In daylight it is only iron. The sound you heard has gone thin again.',
+          buttons: [{ label: 'Step back.', onClick: () => DialoguePanel.close() }],
+        });
+        return true;
+      }
+
+      const hasBag = !!state.items.sleepingBag;
+      DialoguePanel.open({
+        title: 'The bell',
+        body: hasBag
+          ? 'You can smother the bell’s mouth with cloth, or let it ring and see what comes.'
+          : 'You reach for quiet, but you have nothing to swallow the sound. You can only listen.',
+        buttons: [
+          ...(hasBag
+            ? [
+                {
+                  label: 'Silence it (sleeping bag).',
+                  onClick: () => {
+                    state.items.sleepingBag = false;
+                    DialoguePanel.close();
+                    QuestSystem.advance('stonehush'); // → report
+                    Save.write(state);
+                  },
+                },
+              ]
+            : []),
+          {
+            label: 'Let it ring.',
+            onClick: () => {
+              DialoguePanel.close();
+              QuestSystem.advance('stonehush'); // → report
+              Save.write(state);
+            },
           },
-        },
-      ],
-    });
-    return true;
+        ],
+      });
+      return true;
+    }
+
+    return false;
   },
 
   /** Villager E-interact during Stonehush fragment step; `slot` is 0..3. */
