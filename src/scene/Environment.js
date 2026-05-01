@@ -130,6 +130,14 @@ function inWetlandKeepout(x, z, extra = 0) {
   return dx * dx + dz * dz < r * r;
 }
 
+/** Last leg + Unnamed Village — keep props off the approach and plaza. */
+function inRoadEndSanctuary(x, z, extra = 0) {
+  const dx = x;
+  const dz = z - (-14500);
+  const r = 320 + extra;
+  return dx * dx + dz * dz < r * r;
+}
+
 function sampleAlongRoad() {
   const seg =
     ROAD_SEGMENTS_DATA[Math.floor(Math.random() * ROAD_SEGMENTS_DATA.length)];
@@ -303,6 +311,7 @@ export const Environment = {
       if (distToRoad(x, z) < 70) continue;
       // Don't spawn mountains on top of the Mirror Town wetland.
       if (inWetlandKeepout(x, z, 160)) continue;
+      if (inRoadEndSanctuary(x, z, 120)) continue;
       pos.set(x, -6 + Math.random() * 2, z);
       const s = 0.8 + Math.random() * 1.4;
       scl.set(s, s * (0.8 + Math.random() * 0.6), s);
@@ -348,6 +357,7 @@ export const Environment = {
       const z = hit.z + hit.perpZ * side * off;
       if (distToRoad(x, z) < ROAD_HALF_WIDTH + 2) continue;
       if (inWetlandKeepout(x, z, 70)) continue;
+      if (inRoadEndSanctuary(x, z, 40)) continue;
       pos.set(x, 0, z);
       const s = 0.85 + Math.random() * 0.6;
       scl.set(s, s, s);
@@ -432,6 +442,7 @@ export const Environment = {
       const x = hit.x + hit.perpX * side * off;
       const z = hit.z + hit.perpZ * side * off;
       if (inWetlandKeepout(x, z, 60)) continue;
+      if (inRoadEndSanctuary(x, z, 35)) continue;
       pos.set(x, 0.1, z);
       const s = 0.6 + Math.random() * 1.1;
       scl.set(s, s * (0.5 + Math.random() * 0.4), s);

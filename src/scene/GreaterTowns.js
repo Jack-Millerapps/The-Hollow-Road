@@ -483,11 +483,15 @@ export function buildUnnamedTown(scene, reg) {
     dy: -1,
     rotateY: -Math.PI / 12,
     walkable: true,
+    // Match Deeproot-style tuning: tight 0.5 m cells on a scaled GLB create a
+    // "picker fence" on ramps and the road-end approach — coarser cells +
+    // slightly relaxed vertical filtering keep walkable gaps for the finale.
     collision: {
-      cellSize: 0.5,
-      maxNormalY: 0.5,
-      stepHeight: 1.0,
-      playerCeiling: 2.0,
+      cellSize: 0.9,
+      triFloorY: 0.2,
+      maxNormalY: 0.52,
+      stepHeight: 0.95,
+      playerCeiling: 2.15,
     },
   });
   scene.add(group);
