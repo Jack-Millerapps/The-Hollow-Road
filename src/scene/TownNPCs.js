@@ -15,7 +15,12 @@ import {
   STONEHUSH_BELL_WORLD,
   STONEHUSH_BELL_INTERACT_R,
 } from '../data/stonehushBell.js';
-import { DEEPROOT_JOURNAL_SPOT, DEEPROOT_JOURNAL_R } from '../data/deeprootTargets.js';
+import {
+  DEEPROOT_JOURNAL_SPOT,
+  DEEPROOT_JOURNAL_R,
+  DEEPROOT_ROOTKEEPER_SPOT,
+  DEEPROOT_ROOTKEEPER_R,
+} from '../data/deeprootTargets.js';
 
 // ---------------------------------------------------------------------------
 // TownNPCs — a generic wandering-villager system used by every greater town
@@ -97,6 +102,8 @@ const DEEPROOT_INTERACT_R = 5.2;
 const DEEPROOT_INTERACT_R_SQ = DEEPROOT_INTERACT_R * DEEPROOT_INTERACT_R;
 const DEEPROOT_JOURNAL_R_SQ = DEEPROOT_JOURNAL_R * DEEPROOT_JOURNAL_R;
 let _prevDeeprootJournalE = false;
+const DEEPROOT_ROOTKEEPER_R_SQ = DEEPROOT_ROOTKEEPER_R * DEEPROOT_ROOTKEEPER_R;
+let _prevDeeprootRootkeeperE = false;
 
 // Stable posts for Deeproot quest villagers (keeps them reachable in voxel-heavy GLB).
 const DEEPROOT_FRAGMENT_STANDS = [
@@ -263,6 +270,30 @@ function handleDeeprootJournalInteract(playerPos) {
   Travel._showSoftPrompt?.('[E] Search stones');
   if (eEdge) {
     QuestSystem.tryDeeprootJournal();
+  }
+}
+
+function handleDeeprootRootkeeperInteract(playerPos) {
+  const q = state.quests?.deeproot;
+  if (!q || q.done || (q.step ?? 0) === 0 || state.dialogueActive) {
+    _prevDeeprootRootkeeperE = Travel.keys?.has?.('e') ?? false;
+    return;
+  }
+  const dx = DEEPROOT_ROOTKEEPER_SPOT.x - playerPos.x;
+  const dz = DEEPROOT_ROOTKEEPER_SPOT.z - playerPos.z;
+  if (dx * dx + dz * dz > DEEPROOT_ROOTKEEPER_R_SQ) {
+    _prevDeeprootRootkeeperE = Travel.keys?.has?.('e') ?? false;
+    return;
+  }
+
+  const keys = Travel.keys;
+  const eDown = keys?.has?.('e') ?? false;
+  const eEdge = eDown && !_prevDeeprootRootkeeperE;
+  _prevDeeprootRootkeeperE = eDown;
+
+  Travel._showSoftPrompt?.('[E] Speak (Root-keeper)');
+  if (eEdge) {
+    QuestSystem.talkToQuestNpc('deeproot', { onClose: () => {} });
   }
 }
 
@@ -624,6 +655,7 @@ export const TownNPCs = {
       if (entry.town.id === 'deeproot') {
         handleDeeprootInteract(entry, playerPos);
         handleDeeprootJournalInteract(playerPos);
+        handleDeeprootRootkeeperInteract(playerPos);
       }
     }
   },

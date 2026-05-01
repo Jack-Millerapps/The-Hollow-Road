@@ -3,6 +3,8 @@ import * as THREE from 'three';
 let _softCircleTex = null;
 let _bellTex = null;
 let _journalTex = null;
+let _rootTex = null;
+let _villagerTex = null;
 
 function makeSoftCircleCanvas() {
   const c = document.createElement('canvas');
@@ -138,6 +140,99 @@ export function getJournalTexture() {
   const tex = new THREE.CanvasTexture(makeJournalCanvas());
   tex.needsUpdate = true;
   _journalTex = tex;
+  return tex;
+}
+
+function makeRootkeeperCanvas() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.save();
+  ctx.translate(64, 64);
+
+  const g = ctx.createRadialGradient(0, 0, 8, 0, 0, 60);
+  g.addColorStop(0, 'rgba(200, 144, 58, 0.95)');
+  g.addColorStop(0.35, 'rgba(200, 144, 58, 0.28)');
+  g.addColorStop(1, 'rgba(200, 144, 58, 0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, 60, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Stylized root / tree.
+  ctx.strokeStyle = 'rgba(12, 10, 8, 0.92)';
+  ctx.lineWidth = 10;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, 34);
+  ctx.quadraticCurveTo(-4, 10, 0, -8);
+  ctx.stroke();
+
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(0, 2);
+  ctx.quadraticCurveTo(-18, -10, -20, -28);
+  ctx.moveTo(0, -2);
+  ctx.quadraticCurveTo(18, -12, 20, -30);
+  ctx.stroke();
+
+  // Highlight.
+  ctx.strokeStyle = 'rgba(255, 210, 130, 0.55)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(2, 30);
+  ctx.quadraticCurveTo(6, 10, 2, -6);
+  ctx.stroke();
+
+  ctx.restore();
+  return c;
+}
+
+export function getRootkeeperTexture() {
+  if (_rootTex) return _rootTex;
+  const tex = new THREE.CanvasTexture(makeRootkeeperCanvas());
+  tex.needsUpdate = true;
+  _rootTex = tex;
+  return tex;
+}
+
+function makeVillagerCanvas() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.save();
+  ctx.translate(64, 64);
+
+  const g = ctx.createRadialGradient(0, 0, 8, 0, 0, 58);
+  g.addColorStop(0, 'rgba(229, 217, 182, 0.9)');
+  g.addColorStop(0.35, 'rgba(229, 217, 182, 0.22)');
+  g.addColorStop(1, 'rgba(229, 217, 182, 0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, 58, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Simple person bust.
+  ctx.fillStyle = 'rgba(12, 10, 8, 0.92)';
+  ctx.beginPath();
+  ctx.arc(0, -10, 12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect?.(-18, 2, 36, 26, 10);
+  if (!ctx.roundRect) ctx.rect(-18, 2, 36, 26);
+  ctx.fill();
+
+  ctx.restore();
+  return c;
+}
+
+export function getVillagerTexture() {
+  if (_villagerTex) return _villagerTex;
+  const tex = new THREE.CanvasTexture(makeVillagerCanvas());
+  tex.needsUpdate = true;
+  _villagerTex = tex;
   return tex;
 }
 

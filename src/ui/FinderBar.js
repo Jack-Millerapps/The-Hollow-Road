@@ -3,6 +3,7 @@ import { QuestSystem } from '../game/QuestSystem.js';
 import { DayNight } from '../scene/DayNight.js';
 import {
   DEEPROOT_TOWN_CENTER,
+  DEEPROOT_ROOTKEEPER_SPOT,
   DEEPROOT_VILLAGER_POSTS,
   DEEPROOT_JOURNAL_SPOT,
 } from '../data/deeprootTargets.js';
@@ -119,7 +120,7 @@ function deeprootTarget() {
   }
 
   if (step === 'choice') {
-    return { ...DEEPROOT_TOWN_CENTER, label: 'Root-keeper' };
+    return { ...DEEPROOT_ROOTKEEPER_SPOT, label: 'Root-keeper' };
   }
 
   return null;

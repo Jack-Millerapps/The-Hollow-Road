@@ -1,6 +1,11 @@
 // Deeproot quest target locations (world XZ).
 export const DEEPROOT_TOWN_CENTER = { x: 680, z: -6000 };
 
+// Root-keeper talk spot — placed in a more open patch of the plaza so the
+// player can always reach it (even with dense collision).
+export const DEEPROOT_ROOTKEEPER_SPOT = { x: 664, z: -5982 };
+export const DEEPROOT_ROOTKEEPER_R = 8.0;
+
 // These match the pinned villager posts in TownNPCs.js (slot 0..2).
 export const DEEPROOT_VILLAGER_POSTS = [
   { x: 670, z: -5992 },
