@@ -22,7 +22,7 @@ const REGIONS = [
     zMax: 700,
     label: 'The Home Road',
     includesVillages: ['ashwick'],
-    includesCaves: ['ashCave'],
+    includesCaves: ['ashCave', 'ancientAshwickCave'],
   },
   {
     id: 'ashwickPiece',

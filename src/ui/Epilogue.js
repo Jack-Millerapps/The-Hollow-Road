@@ -40,6 +40,8 @@ function labelForCave(id) {
   switch (id) {
     case 'ashCave':
       return 'The Ash Hollow';
+    case 'ancientAshwickCave':
+      return 'Ancient Ashwick Cave';
     case 'veilCave':
       return 'The Velvet Deep';
     case 'stoneCave':

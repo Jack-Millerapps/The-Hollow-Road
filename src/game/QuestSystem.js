@@ -79,7 +79,7 @@ const QUESTS = {
       {
         id: 'cave',
         hint:
-          'Enter The Ash Hollow east of Ashwick — torched stone arch, signpost, then find the shrine deep inside.',
+          'Enter the Ancient Ashwick Cave east of town — torched stone arch and signpost — then find the shrine inside.',
       },
       {
         id: 'choice',
@@ -217,7 +217,7 @@ export const QuestSystem = {
     DialoguePanel.open({
       title: 'Torn page',
       body:
-        'He went to the cave in the hills to the east. He said he heard it singing.',
+        'He went to the Ancient Ashwick Cave in the hills to the east. He said he heard it singing.',
       buttons: [
         {
           label: 'Fold the page away.',

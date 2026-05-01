@@ -133,8 +133,8 @@ function buildEntrance(cave) {
   innerGlow.position.set(0, 2.0, -5.0);
   group.add(innerGlow);
 
-  // Ashwick story cave — extra beacon so it reads from the road east of town.
-  if (cave.id === 'ashCave') {
+  // Ancient Ashwick quest cave — extra beacon so it reads from the road east of town.
+  if (cave.id === 'ancientAshwickCave') {
     const beacon = new THREE.PointLight(0xffc080, 1.35, 32, 1.85);
     beacon.position.set(0, 7.5, 1.2);
     group.add(beacon);

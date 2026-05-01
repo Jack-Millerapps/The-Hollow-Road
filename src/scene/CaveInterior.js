@@ -479,13 +479,11 @@ function buildExitPortal(group, room, materials) {
   return { x: cx, z: cz };
 }
 
-// Ashwick quest — stone stack + carving in the alcove (same props as the old
-// overworld fake cave; now lives inside The Ash Hollow interior).
-function buildAshwickQuestShrine(group, rooms, materials) {
-  const alc = rooms.alcove;
+// Ashwick quest — stacked stones + carving (local XZ in cave space).
+function buildAshwickQuestShrineStack(group, lx, lz, materials) {
   const shrine = new THREE.Group();
   shrine.name = 'ashwickQuestShrine';
-  shrine.position.set(alc.cx + 0.35, 0, alc.cz - 2.35);
+  shrine.position.set(lx, 0, lz);
   for (let s = 0; s < 4; s++) {
     const b = new THREE.Mesh(
       new THREE.BoxGeometry(0.9 - s * 0.12, 0.45, 0.7 - s * 0.08),
@@ -510,7 +508,73 @@ function buildAshwickQuestShrine(group, rooms, materials) {
   gl.position.set(0.45, 2.95, 0.05);
   shrine.add(gl);
   group.add(shrine);
-  return { x: shrine.position.x, z: shrine.position.z, r: 3.6 };
+  return { x: lx, z: lz, r: 3.6 };
+}
+
+// Ancient Ashwick Cave — entry + one chamber: rest bed + quest shrine only (no troll, no ore).
+function buildAncientAshwickCave(cave, caveIndex) {
+  const origin = caveOrigin(caveIndex);
+  const materials = caveMaterials();
+  const rng = seedRng(cave.id);
+  const group = new THREE.Group();
+  group.name = `caveInterior:${cave.id}`;
+  group.position.copy(origin);
+  group.visible = false;
+
+  const walls = [];
+  const entry = {
+    name: 'entry',
+    cx: 0,
+    cz: 0,
+    w: ROOM_SIZE,
+    d: ROOM_SIZE,
+    openSides: { n: false, s: true, e: false, w: false },
+  };
+  const chamber = {
+    name: 'chamber',
+    cx: 0,
+    cz: 26,
+    w: 14,
+    d: 14,
+    openSides: { n: true, s: false, e: false, w: false },
+  };
+
+  buildRoom(group, entry, materials, rng, walls);
+  buildRoom(group, chamber, materials, rng, walls);
+  buildTunnel(group, entry, chamber, materials, walls);
+
+  const bedRoom = { cx: -5.5, cz: 29, w: 10, d: 10 };
+  const bedPos = buildAlcoveBed(group, bedRoom, materials);
+
+  const shrineLocal = buildAshwickQuestShrineStack(group, 5.8, 27.5, materials);
+
+  const exitPortal = buildExitPortal(group, entry, materials);
+
+  for (const side of [-1, 1]) {
+    const torchLight = new THREE.PointLight(0xffb070, 1.2, 8, 2.0);
+    torchLight.position.set(side * 2.5, 2.6, -1.5);
+    group.add(torchLight);
+  }
+  const warm = new THREE.PointLight(0xffcca0, 0.65, 18, 2);
+  warm.position.set(0, 3.8, 26);
+  group.add(warm);
+
+  return {
+    group,
+    origin,
+    rooms: { entry, chamber },
+    oreNodes: [],
+    bedPos,
+    troll: null,
+    exitPortal,
+    walls,
+    activeColliders: [],
+    spawnLocal: { x: entry.cx, z: entry.cz + 1.5, rotationY: Math.PI },
+    compassLocal: { x: shrineLocal.x, z: shrineLocal.z },
+    compassLabel: 'shrine',
+    floorY: 0,
+    ashwickShrineLocal: shrineLocal,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -574,11 +638,6 @@ function buildCave(cave, caveIndex) {
   const troll = buildTroll(group, cave, rooms.troll, materials);
   const exitPortal = buildExitPortal(group, rooms.entry, materials);
 
-  let ashwickShrineLocal = null;
-  if (cave.id === 'ashCave') {
-    ashwickShrineLocal = buildAshwickQuestShrine(group, rooms, materials);
-  }
-
   // A single slightly brighter torch-pair flanking the entry room interior
   // so first sight on spawn is inviting.
   for (const side of [-1, 1]) {
@@ -599,8 +658,9 @@ function buildCave(cave, caveIndex) {
     activeColliders: [], // populated when this cave is active
     spawnLocal: { x: rooms.entry.cx, z: rooms.entry.cz + 1.5, rotationY: Math.PI },
     compassLocal: { x: rooms.troll.cx, z: rooms.troll.cz },
+    compassLabel: 'troll',
     floorY: 0, // cave floor height — flat for now
-    ashwickShrineLocal,
+    ashwickShrineLocal: null,
   };
 }
 
@@ -653,7 +713,7 @@ function buildCompassDOM() {
   ].join(';');
   el.appendChild(label);
   document.body.appendChild(el);
-  return { el, arrow };
+  return { el, arrow, label };
 }
 
 function buildExitPromptDOM() {
@@ -749,7 +809,7 @@ export const CaveInterior = {
       }
       if (
         this._atAshwickShrine &&
-        this.active?.cave?.id === 'ashCave' &&
+        this.active?.cave?.id === 'ancientAshwickCave' &&
         !state.dialogueActive
       ) {
         const q = state.quests?.ashwick;
@@ -773,7 +833,10 @@ export const CaveInterior = {
     const cave = caves.find((c) => c.id === caveId);
     if (!cave) return null;
     const idx = caves.indexOf(cave);
-    const entry = buildCave(cave, idx);
+    const entry =
+      cave.id === 'ancientAshwickCave'
+        ? buildAncientAshwickCave(cave, idx)
+        : buildCave(cave, idx);
     this.scene.add(entry.group);
     entry.cave = cave;
     entry.caveIndex = idx;
@@ -935,7 +998,9 @@ export const CaveInterior = {
 
   getTrollWorldPos() {
     if (!this.active) return null;
-    const t = this.active.troll.userData.worldPos;
+    const tr = this.active.troll;
+    if (!tr?.userData?.worldPos) return null;
+    const t = tr.userData.worldPos;
     return {
       x: this.active.origin.x + t.x,
       z: this.active.origin.z + t.z,
@@ -977,10 +1042,10 @@ export const CaveInterior = {
       this._exitPromptVisible = this._atExit;
     }
 
-    // Ashwick quest shrine (inside ashCave only).
+    // Ashwick quest shrine (Ancient Ashwick Cave only).
     let atShrine = false;
     const shr = this.active.ashwickShrineLocal;
-    if (shr && this.active.cave?.id === 'ashCave') {
+    if (shr && this.active.cave?.id === 'ancientAshwickCave') {
       const dxs = local.x - shr.x;
       const dzs = local.z - shr.z;
       const rr = (shr.r ?? 3.5) * (shr.r ?? 3.5);
@@ -1007,6 +1072,9 @@ export const CaveInterior = {
       this._compassAccum = 0;
       if (this._compass.el.style.opacity !== '1') {
         this._compass.el.style.opacity = '1';
+      }
+      if (this._compass.label) {
+        this._compass.label.textContent = this.active.compassLabel || 'troll';
       }
       const tx = this.active.compassLocal.x;
       const tz = this.active.compassLocal.z;

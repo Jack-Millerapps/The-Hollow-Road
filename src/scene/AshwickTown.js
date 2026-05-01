@@ -20,7 +20,7 @@ let _graveMarker = null;
 let _tornPage = null;
 
 export function getQuestMeshes() {
-  // Quest shrine / cave interior live in CaveInterior (ashCave) — see caves.js.
+  // Quest shrine / bed live in CaveInterior (ancientAshwickCave) — see caves.js.
   return { grave: _graveMarker, page: _tornPage, shrine: null, caveRoot: null };
 }
 
@@ -125,7 +125,7 @@ export function build(scene, reg) {
   pctx.fillStyle = '#2a1810';
   pctx.font = '22px Georgia, serif';
   const line =
-    'He went to the cave in the hills to the east — the stone arch they call The Ash Hollow. He said he heard it singing.';
+    'He went to the cave in the hills to the east — the old place they call Ancient Ashwick Cave. He said he heard it singing.';
   const words = line.split(' ');
   let lineY = 40;
   let buf = '';
