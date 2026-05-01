@@ -1,10 +1,8 @@
 import { state, subscribe } from '../state.js';
 import { DayNight } from '../scene/DayNight.js';
 import { PauseManager } from '../game/PauseManager.js';
-import {
-  STONEHUSH_BELL_WORLD,
-  STONEHUSH_BELL_INTERACT_R,
-} from '../data/stonehushBell.js';
+import { QuestSystem } from '../game/QuestSystem.js';
+import { STONEHUSH_BELL_WORLD } from '../data/stonehushBell.js';
 
 // ---------------------------------------------------------------------------
 // StonehushBellPointer — only while sunset/night + quest step "find the bell".
@@ -31,10 +29,10 @@ function ensureStyle() {
   s.textContent = `
 .stonehush-bell-pointer {
   position: fixed;
-  bottom: 108px;
+  top: 96px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 37;
+  z-index: 48;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -56,6 +54,10 @@ function ensureStyle() {
 }
 .stonehush-bell-pointer.visible {
   opacity: 1;
+}
+.stonehush-bell-pointer.wait-day .arrow {
+  opacity: 0.55;
+  filter: none;
 }
 .stonehush-bell-pointer .arrow-wrap {
   width: 30px;
@@ -98,26 +100,30 @@ function ensureStyle() {
   document.head.appendChild(s);
 }
 
+function stonehushBellStepId() {
+  const q = state.quests?.stonehush;
+  if (!q || q.done) return null;
+  return QuestSystem.currentStep?.('stonehush')?.id ?? null;
+}
+
 function shouldShow() {
   if (state.currentScene !== 'world') return false;
   if (!state.flags?.hasLeftWestwind) return false;
   if (state.dialogueActive) return false;
   if (PauseManager.isPaused()) return false;
 
-  const q = state.quests?.stonehush;
-  if (!q || q.done || q.step !== 2) return false;
-
-  const phase = DayNight.getCurrentPhase?.() ?? 'day';
-  if (phase !== 'night' && phase !== 'sunset') return false;
-
-  const px = state.playerPos?.x ?? 0;
-  const pz = state.playerPos?.z ?? 0;
-  const dx = STONEHUSH_BELL_WORLD.x - px;
-  const dz = STONEHUSH_BELL_WORLD.z - pz;
-  const dist = Math.hypot(dx, dz);
-  if (dist < STONEHUSH_BELL_INTERACT_R * 1.35) return false;
+  const id = stonehushBellStepId();
+  // Match QuestSystem catalogue ids (not raw step index — saves / ordering safe).
+  if (id !== 'waitNight' && id !== 'bellChoice') return false;
 
   return true;
+}
+
+function isWaitNightDaytime() {
+  const id = stonehushBellStepId();
+  if (id !== 'waitNight') return false;
+  const ph = DayNight.getCurrentPhase?.() ?? 'day';
+  return ph === 'day';
 }
 
 export const StonehushBellPointer = {
@@ -142,7 +148,7 @@ export const StonehushBellPointer = {
     const copy = document.createElement('div');
     copy.className = 'copy';
     copy.innerHTML =
-      '<strong>Bell</strong><span>Follow the arrow toward the lower square.</span>';
+      '<strong>Bell</strong><span class="sub">Follow the arrow toward the lower square.</span>';
 
     root.appendChild(wrap);
     root.appendChild(copy);
@@ -150,6 +156,7 @@ export const StonehushBellPointer = {
     document.getElementById('ui-root')?.appendChild(root);
     this.root = root;
     this._arrow = arrow;
+    this._copySub = copy.querySelector('.sub');
 
     subscribe(() => this.syncVisibility());
 
@@ -170,6 +177,22 @@ export const StonehushBellPointer = {
     if (!this.root) return;
     const on = shouldShow();
     this.root.classList.toggle('visible', on);
+    this.root.classList.toggle('wait-day', on && isWaitNightDaytime());
+    if (on && this._copySub) {
+      const id = stonehushBellStepId();
+      const ph = DayNight.getCurrentPhase?.() ?? 'day';
+      const dark = ph === 'night' || ph === 'sunset' || ph === 'sunrise';
+      if (id === 'bellChoice') {
+        this._copySub.textContent =
+          'South plaza — use your sleeping bag at the bell, or listen, then see the weaver.';
+      } else if (dark) {
+        this._copySub.textContent =
+          'South plaza — arrow points toward the bell; approach and press E.';
+      } else {
+        this._copySub.textContent =
+          'South plaza — head this way; after sunset, press E at the bell when prompted.';
+      }
+    }
   },
 
   render() {
