@@ -51,6 +51,7 @@ function ensureQuest(name) {
     if (!Array.isArray(q.villagerHeard) || q.villagerHeard.length < 4) {
       q.villagerHeard = [false, false, false, false];
     }
+    if (q.wetlandArrived === undefined) q.wetlandArrived = false;
   }
   return q;
 }
@@ -728,6 +729,30 @@ export const QuestSystem = {
           onClick: () => {
             DialoguePanel.close();
             QuestSystem.advance('mirrorTown'); // → choice
+            Save.write(state);
+          },
+        },
+      ],
+    });
+    return true;
+  },
+
+  /** Mirror Town: entering the wetland (step "guide") should progress to "found". */
+  tryMirrorWetlandArrive() {
+    const q = ensureQuest('mirrorTown');
+    if (q.done || q.step !== 2) return false;
+    if (q.wetlandArrived) return false;
+    q.wetlandArrived = true;
+    DialoguePanel.open({
+      title: 'Wetland',
+      body:
+        'The ground turns to sponge and black water. Something reflective hides here, waiting for you to notice it.',
+      buttons: [
+        {
+          label: 'Search the reeds.',
+          onClick: () => {
+            DialoguePanel.close();
+            QuestSystem.advance('mirrorTown'); // → found
             Save.write(state);
           },
         },

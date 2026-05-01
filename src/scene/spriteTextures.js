@@ -5,6 +5,7 @@ let _bellTex = null;
 let _journalTex = null;
 let _rootTex = null;
 let _villagerTex = null;
+let _mirrorTex = null;
 
 function makeSoftCircleCanvas() {
   const c = document.createElement('canvas');
@@ -233,6 +234,52 @@ export function getVillagerTexture() {
   const tex = new THREE.CanvasTexture(makeVillagerCanvas());
   tex.needsUpdate = true;
   _villagerTex = tex;
+  return tex;
+}
+
+function makeMirrorCanvas() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.save();
+  ctx.translate(64, 64);
+
+  const g = ctx.createRadialGradient(0, 0, 10, 0, 0, 58);
+  g.addColorStop(0, 'rgba(180, 210, 255, 0.75)');
+  g.addColorStop(0.35, 'rgba(120, 160, 220, 0.22)');
+  g.addColorStop(1, 'rgba(120, 160, 220, 0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, 58, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Frame
+  ctx.strokeStyle = 'rgba(12, 10, 8, 0.92)';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.rect(-20, -26, 40, 52);
+  ctx.stroke();
+
+  // Glass
+  ctx.fillStyle = 'rgba(150, 190, 240, 0.35)';
+  ctx.fillRect(-17, -23, 34, 46);
+  ctx.strokeStyle = 'rgba(220, 240, 255, 0.45)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-10, -18);
+  ctx.lineTo(12, 10);
+  ctx.stroke();
+
+  ctx.restore();
+  return c;
+}
+
+export function getMirrorTexture() {
+  if (_mirrorTex) return _mirrorTex;
+  const tex = new THREE.CanvasTexture(makeMirrorCanvas());
+  tex.needsUpdate = true;
+  _mirrorTex = tex;
   return tex;
 }
 

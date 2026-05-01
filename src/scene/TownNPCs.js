@@ -22,6 +22,7 @@ import {
   DEEPROOT_ROOTKEEPER_R,
 } from '../data/deeprootTargets.js';
 import { MIRROR_HIDDEN_MIRROR_SPOT, MIRROR_HIDDEN_MIRROR_R } from '../data/mirrorTownTargets.js';
+import { MIRROR_WETLAND_CENTER, MIRROR_WETLAND_R } from '../data/mirrorTownTargets.js';
 
 // ---------------------------------------------------------------------------
 // TownNPCs — a generic wandering-villager system used by every greater town
@@ -139,6 +140,7 @@ let _prevDeeprootRootkeeperE = false;
 
 const MIRROR_HIDDEN_R_SQ = MIRROR_HIDDEN_MIRROR_R * MIRROR_HIDDEN_MIRROR_R;
 let _prevMirrorHiddenE = false;
+let _prevMirrorWetlandTick = 0;
 
 // Stable posts for Deeproot quest villagers (keeps them reachable in voxel-heavy GLB).
 const DEEPROOT_FRAGMENT_STANDS = [
@@ -344,6 +346,20 @@ function handleMirrorHiddenMirrorInteract(playerPos) {
   if (eEdge) {
     QuestSystem.tryMirrorHiddenMirror();
   }
+}
+
+function handleMirrorWetlandArrive(playerPos, timeS) {
+  const q = state.quests?.mirrorTown;
+  // Step 2 is "guide" → entering wetland should progress.
+  if (!q || q.done || q.step !== 2 || state.dialogueActive) return;
+  const dx = MIRROR_WETLAND_CENTER.x - playerPos.x;
+  const dz = MIRROR_WETLAND_CENTER.z - playerPos.z;
+  const r = MIRROR_WETLAND_R;
+  if (dx * dx + dz * dz > r * r) return;
+  // Throttle so we don't spam if dialogue can't open for some reason.
+  if ((timeS || 0) - _prevMirrorWetlandTick < 1.0) return;
+  _prevMirrorWetlandTick = timeS || 0;
+  QuestSystem.tryMirrorWetlandArrive();
 }
 
 function handleDeeprootJournalInteract(playerPos) {
@@ -806,6 +822,7 @@ export const TownNPCs = {
       }
       if (entry.town.id === 'mirrorTown') {
         handleMirrorTownInteract(entry, playerPos);
+        handleMirrorWetlandArrive(playerPos, time);
         handleMirrorHiddenMirrorInteract(playerPos);
       }
     }
