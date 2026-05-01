@@ -384,7 +384,7 @@ export function buildVeilMarketTown(scene, reg) {
 // =============================================================
 
 function loadTownGLB(path, group, opts = {}) {
-  const { dx = 0, dy = 0, dz = 0, rotateY = 0, walkable = false, collision = {} } = opts;
+  const { dx = 0, dy = 0, dz = 0, rotateY = 0, walkable = false, collision = {}, onLoaded = null } = opts;
   new GLTFLoader().load(
     path,
     (gltf) => {
@@ -412,6 +412,7 @@ function loadTownGLB(path, group, opts = {}) {
         console.log(`[GLB] ${path} collision:`, stats);
       }
       console.log(`[GLB] Loaded ${path} — bounds y ${box.min.y.toFixed(1)} → ${box.max.y.toFixed(1)}, pos (${model.position.x.toFixed(1)}, ${model.position.y.toFixed(1)}, ${model.position.z.toFixed(1)}), group:`, group.position);
+      if (onLoaded) onLoaded(model);
     },
     undefined,
     (err) => console.error(`[GLB] Failed to load ${path}:`, err),
@@ -483,15 +484,24 @@ export function buildUnnamedTown(scene, reg) {
     dy: -1,
     rotateY: -Math.PI / 12,
     walkable: true,
-    // Match Deeproot-style tuning: tight 0.5 m cells on a scaled GLB create a
-    // "picker fence" on ramps and the road-end approach — coarser cells +
-    // slightly relaxed vertical filtering keep walkable gaps for the finale.
+    // Coarser cells + raised maxNormalY so ramp/step surfaces don't register
+    // as wall-colliders on the road-end approach.  stepHeight lifted so low
+    // threshold geometry (curbs, raised lips) is treated as step-over rather
+    // than a blocking wall.
     collision: {
-      cellSize: 0.9,
+      cellSize: 1.2,
       triFloorY: 0.2,
-      maxNormalY: 0.52,
-      stepHeight: 0.95,
-      playerCeiling: 2.15,
+      maxNormalY: 0.78,
+      stepHeight: 1.2,
+      playerCeiling: 2.4,
+    },
+    onLoaded: () => {
+      // After voxelization, carve a clear approach corridor on the north side
+      // of the model so the player can walk onto it from the road.
+      // The road arrives centred on x=0 from z≈-14400 heading south.
+      // World coords: x [-10, 10], z [-14440, -14555].
+      const cleared = Collision.removeInRegion(-10, 10, -14440, -14555);
+      console.log(`[GLB] Unnamed approach corridor cleared: ${cleared} collider(s) removed`);
     },
   });
   scene.add(group);

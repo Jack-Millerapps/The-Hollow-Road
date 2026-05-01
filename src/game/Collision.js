@@ -143,6 +143,22 @@ export const Collision = {
     return false;
   },
 
+  // Remove every collider whose bounding box overlaps the given XZ region.
+  // Useful for carving a walkable corridor through voxelized GLB collision
+  // (e.g. the road-end approach on the unnamed village model).
+  // Returns the number of colliders removed.
+  removeInRegion(minX, maxX, minZ, maxZ) {
+    const toRemove = [];
+    for (const c of colliders) {
+      const ext = c.type === 'circle' ? c.r : Math.max(c.hw, c.hd);
+      if (c.x + ext <= minX || c.x - ext >= maxX) continue;
+      if (c.z + ext <= minZ || c.z - ext >= maxZ) continue;
+      toRemove.push(c);
+    }
+    for (const c of toRemove) this.remove(c);
+    return toRemove.length;
+  },
+
   _all() {
     return colliders.slice();
   },
