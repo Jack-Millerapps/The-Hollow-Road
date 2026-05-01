@@ -113,18 +113,18 @@ const MIRROR_FRAGMENT_STANDS = [
   { x: 208, z: -7812 },
 ];
 const MIRROR_FOOT_RADIUS = 0.5;
+const MIRROR_ESCAPE_ANCHORS = [
+  { x: 200, z: -7800 },
+  { x: 188, z: -7794 },
+  { x: 214, z: -7790 },
+  { x: 190, z: -7814 },
+  { x: 210, z: -7816 },
+];
 
 function findOpenMirrorPost(sx, sz) {
   if (!Collision.count || Collision.count() === 0) return { x: sx, z: sz };
   if (!npcWorldBlocked(sx, sz, MIRROR_FOOT_RADIUS)) return { x: sx, z: sz };
-  const anchors = [
-    { x: 200, z: -7800 },
-    { x: 190, z: -7790 },
-    { x: 214, z: -7794 },
-    { x: 186, z: -7812 },
-    { x: 208, z: -7816 },
-  ];
-  const s = snapNpcWorldXZWithFallbacks(sx, sz, anchors, {
+  const s = snapNpcWorldXZWithFallbacks(sx, sz, MIRROR_ESCAPE_ANCHORS, {
     radius: MIRROR_FOOT_RADIUS,
     maxSearchRadius: 120,
   });
@@ -396,8 +396,10 @@ const TOWNS = [
   {
     id: 'mirrorTown',
     center: { x: 200, z: -7800 },
-    radius: 13,
+    radius: 15,
     npcCount: 5,
+    // Mirror Town GLB is voxel-dense; keep villagers visible and out of doorways.
+    doorChance: 0,
     palette: [0x303a48, 0x4a4a5a, 0x382a3a, 0x303040, 0x4a3a4a],
   },
   {
@@ -648,6 +650,13 @@ function tickNpc(npc, town, doorways, delta, time, playerPos) {
         STONHUSH_ESCAPE_ANCHORS,
       );
     }
+    if (town.id === 'mirrorTown' && npcWorldBlocked(u.x, u.z)) {
+      u = snapNpcWorldXZWithFallbacks(
+        npc.mesh.position.x,
+        npc.mesh.position.z,
+        MIRROR_ESCAPE_ANCHORS,
+      );
+    }
     npc.mesh.position.x = u.x;
     npc.mesh.position.z = u.z;
   }
@@ -720,6 +729,13 @@ function tickNpc(npc, town, doorways, delta, time, playerPos) {
         npc.mesh.position.x,
         npc.mesh.position.z,
         STONHUSH_ESCAPE_ANCHORS,
+      );
+    }
+    if (town.id === 'mirrorTown' && npcWorldBlocked(u.x, u.z)) {
+      u = snapNpcWorldXZWithFallbacks(
+        npc.mesh.position.x,
+        npc.mesh.position.z,
+        MIRROR_ESCAPE_ANCHORS,
       );
     }
     npc.mesh.position.x = u.x;
