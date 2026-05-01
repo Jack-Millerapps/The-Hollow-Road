@@ -1,7 +1,7 @@
 import { state, notify } from '../state.js';
 import { Save } from '../game/Save.js';
 
-// Small non-pausing popup when the player walks north for too long.
+// Small non-pausing popup when the player walks homeward on the road (~+Z).
 
 export const RoadWhisperPopup = {
   root: null,
@@ -39,23 +39,27 @@ export const RoadWhisperPopup = {
     });
 
     const title = document.createElement('div');
-    title.textContent = 'The road whispers to you';
+    title.textContent = '…something whispers';
     Object.assign(title.style, {
       fontVariant: 'small-caps',
-      letterSpacing: '0.18em',
-      color: '#c8903a',
-      fontSize: '12px',
-      marginBottom: '6px',
+      letterSpacing: '0.22em',
+      color: 'rgba(200, 170, 130, 0.75)',
+      fontSize: '11px',
+      marginBottom: '8px',
+      opacity: '0.92',
     });
     wrap.appendChild(title);
 
     const body = document.createElement('div');
-    body.textContent = `Don't go home yet, your journey has just begun.`;
+    body.textContent =
+      "Don't turn back—not yet. The road still runs ahead of you.";
     Object.assign(body.style, {
       fontStyle: 'italic',
-      fontSize: '15px',
-      lineHeight: '1.5',
-      color: '#ffd79a',
+      fontSize: '14px',
+      lineHeight: '1.55',
+      color: 'rgba(255, 215, 170, 0.88)',
+      letterSpacing: '0.02em',
+      fontWeight: '300',
     });
     wrap.appendChild(body);
 

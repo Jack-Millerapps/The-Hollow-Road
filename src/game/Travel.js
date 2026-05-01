@@ -52,8 +52,24 @@ const _rollQuat = new THREE.Quaternion();
 const _rollAxis = new THREE.Vector3(0, 0, 1);
 
 const WESTWIND_EXIT_Z = 470;
-const WRONG_WAY_TIME_S = 18;
-const WRONG_WAY_DIST = 220;
+/** Cumulative movement toward the road's start (+Z / homeward) before the whisper. */
+const WRONG_WAY_NORTH_UNITS = 50;
+/** Slightly wider than `ROAD_LATERAL_LIMIT` (10) so small drift still counts as on-road. */
+const WRONG_WAY_ROAD_LATERAL = 14;
+const WRONG_WAY_VILLAGE_SUPPRESS_PAD = 15;
+
+function wrongWayWhisperSuppressed(playerX, playerZ) {
+  if (state.dialogueActive) return true;
+  if (state.currentVillage) return true;
+  if (state.flags?.endingStarted) return true;
+  if (PauseManager.isPaused()) return true;
+  for (const v of villages) {
+    if (v.placeholder) continue;
+    const d = Math.hypot(playerX - v.position.x, playerZ - v.position.z);
+    if (d < v.radius + WRONG_WAY_VILLAGE_SUPPRESS_PAD) return true;
+  }
+  return false;
+}
 
 // Each gate sits just past a town along the road. The player cannot cross a
 // gate (i.e. their z cannot go below `gateZ`) until that town's
@@ -97,8 +113,7 @@ export const Travel = {
   _softPrompt: null,
   _softPromptTimer: 0,
   _lastNotifyMs: 0,
-  _wrongWayAcc: 0,
-  _wrongWayDist: 0,
+  _wrongWayNorthAccum: 0,
   // Ground level — overridden when entering/exiting caves.
   _groundY: DEFAULT_GROUND_Y,
   _lastYawForRoll: 0,
@@ -624,27 +639,34 @@ export const Travel = {
     state.playerPos.x = this.player.position.x;
     state.playerPos.z = this.player.position.z;
 
-    // --- Wrong-way whisper (north on the road) ----------------------------
-    // If the player keeps walking north (back home) for a while, nudge them.
+    // --- Wrong-way whisper (north / toward Westwind) ----------------------
+    // Homeward is +world Z. Accumulate only net northward travel on (or
+    // near) the road; fire after WRONG_WAY_NORTH_UNITS. Suppressed in
+    // villages and other quest-adjacent UI so it does not nag mid-task.
     const inWorld = state.currentScene === 'world' && !inCave;
-    const onRoad = inWorld && state.flags.hasLeftWestwind && !state.offRoad;
+    const px = this.player.position.x;
+    const pz = this.player.position.z;
+    const nearRoad =
+      inWorld &&
+      state.flags.hasLeftWestwind &&
+      isWithinRoadDistance(px, pz, WRONG_WAY_ROAD_LATERAL);
+    const suppressed = wrongWayWhisperSuppressed(px, pz);
     const movingNorth = moved && actualDZ > 0.02;
-    if (onRoad && movingNorth && !state.dialogueActive && !PauseManager.isPaused()) {
-      this._wrongWayAcc += clampedDelta;
-      this._wrongWayDist += Math.hypot(actualDX, actualDZ);
-      if (
-        this._wrongWayAcc >= WRONG_WAY_TIME_S ||
-        this._wrongWayDist >= WRONG_WAY_DIST
-      ) {
+    if (nearRoad && !suppressed && movingNorth) {
+      this._wrongWayNorthAccum += actualDZ;
+      if (this._wrongWayNorthAccum >= WRONG_WAY_NORTH_UNITS) {
         RoadWhisperPopup.maybeShow();
-        // Prevent retriggering spam after it fires.
-        this._wrongWayAcc = 0;
-        this._wrongWayDist = 0;
+        this._wrongWayNorthAccum = 0;
       }
     } else {
-      // Decay instead of hard reset so brief corrections don't wipe progress.
-      this._wrongWayAcc = Math.max(0, this._wrongWayAcc - clampedDelta * 1.5);
-      this._wrongWayDist = Math.max(0, this._wrongWayDist - Math.hypot(actualDX, actualDZ) * 1.2);
+      if (moved && actualDZ < -0.02) {
+        this._wrongWayNorthAccum = Math.max(0, this._wrongWayNorthAccum + actualDZ);
+      } else {
+        this._wrongWayNorthAccum = Math.max(
+          0,
+          this._wrongWayNorthAccum - clampedDelta * 12,
+        );
+      }
     }
 
     // --- Westwind exit gate ------------------------------------------------
