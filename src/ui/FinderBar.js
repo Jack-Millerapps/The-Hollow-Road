@@ -7,7 +7,21 @@ import {
   DEEPROOT_VILLAGER_POSTS,
   DEEPROOT_JOURNAL_SPOT,
 } from '../data/deeprootTargets.js';
-import { MIRROR_WETLAND_CENTER, MIRROR_HIDDEN_MIRROR_SPOT } from '../data/mirrorTownTargets.js';
+import {
+  MIRROR_TOWN_CENTER,
+  MIRROR_VILLAGER_POSTS,
+  MIRROR_WETLAND_CENTER,
+  MIRROR_HIDDEN_MIRROR_SPOT,
+} from '../data/mirrorTownTargets.js';
+import {
+  ASHWICK_GRAVE,
+  ASHWICK_MILL,
+  ASHWICK_PAGE,
+  ASHWICK_QUEST_CAVE,
+  ASHWICK_VILLAGER_POSTS,
+} from '../data/ashwickTargets.js';
+import { STONEHUSH_TOWN_CENTER, STONEHUSH_VILLAGER_POSTS } from '../data/stonehushTargets.js';
+import { STONEHUSH_BELL_WORLD } from '../data/stonehushBell.js';
 
 // ---------------------------------------------------------------------------
 // FinderBar — directional objective bar (old-school quest finder).
@@ -80,11 +94,69 @@ function ensureStyle() {
   document.head.appendChild(s);
 }
 
-function pickActiveQuest() {
-  // Prefer blocked gating quests by road order, else first active quest.
-  for (const name of ['ashwick', 'stonehush', 'deeproot', 'mirrorTown']) {
-    const q = state.quests?.[name];
-    if (q && !q.done && (q.step ?? 0) > 0) return name;
+const FINDER_QUEST_ORDER = ['ashwick', 'stonehush', 'deeproot', 'mirrorTown'];
+
+function isQuestActiveForFinder(q) {
+  return q && !q.done && (q.step ?? 0) > 0;
+}
+
+function ashwickTarget() {
+  const q = state.quests?.ashwick;
+  if (!q || q.done) return null;
+  const step = QuestSystem.currentStep?.('ashwick')?.id ?? null;
+
+  if (step === 'villagers') {
+    const px = state.playerPos?.x ?? 0;
+    const pz = state.playerPos?.z ?? 0;
+    const spoke = {
+      maren: q.spokeMaren,
+      dov: q.spokeDov,
+      sera: q.spokeSera,
+    };
+    let best = null;
+    for (const p of ASHWICK_VILLAGER_POSTS) {
+      if (spoke[p.key]) continue;
+      const dx = p.x - px;
+      const dz = p.z - pz;
+      const d = dx * dx + dz * dz;
+      if (!best || d < best.d) best = { x: p.x, z: p.z, d, label: 'Townsfolk' };
+    }
+    if (!best) return { ...ASHWICK_MILL, label: 'The miller' };
+    return { x: best.x, z: best.z, label: 'Townsfolk' };
+  }
+  if (step === 'grave') return { ...ASHWICK_GRAVE, label: 'Eastern grave' };
+  if (step === 'page') return { ...ASHWICK_PAGE, label: 'Torn page' };
+  if (step === 'cave') return { ...ASHWICK_QUEST_CAVE, label: 'Ancient cave' };
+  if (step === 'choice') return { ...ASHWICK_MILL, label: 'The miller' };
+  return null;
+}
+
+function stonehushTarget() {
+  const q = state.quests?.stonehush;
+  if (!q || q.done) return null;
+  const step = QuestSystem.currentStep?.('stonehush')?.id ?? null;
+
+  if (step === 'fragments') {
+    const heard = q.fragmentHeard || [false, false, false, false];
+    const px = state.playerPos?.x ?? 0;
+    const pz = state.playerPos?.z ?? 0;
+    let best = null;
+    for (let i = 0; i < STONEHUSH_VILLAGER_POSTS.length; i++) {
+      const target = STONEHUSH_VILLAGER_POSTS[i];
+      if (!target || heard[i]) continue;
+      const dx = target.x - px;
+      const dz = target.z - pz;
+      const d = dx * dx + dz * dz;
+      if (!best || d < best.d) best = { ...target, d, label: 'Villager' };
+    }
+    if (!best) return { ...STONEHUSH_BELL_WORLD, label: 'The bell' };
+    return { x: best.x, z: best.z, label: 'Villager' };
+  }
+  if (step === 'waitNight' || step === 'bellChoice') {
+    return { ...STONEHUSH_BELL_WORLD, label: 'The bell' };
+  }
+  if (step === 'report') {
+    return { ...STONEHUSH_TOWN_CENTER, label: 'The weaver' };
   }
   return null;
 }
@@ -132,20 +204,51 @@ function mirrorTownTarget() {
   if (!q || q.done) return null;
   const step = QuestSystem.currentStep?.('mirrorTown')?.id ?? null;
 
+  if (step === 'villagers') {
+    const heard = q.villagerHeard || [false, false, false, false];
+    const px = state.playerPos?.x ?? 0;
+    const pz = state.playerPos?.z ?? 0;
+    let best = null;
+    for (let i = 0; i < MIRROR_VILLAGER_POSTS.length; i++) {
+      const target = MIRROR_VILLAGER_POSTS[i];
+      if (!target || heard[i]) continue;
+      const dx = target.x - px;
+      const dz = target.z - pz;
+      const d = dx * dx + dz * dz;
+      if (!best || d < best.d) best = { ...target, d, label: 'Villager' };
+    }
+    if (!best) return { ...MIRROR_TOWN_CENTER, label: 'Town square' };
+    return { x: best.x, z: best.z, label: 'Villager' };
+  }
   if (step === 'guide') {
     return { ...MIRROR_WETLAND_CENTER, label: 'Wetland' };
   }
   if (step === 'found') {
     return { ...MIRROR_HIDDEN_MIRROR_SPOT, label: 'Hidden mirror' };
   }
+  if (step === 'choice') {
+    return { ...MIRROR_TOWN_CENTER, label: 'The glassmaker' };
+  }
+  return null;
+}
+
+function targetForQuest(name) {
+  if (name === 'ashwick') return ashwickTarget();
+  if (name === 'stonehush') return stonehushTarget();
+  if (name === 'deeproot') return deeprootTarget();
+  if (name === 'mirrorTown') return mirrorTownTarget();
   return null;
 }
 
 function getTarget() {
-  const qname = pickActiveQuest();
-  if (!qname) return null;
-  if (qname === 'deeproot') return deeprootTarget();
-  if (qname === 'mirrorTown') return mirrorTownTarget();
+  // Walk the road in order; skip quests with no finder geometry so a stale
+  // Ashwick/Stonehush step does not hide Deeproot/Mirror objectives.
+  for (const name of FINDER_QUEST_ORDER) {
+    const q = state.quests?.[name];
+    if (!isQuestActiveForFinder(q)) continue;
+    const t = targetForQuest(name);
+    if (t) return t;
+  }
   return null;
 }
 

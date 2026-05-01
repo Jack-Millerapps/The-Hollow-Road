@@ -21,8 +21,14 @@ import {
   DEEPROOT_ROOTKEEPER_SPOT,
   DEEPROOT_ROOTKEEPER_R,
 } from '../data/deeprootTargets.js';
-import { MIRROR_HIDDEN_MIRROR_SPOT, MIRROR_HIDDEN_MIRROR_R } from '../data/mirrorTownTargets.js';
-import { MIRROR_WETLAND_CENTER, MIRROR_WETLAND_R } from '../data/mirrorTownTargets.js';
+import {
+  MIRROR_HIDDEN_MIRROR_SPOT,
+  MIRROR_HIDDEN_MIRROR_R,
+  MIRROR_VILLAGER_POSTS,
+  MIRROR_WETLAND_CENTER,
+  MIRROR_WETLAND_R,
+} from '../data/mirrorTownTargets.js';
+import { STONEHUSH_VILLAGER_POSTS } from '../data/stonehushTargets.js';
 
 // ---------------------------------------------------------------------------
 // TownNPCs — a generic wandering-villager system used by every greater town
@@ -57,15 +63,6 @@ const STONHUSH_ESCAPE_ANCHORS = [
   { x: -850, z: -5008 },
   { x: -822, z: -5018 },
   { x: -838, z: -4988 },
-];
-
-// Fixed posts for the four fragment NPCs — avoids one wanderer pathing into
-// dense GLB voxels or ending up effectively untargetable.
-const STONHUSH_FRAGMENT_STANDS = [
-  { x: -816, z: -4994 },
-  { x: -844, z: -5002 },
-  { x: -826, z: -5010 },
-  { x: -836, z: -4988 },
 ];
 
 /** Tighter probe than default NPC radius — finds a tile the mesh can stand on. */
@@ -109,13 +106,6 @@ const DEEPROOT_INTERACT_R_SQ = DEEPROOT_INTERACT_R * DEEPROOT_INTERACT_R;
 const MIRROR_INTERACT_R = 5.2;
 const MIRROR_INTERACT_R_SQ = MIRROR_INTERACT_R * MIRROR_INTERACT_R;
 
-// Stable posts for Mirror Town quest villagers (slot 0..3).
-const MIRROR_FRAGMENT_STANDS = [
-  { x: 186, z: -7792 },
-  { x: 214, z: -7798 },
-  { x: 192, z: -7810 },
-  { x: 208, z: -7812 },
-];
 const MIRROR_FOOT_RADIUS = 0.5;
 const MIRROR_ESCAPE_ANCHORS = [
   { x: 200, z: -7800 },
@@ -539,7 +529,7 @@ function ensureTown(scene, town) {
       n.opacity = 1;
       setOpacity(n.mesh, 1);
       n.mesh.visible = true;
-      const prefer = STONHUSH_FRAGMENT_STANDS[i];
+      const prefer = STONEHUSH_VILLAGER_POSTS[i];
       const free = findOpenStonehushPost(prefer.x, prefer.z);
       n.mesh.position.set(free.x, 0, free.z);
       root.add(n.mesh);
@@ -571,7 +561,7 @@ function ensureTown(scene, town) {
       n.opacity = 1;
       setOpacity(n.mesh, 1);
       n.mesh.visible = true;
-      const prefer = MIRROR_FRAGMENT_STANDS[i];
+      const prefer = MIRROR_VILLAGER_POSTS[i];
       const free = findOpenMirrorPost(prefer.x, prefer.z);
       n.mesh.position.set(free.x, 0, free.z);
       root.add(n.mesh);
@@ -624,7 +614,7 @@ function tickNpc(npc, town, doorways, delta, time, playerPos) {
     npc.state = 'walk';
     const collReady = Collision.count && Collision.count() > 0;
     if (collReady && !npc._stonehushReliablePlaced) {
-      const prefer = STONHUSH_FRAGMENT_STANDS[npc.stonehushSlot % STONHUSH_FRAGMENT_STANDS.length];
+      const prefer = STONEHUSH_VILLAGER_POSTS[npc.stonehushSlot % STONEHUSH_VILLAGER_POSTS.length];
       const u = findOpenStonehushPost(prefer.x, prefer.z);
       npc.mesh.position.set(u.x, 0, u.z);
       npc._stonehushReliablePlaced = true;
@@ -632,7 +622,7 @@ function tickNpc(npc, town, doorways, delta, time, playerPos) {
     const px = npc.mesh.position.x;
     const pz = npc.mesh.position.z;
     if (collReady && npcWorldBlocked(px, pz, STONEHUSH_FOOT_RADIUS)) {
-      const prefer = STONHUSH_FRAGMENT_STANDS[npc.stonehushSlot % STONHUSH_FRAGMENT_STANDS.length];
+      const prefer = STONEHUSH_VILLAGER_POSTS[npc.stonehushSlot % STONEHUSH_VILLAGER_POSTS.length];
       const u = findOpenStonehushPost(prefer.x, prefer.z);
       npc.mesh.position.set(u.x, 0, u.z);
     }
@@ -672,7 +662,7 @@ function tickNpc(npc, town, doorways, delta, time, playerPos) {
     npc.mesh.visible = true;
     const collReady = !!Collision.count && Collision.count() > 0;
     if (collReady && npcWorldBlocked(npc.mesh.position.x, npc.mesh.position.z, MIRROR_FOOT_RADIUS)) {
-      const prefer = MIRROR_FRAGMENT_STANDS[npc.mirrorSlot % MIRROR_FRAGMENT_STANDS.length];
+      const prefer = MIRROR_VILLAGER_POSTS[npc.mirrorSlot % MIRROR_VILLAGER_POSTS.length];
       const u = findOpenMirrorPost(prefer.x, prefer.z);
       npc.mesh.position.x = u.x;
       npc.mesh.position.z = u.z;
