@@ -377,7 +377,8 @@ export function buildVeilMarketTown(scene, reg) {
 
   scene.add(group);
   reg.group = group;
-  ChunkManager.register(group, group.position.x, group.position.z);
+  // Group origin is not the visual center; large radius avoids frustum pop-out.
+  ChunkManager.register(group, group.position.x, group.position.z, { radius: 120 });
 }
 
 // =============================================================

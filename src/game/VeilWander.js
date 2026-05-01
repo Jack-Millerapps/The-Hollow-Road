@@ -45,9 +45,11 @@ const PARTICLE_COUNT = 120;
 const EXCLUSION = [
   { x: 0, z: 500, r: 30 }, // Westwind / start
   { x: 0, z: -14500, r: 50 }, // Unnamed Village
-  ...villages
-    .filter((v) => v.name !== 'veilMarket')
-    .map((v) => ({ x: v.position.x, z: v.position.z, r: v.radius + 6 })),
+  ...villages.map((v) => ({
+    x: v.position.x,
+    z: v.position.z,
+    r: v.radius + 6,
+  })),
   ...caves.map((c) => ({ x: c.position.x, z: c.position.z, r: 10 })),
 ];
 
