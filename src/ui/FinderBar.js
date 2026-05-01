@@ -94,10 +94,23 @@ function ensureStyle() {
   document.head.appendChild(s);
 }
 
-const FINDER_QUEST_ORDER = ['ashwick', 'stonehush', 'deeproot', 'mirrorTown'];
+// Same north → south order as Travel.TOWN_GATES. The finder follows the
+// chapter that still blocks the road (`tradeComplete`), not stale quest steps
+// from towns you already finished.
+const FINDER_TOWN_ORDER = ['ashwick', 'veilMarket', 'stonehush', 'deeproot', 'mirrorTown'];
 
-function isQuestActiveForFinder(q) {
-  return q && !q.done && (q.step ?? 0) > 0;
+const TOWN_TO_QUEST_KEY = {
+  ashwick: 'ashwick',
+  stonehush: 'stonehush',
+  deeproot: 'deeproot',
+  mirrorTown: 'mirrorTown',
+};
+
+function currentRoadChapterTown() {
+  for (const town of FINDER_TOWN_ORDER) {
+    if (!state.tradeComplete?.[town]) return town;
+  }
+  return null;
 }
 
 function ashwickTarget() {
@@ -128,6 +141,7 @@ function ashwickTarget() {
   if (step === 'page') return { ...ASHWICK_PAGE, label: 'Torn page' };
   if (step === 'cave') return { ...ASHWICK_QUEST_CAVE, label: 'Ancient cave' };
   if (step === 'choice') return { ...ASHWICK_MILL, label: 'The miller' };
+  if (step === 'intro') return { ...ASHWICK_MILL, label: 'The miller' };
   return null;
 }
 
@@ -158,6 +172,7 @@ function stonehushTarget() {
   if (step === 'report') {
     return { ...STONEHUSH_TOWN_CENTER, label: 'The weaver' };
   }
+  if (step === 'intro') return { ...STONEHUSH_TOWN_CENTER, label: 'The weaver' };
   return null;
 }
 
@@ -196,6 +211,7 @@ function deeprootTarget() {
     return { ...DEEPROOT_ROOTKEEPER_SPOT, label: 'Root-keeper' };
   }
 
+  if (step === 'intro') return { ...DEEPROOT_TOWN_CENTER, label: 'Root-keeper' };
   return null;
 }
 
@@ -204,6 +220,9 @@ function mirrorTownTarget() {
   if (!q || q.done) return null;
   const step = QuestSystem.currentStep?.('mirrorTown')?.id ?? null;
 
+  if (step === 'mirror') {
+    return { ...MIRROR_TOWN_CENTER, label: 'Central mirror' };
+  }
   if (step === 'villagers') {
     const heard = q.villagerHeard || [false, false, false, false];
     const px = state.playerPos?.x ?? 0;
@@ -229,6 +248,7 @@ function mirrorTownTarget() {
   if (step === 'choice') {
     return { ...MIRROR_TOWN_CENTER, label: 'The glassmaker' };
   }
+  if (step === 'intro') return { ...MIRROR_TOWN_CENTER, label: 'The glassmaker' };
   return null;
 }
 
@@ -241,13 +261,12 @@ function targetForQuest(name) {
 }
 
 function getTarget() {
-  // Walk the road in order; skip quests with no finder geometry so a stale
-  // Ashwick/Stonehush step does not hide Deeproot/Mirror objectives.
-  for (const name of FINDER_QUEST_ORDER) {
-    const q = state.quests?.[name];
-    if (!isQuestActiveForFinder(q)) continue;
-    const t = targetForQuest(name);
-    if (t) return t;
+  const town = currentRoadChapterTown();
+  if (!town) return null;
+  const qk = TOWN_TO_QUEST_KEY[town];
+  if (qk) return targetForQuest(qk);
+  if (town === 'veilMarket') {
+    return { x: 34, z: -2500, label: 'The Veil Market' };
   }
   return null;
 }
