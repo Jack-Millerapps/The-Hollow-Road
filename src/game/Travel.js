@@ -19,7 +19,7 @@ const WALK_SPEED = 6.0;
 const SPRINT_SPEED = 13.5;
 const CAVE_SPEED = 4.0;
 const SPRINT_DRAIN = 0.25;
-const SPRINT_REGEN = 0.15;
+const SPRINT_REGEN = 0.34;
 const SPRINT_GRACE = 0.2;
 
 // Mouse-look tuning
