@@ -3,6 +3,7 @@ import { ROAD_SEGMENTS_DATA } from './Road.js';
 import { SceneManager } from './SceneManager.js';
 import { Collision } from '../game/Collision.js';
 import { ChunkManager } from '../game/ChunkManager.js';
+import { MIRROR_WETLAND_CENTER, MIRROR_WETLAND_R } from '../data/mirrorTownTargets.js';
 
 // ---------------------------------------------------------------------------
 // Environment — consolidation patch.
@@ -120,6 +121,13 @@ function distToRoad(x, z) {
     if (d < best) best = d;
   }
   return best;
+}
+
+function inWetlandKeepout(x, z, extra = 0) {
+  const dx = x - MIRROR_WETLAND_CENTER.x;
+  const dz = z - MIRROR_WETLAND_CENTER.z;
+  const r = MIRROR_WETLAND_R + extra;
+  return dx * dx + dz * dz < r * r;
 }
 
 function sampleAlongRoad() {
@@ -293,6 +301,8 @@ export const Environment = {
       const x = hit.x + hit.perpX * side * off;
       const z = hit.z + hit.perpZ * side * off;
       if (distToRoad(x, z) < 70) continue;
+      // Don't spawn mountains on top of the Mirror Town wetland.
+      if (inWetlandKeepout(x, z, 160)) continue;
       pos.set(x, -6 + Math.random() * 2, z);
       const s = 0.8 + Math.random() * 1.4;
       scl.set(s, s * (0.8 + Math.random() * 0.6), s);
@@ -337,6 +347,7 @@ export const Environment = {
       const x = hit.x + hit.perpX * side * off;
       const z = hit.z + hit.perpZ * side * off;
       if (distToRoad(x, z) < ROAD_HALF_WIDTH + 2) continue;
+      if (inWetlandKeepout(x, z, 70)) continue;
       pos.set(x, 0, z);
       const s = 0.85 + Math.random() * 0.6;
       scl.set(s, s, s);
@@ -420,6 +431,7 @@ export const Environment = {
       const off = ROAD_HALF_WIDTH + 1 + Math.random() * 10;
       const x = hit.x + hit.perpX * side * off;
       const z = hit.z + hit.perpZ * side * off;
+      if (inWetlandKeepout(x, z, 60)) continue;
       pos.set(x, 0.1, z);
       const s = 0.6 + Math.random() * 1.1;
       scl.set(s, s * (0.5 + Math.random() * 0.4), s);

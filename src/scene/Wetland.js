@@ -28,6 +28,8 @@ export const Wetland = {
       polygonOffsetFactor: -1,
       polygonOffsetUnits: -1,
     });
+    // Make sure the water doesn't disappear behind the ground at grazing angles.
+    waterMat.depthTest = true;
     const water = new THREE.Mesh(
       new THREE.CircleGeometry(MIRROR_WETLAND_R, 48),
       waterMat,
@@ -37,6 +39,7 @@ export const Wetland = {
     water.position.set(MIRROR_WETLAND_CENTER.x, 0.16, MIRROR_WETLAND_CENTER.z);
     water.receiveShadow = false;
     water.frustumCulled = false;
+    water.renderOrder = 2;
     g.add(water);
     this._water = water;
 
