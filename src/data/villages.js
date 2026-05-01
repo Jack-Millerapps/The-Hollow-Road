@@ -4,7 +4,7 @@
 // The route spans roughly 16,500 units end-to-end:
 //   westwind    (0,  500)
 //   ashwick     (0, -500)       1000 units from Westwind
-//   veilMarket  (0, -2500)      2000 units from Ashwick
+//   veilMarket  (34, -2500)     plaza core — matches GreaterTowns / TownNPCs
 //   stonehush   (-800, -5000)   3000 units (slight west turn)
 //   deeproot    (600, -6000)    1500 units (east turn)
 //   mirrorTown  (200, -7800)    2000 units
@@ -47,13 +47,12 @@ export const villages = [
   },
   {
     name: 'veilMarket',
-    position: { x: 0, z: -2500 },
-    radius: 26,
+    position: { x: 34, z: -2500 },
+    radius: 40,
     displayName: 'The Veil Market',
     flavor: "Everything here was someone else's. Including the silence.",
     npc: 'The Auctioneer',
     sells: { name: 'Rare Map', effect: 'revealTrueWant' },
-    wandering: true,
     options: [
       {
         label: 'Share a Secret',

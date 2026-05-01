@@ -317,6 +317,22 @@ export const VeilWander = {
     if (!this._beacon) return;
     this._time += dt;
 
+    // Trade can finish at the fixed market; retire road beacon the same session.
+    if (state.tradeComplete?.veilMarket) {
+      if (this._state !== 'absent' || this._spawnPoint || this._beacon.group.visible) {
+        this._state = 'absent';
+        this._spawnPoint = null;
+        this._respawnTimer = 0;
+        this._hideBeacon();
+        this._playerInside = false;
+        this._tradeRequested = false;
+        if (state.flags && !state.flags.veilFirstEncounterDone) {
+          state.flags.veilFirstEncounterDone = true;
+          notify();
+        }
+      }
+    }
+
     // Animate beacon when active.
     if (this._beacon.group.visible) {
       const particles = this._beacon.particles;

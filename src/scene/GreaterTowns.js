@@ -6,6 +6,7 @@ import { Collision } from '../game/Collision.js';
 import { SceneManager } from './SceneManager.js';
 import { MODEL_URLS } from './modelUrls.js';
 import { voxelizeMeshCollision } from './glbCollision.js';
+import { makeVillagerMesh } from './Westwind.js';
 
 function stdMat(color, opts = {}) {
   return new THREE.MeshStandardMaterial({
@@ -324,6 +325,26 @@ export function buildVeilMarketTown(scene, reg) {
   }
   core.add(chimeGroup);
   reg.chimes = chimeGroup;
+
+  // --- Auctioneer (visible counterpart to trade panel NPC) ----
+  const auctioneer = makeVillagerMesh({
+    robeColor: 0x4a3058,
+    skinColor: 0xc8b090,
+  });
+  auctioneer.name = 'veilAuctioneer';
+  auctioneer.position.set(0, 0, -3.15);
+  auctioneer.rotation.y = 0;
+  auctioneer.scale.setScalar(1.12);
+  auctioneer.traverse((ch) => {
+    if (ch.isMesh) {
+      ch.castShadow = true;
+      ch.receiveShadow = true;
+    }
+  });
+  core.add(auctioneer);
+  const auctioneerGlow = new THREE.PointLight(0xc8a8e8, 0.55, 6, 1.8);
+  auctioneerGlow.position.set(0, 2.2, -2.8);
+  core.add(auctioneerGlow);
 
   // --- East annex (extra stalls; road stays near x = 0) ----
   const annex = new THREE.Group();

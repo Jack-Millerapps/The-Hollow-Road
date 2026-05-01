@@ -9,7 +9,7 @@ import { state } from '../state.js';
 const TELEPORT_LOCATIONS = [
   { label: 'Westwind',         x: 0,     z: 500,    rot: Math.PI },
   { label: 'Ashwick',          x: 0,     z: -500,   rot: Math.PI },
-  { label: 'Veil Market',      x: 0,     z: -2500,  rot: Math.PI },
+  { label: 'Veil Market',      x: 34,    z: -2500,  rot: Math.PI },
   { label: 'Stonehush',        x: -800,  z: -5000,  rot: Math.PI },
   { label: 'Deeproot',         x: 600,   z: -6000,  rot: Math.PI },
   { label: 'Mirror Town',      x: 200,   z: -7800,  rot: Math.PI },

@@ -64,7 +64,7 @@ const VILLAGE_UPDATE_RANGE_SQ = 220 * 220;
 
 const VILLAGE_POSITIONS = {
   ashwick: { x: 0, z: -500 },
-  veilMarket: { x: 0, z: -2500 },
+  veilMarket: { x: 34, z: -2500 },
   stonehush: { x: -800, z: -5000 },
   deeproot: { x: 600, z: -6000 },
   mirrorTown: { x: 200, z: -7800 },
