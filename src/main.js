@@ -516,8 +516,10 @@ function start() {
         VeilWander.update(delta, state.playerPos);
         Exchanger.update(state.playerPos);
         RoadEvents.update(delta, state.playerPos, Travel);
-        AshwickNPCs.update(delta, t, state.playerPos);
+        // TownNPCs first so Stonehush (etc.) E-interacts win the same frame
+        // before Ashwick's shared Travel.keys edge detection.
         TownNPCs.update(delta, t, state.playerPos);
+        AshwickNPCs.update(delta, t, state.playerPos);
       } else {
         Goblins.update(delta, state.playerPos);
       }

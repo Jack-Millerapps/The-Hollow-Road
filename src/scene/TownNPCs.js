@@ -9,6 +9,7 @@ import {
 } from './npcWorldPlacement.js';
 import { Travel } from '../game/Travel.js';
 import { QuestSystem } from '../game/QuestSystem.js';
+import { Collision } from '../game/Collision.js';
 
 // ---------------------------------------------------------------------------
 // TownNPCs — a generic wandering-villager system used by every greater town
@@ -52,10 +53,38 @@ const STONHUSH_FRAGMENT_STANDS = [
   { x: -836, z: -4988 },
 ];
 
+/** Tighter probe than default NPC radius — finds a tile the mesh can stand on. */
+const STONEHUSH_FOOT_RADIUS = 0.48;
+
+function findOpenStonehushPost(sx, sz) {
+  if (!Collision.count || Collision.count() === 0) {
+    return { x: sx, z: sz };
+  }
+  if (!npcWorldBlocked(sx, sz, STONEHUSH_FOOT_RADIUS)) return { x: sx, z: sz };
+  const s = snapNpcWorldXZWithFallbacks(sx, sz, STONHUSH_ESCAPE_ANCHORS, {
+    radius: STONEHUSH_FOOT_RADIUS,
+    maxSearchRadius: 88,
+  });
+  if (!npcWorldBlocked(s.x, s.z, STONEHUSH_FOOT_RADIUS)) return s;
+  for (let ring = 1; ring <= 70; ring++) {
+    const step = ring * 0.34;
+    const samples = Math.max(10, Math.round((2 * Math.PI * step) / 0.38));
+    for (let i = 0; i < samples; i++) {
+      const a = (i / samples) * Math.PI * 2;
+      const nx = sx + Math.cos(a) * step;
+      const nz = sz + Math.sin(a) * step;
+      if (!npcWorldBlocked(nx, nz, STONEHUSH_FOOT_RADIUS)) return { x: nx, z: nz };
+    }
+  }
+  return { x: sx, z: sz };
+}
+
 let _prevStonehushE = false;
 
-const STONEHUSH_INTERACT_R = 3.5;
+const STONEHUSH_INTERACT_R = 4.8;
 const STONEHUSH_INTERACT_R_SQ = STONEHUSH_INTERACT_R * STONEHUSH_INTERACT_R;
+/** Wider bubble so NPCs + E work before ChunkManager clips the GLB at the town edge. */
+const STONEHUSH_UPDATE_RANGE_SQ = 360 * 360;
 
 function handleStonehushInteract(entry, playerPos) {
   const q = state.quests?.stonehush;
@@ -63,32 +92,35 @@ function handleStonehushInteract(entry, playerPos) {
     _prevStonehushE = Travel.keys?.has?.('e') ?? false;
     return;
   }
+  const heard = q.fragmentHeard || [false, false, false, false];
   const px = playerPos.x;
   const pz = playerPos.z;
-  let nearest = null;
-  let bestD2 = STONEHUSH_INTERACT_R_SQ;
+  const candidates = [];
   for (const npc of entry.npcs) {
     if (npc.stonehushSlot === undefined || npc.stonehushSlot === null) continue;
     const dx = npc.mesh.position.x - px;
     const dz = npc.mesh.position.z - pz;
     const d2 = dx * dx + dz * dz;
-    if (d2 < bestD2) {
-      bestD2 = d2;
-      nearest = npc;
+    if (d2 < STONEHUSH_INTERACT_R_SQ) {
+      candidates.push({ npc, d2, slot: npc.stonehushSlot });
     }
   }
+  candidates.sort((a, b) => a.d2 - b.d2);
 
   const keys = Travel.keys;
   const eDown = keys?.has?.('e') ?? false;
   const eEdge = eDown && !_prevStonehushE;
   _prevStonehushE = eDown;
 
-  if (nearest) {
+  const unheard = candidates.find((c) => !heard[c.slot]);
+  const promptTarget = unheard || candidates[0];
+  if (promptTarget) {
     Travel._showSoftPrompt?.('[E] Listen');
   }
 
-  if (eEdge && nearest) {
-    QuestSystem.tryStonehushFragment(nearest.stonehushSlot);
+  if (eEdge && candidates.length) {
+    const target = unheard || candidates[0];
+    QuestSystem.tryStonehushFragment(target.slot);
   }
 }
 
@@ -212,13 +244,14 @@ function ensureTown(scene, town) {
       const n = makeNpc(town, doorways);
       n.stonehushSlot = i;
       n.stonehushPinned = true;
+      n._stonehushReliablePlaced = false;
       n.state = 'walk';
       n.fadeTotal = 0;
       n.opacity = 1;
       setOpacity(n.mesh, 1);
       n.mesh.visible = true;
       const prefer = STONHUSH_FRAGMENT_STANDS[i];
-      const free = snapNpcWorldXZWithFallbacks(prefer.x, prefer.z, STONHUSH_ESCAPE_ANCHORS);
+      const free = findOpenStonehushPost(prefer.x, prefer.z);
       n.mesh.position.set(free.x, 0, free.z);
       root.add(n.mesh);
       npcs.push(n);
@@ -268,11 +301,18 @@ function tickNpc(npc, town, doorways, delta, time, playerPos) {
     setOpacity(npc.mesh, 1);
     npc.mesh.visible = true;
     npc.state = 'walk';
+    const collReady = Collision.count && Collision.count() > 0;
+    if (collReady && !npc._stonehushReliablePlaced) {
+      const prefer = STONHUSH_FRAGMENT_STANDS[npc.stonehushSlot % STONHUSH_FRAGMENT_STANDS.length];
+      const u = findOpenStonehushPost(prefer.x, prefer.z);
+      npc.mesh.position.set(u.x, 0, u.z);
+      npc._stonehushReliablePlaced = true;
+    }
     const px = npc.mesh.position.x;
     const pz = npc.mesh.position.z;
-    if (npcWorldBlocked(px, pz)) {
+    if (collReady && npcWorldBlocked(px, pz, STONEHUSH_FOOT_RADIUS)) {
       const prefer = STONHUSH_FRAGMENT_STANDS[npc.stonehushSlot % STONHUSH_FRAGMENT_STANDS.length];
-      const u = snapNpcWorldXZWithFallbacks(prefer.x, prefer.z, STONHUSH_ESCAPE_ANCHORS);
+      const u = findOpenStonehushPost(prefer.x, prefer.z);
       npc.mesh.position.set(u.x, 0, u.z);
     }
     const plx = playerPos.x - px;
@@ -389,7 +429,9 @@ export const TownNPCs = {
       const c = entry.town.center;
       const dx = c.x - playerPos.x;
       const dz = c.z - playerPos.z;
-      const inRange = dx * dx + dz * dz < UPDATE_RANGE_SQ;
+      const rangeSq =
+        entry.town.id === 'stonehush' ? STONEHUSH_UPDATE_RANGE_SQ : UPDATE_RANGE_SQ;
+      const inRange = dx * dx + dz * dz < rangeSq;
       // Hide root when far away to skip per-NPC work and keep them off the
       // GPU until the player approaches.
       if (entry.root.visible !== inRange) entry.root.visible = inRange;
