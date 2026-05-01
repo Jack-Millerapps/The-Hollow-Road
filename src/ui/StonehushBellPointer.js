@@ -60,22 +60,22 @@ function ensureStyle() {
   filter: none;
 }
 .stonehush-bell-pointer .arrow-wrap {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .stonehush-bell-pointer .arrow {
   display: block;
-  width: 0;
-  height: 0;
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-bottom: 12px solid #f0c86a;
-  filter: drop-shadow(0 0 6px rgba(240, 200, 106, 0.45));
-  transform-origin: 50% 65%;
+  width: 34px;
+  height: 34px;
+  filter: drop-shadow(0 0 8px rgba(240, 200, 106, 0.5));
+  transform-origin: 50% 50%;
+}
+.stonehush-bell-pointer .arrow path {
+  fill: #f0c86a;
 }
 .stonehush-bell-pointer .copy {
   display: flex;
@@ -141,8 +141,16 @@ export const StonehushBellPointer = {
 
     const wrap = document.createElement('div');
     wrap.className = 'arrow-wrap';
-    const arrow = document.createElement('span');
-    arrow.className = 'arrow';
+    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    arrow.setAttribute('viewBox', '0 0 36 36');
+    arrow.setAttribute('width', '34');
+    arrow.setAttribute('height', '34');
+    arrow.classList.add('arrow');
+    arrow.setAttribute('aria-hidden', 'true');
+    // A clear arrow: shaft + head (points UP in SVG space).
+    arrow.innerHTML = `
+      <path d="M16 32V16H10L18 4l8 12h-6v16z"></path>
+    `;
     wrap.appendChild(arrow);
 
     const copy = document.createElement('div');
